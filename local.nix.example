@@ -1,0 +1,72 @@
+# local.nix — per-deployment settings, not tracked by git.
+#
+# HOW TO USE
+# ----------
+# 1. Copy this file to local.nix:
+#      cp local.nix.example local.nix
+# 2. Fill in all values below.
+# 3. Deploy with --impure so Nix reads local.nix from disk:
+#      nixos-rebuild switch --flake .#server --target-host admin@server --impure
+#      nixos-rebuild switch --flake .#pi     --target-host admin@pi5    --impure
+#
+# This file is gitignored. Never commit local.nix — it contains your real IPs
+# and SSH keys. The shared repo keeps only placeholder defaults in
+# modules/common/settings.nix.
+{ ... }: {
+  lanbat = {
+    # -------------------------------------------------------------------------
+    # Network
+    # -------------------------------------------------------------------------
+    serverIp       = "CHANGE_ME";   # e.g. "192.168.1.10"
+    piIp           = "CHANGE_ME";   # e.g. "192.168.1.11"
+    gatewayIp      = "CHANGE_ME";   # e.g. "192.168.1.1"
+    lanSubnet      = "CHANGE_ME";   # e.g. "192.168.1.0/24"
+
+    serverHostname = "server";      # hostname for the main server
+    piHostname     = "pi5";         # or set to piIp if hostname resolution is unreliable
+
+    # -------------------------------------------------------------------------
+    # DNS
+    # -------------------------------------------------------------------------
+    domain         = "CHANGE_ME";   # e.g. "home.example.com"
+    rootDomain     = "CHANGE_ME";   # e.g. "example.com" (parent of domain)
+
+    # -------------------------------------------------------------------------
+    # NFS
+    # -------------------------------------------------------------------------
+    # NFSv4 ID mapping domain — must be identical on server and Pi.
+    # Any string works; a common choice is your local DNS suffix.
+    nfsIdmapdDomain = "CHANGE_ME"; # e.g. "home.lan"
+
+    # -------------------------------------------------------------------------
+    # System
+    # -------------------------------------------------------------------------
+    timezone       = "Europe/London";  # e.g. "Europe/London", "America/New_York" — see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+
+    # ISO 3166-1 alpha-2 country code for phone number formatting (Nextcloud).
+    phoneRegion    = "GB";             # e.g. "GB", "US", "DE", "FR"
+
+    # -------------------------------------------------------------------------
+    # Home Assistant location
+    # -------------------------------------------------------------------------
+    haLatitude     = "51.5074";        # decimal degrees, e.g. "51.5074" (London)
+    haLongitude    = "-0.1278";        # decimal degrees, e.g. "-0.1278" (London)
+    haElevation    = 11;               # metres above sea level, e.g. 11 (London)
+
+    # -------------------------------------------------------------------------
+    # Admin SSH public key — same for both machines.
+    # Generate with: ssh-keygen -t ed25519
+    # Get the value with: cat ~/.ssh/id_ed25519.pub
+    # -------------------------------------------------------------------------
+    adminSshKey    = "CHANGE_ME";
+
+    # -------------------------------------------------------------------------
+    # Zigbee dongle (Home Assistant / ZHA)
+    # Find the by-id path with: ls /dev/serial/by-id/  (dongle must be plugged in)
+    # Find vendor/product IDs with: lsusb  (format: "ID 10c4:ea60 ...")
+    # -------------------------------------------------------------------------
+    zigbeeDongle    = "CHANGE_ME";  # just the filename under /dev/serial/by-id/
+    zigbeeVendorId  = "CHANGE_ME";  # 4 hex digits, e.g. "10c4"
+    zigbeeProductId = "CHANGE_ME";  # 4 hex digits, e.g. "ea60"
+  };
+}

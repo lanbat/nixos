@@ -1,0 +1,55 @@
+name: NixOS Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & evaluate NixOS configurations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@v14
+        # Installs Nix with flakes + nix-command enabled.
+        # Also registers binfmt/QEMU for aarch64 so the Pi config can be
+        # evaluated (not built) on this x86_64 runner.
+
+      - uses: DeterminateSystems/magic-nix-cache-action@v8
+        # Transparent GitHub Actions cache for Nix build results.
+        # No Cachix account required. Speeds up repeat server builds
+        # significantly once the cache is warm.
+
+      # -----------------------------------------------------------------------
+      # Format check — fails if any .nix file is not formatted with nixfmt.
+      # Fix locally with: nix fmt
+      # -----------------------------------------------------------------------
+      - name: Check formatting
+        run: |
+          nix fmt
+          git diff --exit-code
+
+      # -----------------------------------------------------------------------
+      # Server (x86_64) — full build.
+      # Catches all evaluation errors and package build failures.
+      # Note: requires secrets/*.age files to be committed (they are encrypted
+      # and safe to commit). If they don't exist yet, this step will fail on
+      # agenix path evaluation.
+      # -----------------------------------------------------------------------
+      - name: Build server (x86_64)
+        run: |
+          nix build .#nixosConfigurations.server.config.system.build.toplevel \
+            --no-link \
+            --print-build-logs
+
+      # -----------------------------------------------------------------------
+      # Pi (aarch64) — evaluation only.
+      # A full aarch64 build via QEMU on x86_64 would take several hours.
+      # Evaluation catches all Nix expression errors (wrong option types,
+      # missing attributes, bad imports) without building any packages.
+      # -----------------------------------------------------------------------
+      - name: Evaluate Pi config (aarch64)
+        run: |
+          nix eval .#nixosConfigurations.pi.config.system.build.toplevel.drvPath

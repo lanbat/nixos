@@ -1,0 +1,24 @@
+# Per-deployment local settings (see local.nix.example)
+local.nix
+
+# Vim
+*.swp
+*.swo
+*~
+.netrwhist
+
+# Emacs
+\#*\#
+.\#*
+
+# VSCode
+.vscode/
+
+# JetBrains
+.idea/
+
+# macOS
+.DS_Store
+
+# Direnv
+.direnv/

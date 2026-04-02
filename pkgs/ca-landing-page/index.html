@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Homelab CA Trust</title>
+  <style>
+    :root {
+      --bg: #0f172a; --surface: #1e293b; --surface2: #283548;
+      --text: #e2e8f0; --muted: #94a3b8; --accent: #6366f1;
+      --green: #22c55e; --yellow: #eab308;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: var(--bg);
+           color: var(--text); margin: 0; padding: 20px; min-height: 100vh; }
+    .container { max-width: 860px; margin: 0 auto; }
+    h1 { font-size: 2rem; margin-bottom: .3rem; }
+    .subtitle { color: var(--muted); margin-bottom: 2rem; }
+    .card { background: var(--surface); border-radius: 12px;
+            padding: 1.5rem; margin-bottom: 1.5rem; }
+    .card h2 { margin: 0 0 1rem; font-size: 1.25rem; }
+    .download-btn {
+      display: inline-block; background: var(--accent); color: #fff;
+      padding: .75rem 1.75rem; border-radius: 8px; font-size: 1rem;
+      font-weight: 600; text-decoration: none; margin-bottom: 1rem;
+    }
+    .download-btn:hover { background: #4f46e5; }
+    .tabs { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
+    .tab {
+      padding: .5rem 1rem; border-radius: 6px; cursor: pointer;
+      border: 2px solid transparent; background: var(--surface2);
+      color: var(--muted); font-size: .9rem; user-select: none;
+    }
+    .tab.active { border-color: var(--accent); color: var(--text); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    pre {
+      background: #0d1117; border-radius: 8px; padding: 1rem;
+      overflow-x: auto; font-size: .875rem; line-height: 1.6;
+      color: #c9d1d9;
+    }
+    code { font-family: "Cascadia Code", "Fira Code", monospace; }
+    .qr-wrap { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
+    #qrcode { background: #fff; padding: 8px; border-radius: 8px; }
+    .note { background: #1e3a5f; border-left: 4px solid var(--accent);
+            border-radius: 4px; padding: .75rem 1rem; font-size: .9rem;
+            color: var(--muted); margin-top: 1rem; }
+    .note strong { color: var(--text); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Homelab Internal CA</h1>
+  <p class="subtitle">
+    This CA root certificate signs all <code>*.<span id="domain-display"></span></code> certificates.
+    Install it once on each device to get valid HTTPS on all homelab services.
+  </p>
+
+  <!-- Download -->
+  <div class="card">
+    <h2>Download CA Certificate</h2>
+    <a class="download-btn" href="/root.crt" download="lanbat-ca.crt">
+      ⬇ Download lanbat-ca.crt
+    </a>
+    <p style="color:var(--muted); font-size:.9rem; margin:0">
+      PEM format — works on Linux, macOS, Windows, Android, and iOS.
+    </p>
+    <div class="qr-wrap" style="margin-top:1.2rem">
+      <div>
+        <p style="color:var(--muted);font-size:.9rem;margin:0 0 .5rem">
+          Scan with your phone to download on mobile:
+        </p>
+        <div id="qrcode"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OS instructions -->
+  <div class="card">
+    <h2>Install Instructions</h2>
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('linux')">Linux</div>
+      <div class="tab" onclick="showTab('macos')">macOS</div>
+      <div class="tab" onclick="showTab('windows')">Windows</div>
+      <div class="tab" onclick="showTab('android')">Android</div>
+      <div class="tab" onclick="showTab('ios')">iPhone / iPad</div>
+    </div>
+
+    <div id="tab-linux" class="tab-content active">
+      <p>Run as root on Debian/Ubuntu/NixOS:</p>
+      <pre><code>curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o /usr/local/share/ca-certificates/lanbat-ca.crt
+update-ca-certificates</code></pre>
+      <p>Or on Fedora/RHEL:</p>
+      <pre><code>curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o /etc/pki/ca-trust/source/anchors/lanbat-ca.crt
+update-ca-trust</code></pre>
+      <p>On NixOS (add to configuration.nix):</p>
+      <pre><code>security.pki.certificateFiles = [ /etc/ssl/certs/lanbat-ca.crt ];</code></pre>
+    </div>
+
+    <div id="tab-macos" class="tab-content">
+      <p>Option 1 — GUI:</p>
+      <ol>
+        <li>Download <strong>lanbat-ca.crt</strong> above.</li>
+        <li>Double-click the file → Keychain Access opens.</li>
+        <li>Add to <em>System</em> keychain.</li>
+        <li>Find the certificate, double-click → Trust → "Always Trust".</li>
+      </ol>
+      <p>Option 2 — Terminal:</p>
+      <pre><code>curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o ~/Downloads/lanbat-ca.crt
+sudo security add-trusted-cert -d -r trustRoot \
+  -k /Library/Keychains/System.keychain ~/Downloads/lanbat-ca.crt</code></pre>
+    </div>
+
+    <div id="tab-windows" class="tab-content">
+      <p>Run in PowerShell as Administrator:</p>
+      <pre><code>Invoke-WebRequest -Uri PLACEHOLDER_CA_ORIGIN/root.crt `
+  -OutFile "$env:TEMP\lanbat-ca.crt" -SkipCertificateCheck
+Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
+  -CertStoreLocation Cert:\LocalMachine\Root</code></pre>
+      <p>Or manually:</p>
+      <ol>
+        <li>Download <strong>lanbat-ca.crt</strong>.</li>
+        <li>Right-click → Install Certificate.</li>
+        <li>Store location: <em>Local Machine</em>.</li>
+        <li>Place in: <em>Trusted Root Certification Authorities</em>.</li>
+      </ol>
+    </div>
+
+    <div id="tab-android" class="tab-content">
+      <ol>
+        <li>Scan the QR code above or download the cert via browser.</li>
+        <li>Go to <strong>Settings → Security → Encryption &amp; Credentials → Install a Certificate</strong>.</li>
+        <li>Choose <em>CA Certificate</em>.</li>
+        <li>Select the downloaded <code>.crt</code> file.</li>
+        <li>Accept the warning.</li>
+      </ol>
+      <div class="note">
+        <strong>Note:</strong> On Android, user-installed CAs are not trusted by all apps
+        by default (Chrome works; some apps enforce system trust).
+        This is an Android security policy — nothing we can change.
+      </div>
+    </div>
+
+    <div id="tab-ios" class="tab-content">
+      <ol>
+        <li>Scan the QR code above → Safari opens the cert download.</li>
+        <li>Tap <em>Allow</em> to download the profile.</li>
+        <li>Go to <strong>Settings → General → VPN &amp; Device Management</strong>.</li>
+        <li>Tap the profile → <em>Install</em>.</li>
+        <li>Go to <strong>Settings → General → About → Certificate Trust Settings</strong>.</li>
+        <li>Enable full trust for <em>Lanbat Root CA</em>.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<!-- Dynamic URL and domain injection.
+     The page derives the CA URL from window.location so it works regardless
+     of what domain the homelab is deployed under. -->
+<script>
+(function() {
+  var origin = window.location.origin; // e.g. https://ca.<domain>
+  var caUrl  = origin + '/root.crt';
+
+  // Fill domain display span in the subtitle.
+  var domainEl = document.getElementById('domain-display');
+  if (domainEl) domainEl.textContent = window.location.hostname.replace(/^ca\./, '');
+
+  // Replace PLACEHOLDER_CA_ORIGIN in all <code> and <pre> blocks.
+  document.querySelectorAll('code, pre').forEach(function(el) {
+    el.innerHTML = el.innerHTML.split('PLACEHOLDER_CA_ORIGIN').join(origin);
+  });
+
+  // QR code fallback: show the cert URL as a link.
+  var qrEl = document.getElementById('qrcode');
+  if (qrEl) {
+    qrEl.innerHTML = '<a href="' + caUrl + '" style="color:#6366f1;font-size:.8rem;word-break:break-all">' + caUrl + '</a>';
+  }
+})();
+</script>
+<script>
+// Tab switching.
+function showTab(name) {
+  document.querySelectorAll('.tab-content').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  document.querySelectorAll('.tab').forEach(function(el) {
+    el.classList.remove('active');
+  });
+  document.getElementById('tab-' + name).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
