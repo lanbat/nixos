@@ -133,6 +133,18 @@ dependencies. Hard mounts will block forever and prevent services from stopping.
 
 ---
 
+## Unattended upgrade reboot (Pi)
+
+The Pi reboots automatically after an upgrade if a new kernel is activated
+(between 04:00–06:00).  This follows the same path as a normal Pi reboot:
+NFS-dependent services on the server briefly pause and auto-restart.
+
+The server is **never** rebooted automatically.  A "reboot pending" state
+means a new kernel is available but the running kernel is the previous one —
+this is harmless until the next manual maintenance window.
+
+---
+
 ## What needs manual intervention
 
 | Situation | Manual action needed? |
@@ -144,6 +156,9 @@ dependencies. Hard mounts will block forever and prevent services from stopping.
 | Server NIC failure | No (Pi retries) |
 | Tang key rotation | Yes — re-bind Clevis on Pi |
 | Drives fill up | Yes — cleanup or expand |
+| NixOS package upgrades | No — auto-upgrade runs nightly |
+| Server new kernel | Yes — manual reboot required (LUKS prompt) |
+| Pi new kernel | No — Pi reboots automatically via Clevis/Tang |
 | Container image updates | Manual `nixos-rebuild switch` |
 
 ---

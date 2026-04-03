@@ -17,6 +17,56 @@ nix build .#nixosConfigurations.server.config.system.build.toplevel --impure
 nix build .#nixosConfigurations.pi.config.system.build.toplevel --impure
 ```
 
+## Unattended upgrades
+
+Both machines run `nixos-upgrade.service` nightly (server ~04:00, Pi ~04:30).
+It pulls the latest commit from `/etc/nixos` and runs `nixos-rebuild switch`.
+
+```bash
+# Check the last upgrade on the server
+systemctl status nixos-upgrade.service
+journalctl -u nixos-upgrade.service -n 50
+
+# Check the git pull step
+journalctl -u nixos-upgrade-pull.service -n 20
+
+# On the Pi
+ssh admin@pi5 journalctl -u nixos-upgrade.service -n 50
+```
+
+**Server:** upgrades apply immediately but the machine is **not rebooted** —
+a new kernel only takes effect after the next manual reboot.  Check whether a
+reboot is pending:
+```bash
+[ "$(readlink /run/booted-system)" = "$(readlink /nix/var/nix/profiles/system)" ] \
+  && echo "up to date" || echo "reboot pending"
+```
+
+**Pi:** upgrades apply immediately and the machine **reboots automatically**
+(between 04:00–06:00) if a reboot is needed.  Clevis/Tang handles LUKS unlock
+automatically.  NFS-dependent services on the server will briefly pause and
+auto-restart as usual.
+
+### Disabling auto-upgrade temporarily
+
+```bash
+# Prevent the next scheduled run (survives until the timer fires again)
+sudo systemctl stop nixos-upgrade.timer
+
+# Re-enable
+sudo systemctl start nixos-upgrade.timer
+```
+
+### Pinning a specific commit
+
+If an upgrade breaks something, pin the repo to a known-good commit:
+
+```bash
+ssh admin@server
+sudo git -C /etc/nixos checkout <good-commit-hash>
+# Auto-upgrade will now rebuild from this commit until you move HEAD forward.
+```
+
 ## Checking service health
 
 ```bash

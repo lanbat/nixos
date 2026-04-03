@@ -14,6 +14,7 @@
     ../../modules/common/base.nix
     ../../modules/common/users.nix
     ../../modules/common/ssh.nix
+    ../../modules/common/auto-upgrade.nix
 
     # Server-specific modules
     ../../modules/server/nfs-mounts.nix
@@ -48,6 +49,22 @@
   # Identity
   # ---------------------------------------------------------------------------
   networking.hostName = config.lanbat.serverHostname;
+
+  # ---------------------------------------------------------------------------
+  # Unattended upgrades
+  # ---------------------------------------------------------------------------
+  # The git pull pre-service is in modules/common/auto-upgrade.nix.
+  # allowReboot is false — the server requires a manual LUKS passphrase at
+  # boot, so it cannot reboot unattended.  Upgrades take effect at the next
+  # manual reboot or when `systemctl restart <service>` is run.
+  system.autoUpgrade = {
+    enable      = true;
+    flake       = "/etc/nixos#server";
+    flags       = [ "--impure" ];
+    allowReboot = false;
+    dates       = "04:00";
+    randomizedDelaySec = "30min";
+  };
 
   # ---------------------------------------------------------------------------
   # Boot / disk encryption

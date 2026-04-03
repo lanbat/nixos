@@ -24,6 +24,7 @@
     ../../modules/common/base.nix
     ../../modules/common/users.nix
     ../../modules/common/ssh.nix
+    ../../modules/common/auto-upgrade.nix
 
     # Pi-specific modules
     ../../modules/pi/clevis-unlock.nix
@@ -37,6 +38,27 @@
     ./services/wyoming-satellite.nix
     ./services/telegraf.nix
   ];
+
+  # ---------------------------------------------------------------------------
+  # Unattended upgrades
+  # ---------------------------------------------------------------------------
+  # The git pull pre-service is in modules/common/auto-upgrade.nix.
+  # allowReboot is true — the Pi unlocks its drives via Clevis/Tang
+  # automatically on reboot, so unattended reboots are safe as long as the
+  # server (and Tang) are running.  The reboot window keeps reboots in the
+  # early hours so they don't interrupt evening use.
+  system.autoUpgrade = {
+    enable      = true;
+    flake       = "/etc/nixos#pi";
+    flags       = [ "--impure" ];
+    allowReboot = true;
+    rebootWindow = {
+      lower = "04:00";
+      upper = "06:00";
+    };
+    dates       = "04:30";
+    randomizedDelaySec = "30min";
+  };
 
   # ---------------------------------------------------------------------------
   # Identity

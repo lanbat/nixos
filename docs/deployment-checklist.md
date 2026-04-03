@@ -323,6 +323,38 @@ nixos-install --flake /tmp/repo#pi --impure
 - Verify Snapclient: `systemctl status snapclient`
 - TV launcher should appear on HDMI (if monitor attached).
 
+### 2h. Clone the config repo on each machine
+
+Unattended upgrades rebuild from a local copy of this repo at `/etc/nixos`.
+Clone it on both machines now:
+
+```bash
+# On the server
+ssh admin@server
+sudo git clone <your-repo-url> /etc/nixos
+sudo cp /path/to/local.nix /etc/nixos/local.nix   # copy your local settings
+
+# On the Pi
+ssh admin@pi5
+sudo git clone <your-repo-url> /etc/nixos
+sudo cp /path/to/local.nix /etc/nixos/local.nix
+```
+
+If your repo is **private**, configure git credentials before auto-upgrade
+will be able to pull:
+
+```bash
+# Option A — HTTPS token (simpler)
+sudo git -C /etc/nixos remote set-url origin https://<token>@github.com/user/repo.git
+
+# Option B — SSH deploy key (more secure)
+sudo ssh-keygen -t ed25519 -f /root/.ssh/nixos_deploy -N ""
+# Add /root/.ssh/nixos_deploy.pub as a read-only deploy key in your git host
+sudo git -C /etc/nixos remote set-url origin git@github.com:user/repo.git
+```
+
+If your repo is **public**, no credentials are needed — HTTPS clone works as-is.
+
 ---
 
 ## Phase 3 — Post-install configuration
