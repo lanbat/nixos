@@ -101,49 +101,32 @@ cp secrets/secrets.nix.example secrets/secrets.nix
 Fill in your workstation public key (`cat ~/.ssh/id_ed25519.pub`) as `admin`.
 Leave `server` and `pi` as placeholders for now — you'll fill them in at step 3a.
 
-Then create all required secrets:
+Generate all purely-random secrets automatically:
 ```bash
-cd secrets
+bash secrets/generate-secrets.sh
+```
 
-# Authentik (two KEY=value lines):
-#   AUTHENTIK_POSTGRESQL__PASSWORD=<random>
-#   AUTHENTIK_SECRET_KEY=<50+ random chars>
-agenix -e authentik-env.age
+This generates and encrypts: Authentik, Nextcloud, Immich, InfluxDB, Grafana,
+and Vaultwarden secrets.  It skips any `.age` file that already exists, so it
+is safe to re-run.
 
-# Nextcloud
-agenix -e nextcloud-db-pass.age       # plaintext DB password
-agenix -e nextcloud-admin-pass.age    # plaintext admin password
-# nextcloud-oidc-env.age — fill in AFTER creating the Authentik OIDC app (Phase 3b)
-agenix -e nextcloud-oidc-env.age
+The script will print instructions for the secrets it **cannot** generate
+automatically — those that depend on external setup:
 
-# Immich
-# immich-db-password.age: one line → POSTGRES_PASSWORD=<value>
-agenix -e immich-db-password.age
-# immich-oidc-env.age — fill in AFTER creating the Authentik OIDC app (Phase 3b)
-agenix -e immich-oidc-env.age
+| Secret | When to fill in |
+|---|---|
+| `nextcloud-oidc-env.age` | After creating Authentik OIDC app (step 3b) |
+| `immich-oidc-env.age` | After creating Authentik OIDC app (step 3b) |
+| `grafana-env.age` | Update OAuth secret + InfluxDB token after steps 3b/3h |
+| `mosquitto-ha-pass.age` | Choose a password for the HA MQTT user |
+| `mosquitto-frigate-pass.age` | Choose a password for the Frigate MQTT user |
+| `rclone-frigate-config.age` | Run `rclone config`, paste result (step 3g) |
+| `telegraf-token.age` | After deploying InfluxDB (step 3i) |
 
-# Mosquitto (each file: single-line plaintext password)
-agenix -e mosquitto-ha-pass.age
-agenix -e mosquitto-frigate-pass.age
-
-# InfluxDB
-agenix -e influxdb-admin-password.age  # plaintext password
-agenix -e influxdb-admin-token.age     # openssl rand -base64 48
-
-# Grafana (four KEY=value lines — see secrets/README.md)
-# GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET — fill in AFTER Phase 3b
-agenix -e grafana-env.age
-
-# Vaultwarden (one line: ADMIN_TOKEN=<openssl rand -base64 48>)
-agenix -e vaultwarden-env.age
-
-# Frigate rclone (full rclone config — can leave empty until Phase 3g)
-agenix -e rclone-frigate-config.age
-
-# Telegraf — leave EMPTY for now, fill in after Phase 3 (InfluxDB token doesn't
-# exist until InfluxDB is deployed and you create a write token in its UI).
-# File format: TELEGRAF_INFLUXDB_TOKEN=<value>
-agenix -e telegraf-token.age
+Then commit the generated `.age` files:
+```bash
+git add secrets/*.age && git commit -m "add initial secrets"
+```
 ```
 
 See `secrets/README.md` for the exact format of each file.

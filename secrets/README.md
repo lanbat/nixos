@@ -50,7 +50,16 @@ and add the host keys in step 3a of the deployment checklist.
 
 ### 2. Create all required secrets
 
-Run from the repo root:
+Run the generator script — it creates all purely-random secrets automatically:
+
+```bash
+bash secrets/generate-secrets.sh
+```
+
+For secrets that need manual input (OIDC credentials, MQTT passwords, rclone
+config, Telegraf token), the script prints instructions at the end.
+
+The full list for reference:
 
 ```bash
 cd secrets
@@ -59,6 +68,13 @@ cd secrets
 # Two KEY=value lines:
 #   AUTHENTIK_POSTGRESQL__PASSWORD=<random string>
 #   AUTHENTIK_SECRET_KEY=<50+ random chars>
+#
+# Generate with:
+#   openssl rand -base64 36   # AUTHENTIK_POSTGRESQL__PASSWORD
+#   openssl rand -base64 50   # AUTHENTIK_SECRET_KEY
+#
+# AUTHENTIK_SECRET_KEY signs sessions and tokens — generate once and never
+# rotate unless you intend to invalidate all active sessions.
 agenix -e authentik-env.age
 
 # ---- Nextcloud ----
