@@ -6,7 +6,24 @@ Follow this order exactly. The server must come up before the Pi can unlock its 
 
 ## Phase 0 — Preparation (on your workstation)
 
-### 0a. Clone and configure
+### 0a. Enable Nix experimental features on your workstation
+
+The flake and `nix shell` / `nix build` commands require `nix-command` and
+`flakes` to be enabled.  The managed machines get this via
+`modules/common/base.nix`, but your workstation needs it separately.
+
+```bash
+mkdir -p ~/.config/nix
+echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
+```
+
+Verify it works:
+```bash
+nix shell nixpkgs#hello --command hello
+# Hello, world!
+```
+
+### 0b. Clone and configure
 
 - [ ] Clone this repo
   ```bash
@@ -52,14 +69,14 @@ Follow this order exactly. The server must come up before the Pi can unlock its 
 - [ ] Configure DNS on your router: point `*.<domain>` to the server's static IP.
   This must be done before any service URLs will resolve.
 
-### 0b. Install agenix on your workstation
+### 0c. Install agenix on your workstation
 
 ```bash
 nix shell github:ryantm/agenix
 # Or add it to your personal flake/profile permanently.
 ```
 
-### 0c. Create secrets (agenix)
+### 0d. Create secrets (agenix)
 
 > **Chicken-and-egg note:** agenix encrypts secrets to the host SSH key, but the
 > host doesn't exist yet. Encrypt all secrets with your admin key only for now.
