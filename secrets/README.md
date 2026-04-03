@@ -28,17 +28,25 @@ agenix decrypts them at activation time using whichever key is available).
 
 ## Setup
 
-### 1. Add your admin key to secrets.nix
+### 1. Create your secrets.nix
+
+`secrets/secrets.nix` is gitignored (like `local.nix`) — it contains real
+SSH public keys that identify your machines and should not be committed.
+
+```bash
+cp secrets/secrets.nix.example secrets/secrets.nix
+```
+
+Fill in the three keys:
 
 ```nix
-# secrets/secrets.nix
-let
-  admin = "ssh-ed25519 AAAA... your-workstation";
-  # Add server/pi keys after first install:
-  # server = "ssh-ed25519 AAAA...";
-  # pi     = "ssh-ed25519 AAAA...";
-in { ... }
+server = "ssh-ed25519 AAAA...";   # from: ssh admin@server cat /etc/ssh/ssh_host_ed25519_key.pub
+pi     = "ssh-ed25519 AAAA...";   # from: ssh admin@pi5    cat /etc/ssh/ssh_host_ed25519_key.pub
+admin  = "ssh-ed25519 AAAA...";   # from: cat ~/.ssh/id_ed25519.pub
 ```
+
+The host keys are only available after first install — fill in `admin` first
+and add the host keys in step 3a of the deployment checklist.
 
 ### 2. Create all required secrets
 

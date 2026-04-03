@@ -1,6 +1,9 @@
 # Per-deployment local settings (see local.nix.example)
 local.nix
 
+# Per-deployment agenix recipients (see secrets/secrets.nix.example)
+secrets/secrets.nix
+
 # Vim
 *.swp
 *.swo

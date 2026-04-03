@@ -23,6 +23,13 @@ nix shell nixpkgs#hello --command hello
 # Hello, world!
 ```
 
+> **Existing repo upgrade:** if you previously had `secrets/secrets.nix`
+> tracked in git, stop tracking it:
+> ```bash
+> git rm --cached secrets/secrets.nix
+> git commit -m "stop tracking secrets/secrets.nix (now gitignored)"
+> ```
+
 ### 0b. Clone and configure
 
 - [ ] Clone this repo
@@ -80,17 +87,19 @@ nix shell github:ryantm/agenix
 
 > **Chicken-and-egg note:** agenix encrypts secrets to the host SSH key, but the
 > host doesn't exist yet. Encrypt all secrets with your admin key only for now.
-> After first boot, add the host keys to `secrets.nix` and run `agenix -r`.
+> After first boot, add the host keys to `secrets/secrets.nix` and run `agenix -r`.
 
 > **CI note:** commit the `.age` files to the repository — they are encrypted and
 > safe to commit. The GitHub Actions workflow evaluates the NixOS configurations,
 > which requires the `.age` files to exist as paths in the store. Decryption only
 > happens at activation time on the real machines, never in CI.
 
-First, add your workstation public key to `secrets/secrets.nix`:
+First, create your `secrets/secrets.nix` (gitignored — like `local.nix`):
 ```bash
-cat ~/.ssh/id_ed25519.pub  # copy this value into secrets/secrets.nix → admin
+cp secrets/secrets.nix.example secrets/secrets.nix
 ```
+Fill in your workstation public key (`cat ~/.ssh/id_ed25519.pub`) as `admin`.
+Leave `server` and `pi` as placeholders for now — you'll fill them in at step 3a.
 
 Then create all required secrets:
 ```bash
