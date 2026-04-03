@@ -127,15 +127,8 @@ Then commit the generated `.age` files:
 ```bash
 git add secrets/*.age && git commit -m "add initial secrets"
 ```
-```
 
 See `secrets/README.md` for the exact format of each file.
-
-- [ ] Commit the `.age` files:
-  ```bash
-  git add secrets/*.age secrets/secrets.nix
-  git commit -m "add encrypted secrets"
-  ```
 
 ---
 
@@ -229,6 +222,19 @@ nix-shell -p git --run "git clone <your-repo-url> /mnt/etc/nixos/repo"
 cp -r /media/usb/nixos /mnt/etc/nixos/repo
 ```
 
+**Critical:** copy your `local.nix` into the cloned repo — without it the
+flake uses `CHANGE_ME` defaults (wrong IPs, wrong SSH key, no SSH after install).
+
+From your **workstation** (before or after cloning on the installer):
+```bash
+scp local.nix nixos@<installer-ip>:/tmp/local.nix
+```
+
+Then on the **installer**:
+```bash
+cp /tmp/local.nix /mnt/etc/nixos/repo/local.nix
+```
+
 Then install:
 ```bash
 nixos-install --flake /mnt/etc/nixos/repo#server --impure
@@ -277,14 +283,16 @@ ssh nixos@<pi-ip>
 
 ### 2c. Partition and format storage drives
 
-> **IMPORTANT**: The Pi boots from microSD/USB. The two 4 TB drives are separate.
+> **IMPORTANT**: The Pi boots from microSD. The two NVMe storage drives are
+> separate (connected via M.2 HAT or USB NVMe adapter).
 
 ```bash
-# Identify the drives (NOT the boot media)
+# Identify the drives — NVMe drives appear as /dev/nvme0n1, /dev/nvme1n1, etc.
+# microSD appears as /dev/mmcblk0 — do NOT touch that one.
 lsblk
 
-# Get the stable by-id paths for both drives (use these — not /dev/sdX):
-ls -la /dev/disk/by-id/ | grep -v part | grep -v mmc
+# Get the stable by-id paths for both NVMe drives (use these in config — not /dev/nvmeXn1):
+ls -la /dev/disk/by-id/ | grep nvme | grep -v part
 
 # Encrypt and format Drive A
 cryptsetup luksFormat --type luks2 /dev/disk/by-id/DRIVE_A_ID

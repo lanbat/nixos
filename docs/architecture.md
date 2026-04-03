@@ -47,7 +47,7 @@
                          │  Wyoming Satellite (10700) ◄── HA on server         │
                          │  Telegraf → server:8086                             │
                          │                                                     │
-                         │  Drive A /dev/sdb                                  │
+                         │  Drive A /dev/nvme0n1                              │
                          │  ┌─────────────────────────────────────────────┐   │
                          │  │ LUKS2  →  XFS (pquota)                     │   │
                          │  │  /mnt/storage-a/media/       (Jellyfin)    │   │
@@ -56,7 +56,7 @@
                          │  │  /mnt/storage-a/surveillance/(Frigate)     │   │
                          │  └─────────────────────────────────────────────┘   │
                          │                                                     │
-                         │  Drive B /dev/sdc                                  │
+                         │  Drive B /dev/nvme1n1                              │
                          │  ┌─────────────────────────────────────────────┐   │
                          │  │ LUKS2  →  XFS (pquota)                     │   │
                          │  │  /mnt/storage-b/nextcloud/   (Nextcloud)   │   │
