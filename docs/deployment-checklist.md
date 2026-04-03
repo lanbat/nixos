@@ -159,22 +159,24 @@ ssh nixos@<ip>
 ### 1b. Partition and encrypt the server disk
 
 ```bash
-# Identify your disk
+# Identify your disk — the server uses a SATA disk (e.g. /dev/sda).
+# The USB installer will also show up (smaller, with an /iso mountpoint) —
+# do NOT touch that one.
 lsblk
 
-# Partition (adjust /dev/nvme0n1 to your disk)
-parted /dev/nvme0n1 -- mklabel gpt
-parted /dev/nvme0n1 -- mkpart ESP fat32 1MiB 512MiB
-parted /dev/nvme0n1 -- set 1 esp on
-parted /dev/nvme0n1 -- mkpart primary 512MiB 100%
+# Partition (adjust /dev/sda if your disk has a different name)
+parted /dev/sda -- mklabel gpt
+parted /dev/sda -- mkpart ESP fat32 1MiB 512MiB
+parted /dev/sda -- set 1 esp on
+parted /dev/sda -- mkpart primary 512MiB 100%
 
 # Format EFI
-mkfs.fat -F 32 -n BOOT /dev/nvme0n1p1
+mkfs.fat -F 32 -n BOOT /dev/sda1
 
 # Encrypt root partition
-cryptsetup luksFormat --type luks2 /dev/nvme0n1p2
+cryptsetup luksFormat --type luks2 /dev/sda2
 # ↑ Enter the passphrase you will type at every boot.
-cryptsetup luksOpen /dev/nvme0n1p2 cryptroot
+cryptsetup luksOpen /dev/sda2 cryptroot
 
 # Format root
 mkfs.ext4 -L nixos /dev/mapper/cryptroot
@@ -182,11 +184,11 @@ mkfs.ext4 -L nixos /dev/mapper/cryptroot
 # Mount
 mount /dev/mapper/cryptroot /mnt
 mkdir -p /mnt/boot
-mount /dev/nvme0n1p1 /mnt/boot
+mount /dev/sda1 /mnt/boot
 
 # Note the UUIDs — you will need them in the next step.
-blkid /dev/nvme0n1p2  # → LUKS UUID  (goes in hosts/server/default.nix)
-blkid /dev/nvme0n1p1  # → EFI UUID   (goes in hosts/server/hardware-configuration.nix)
+blkid /dev/sda2  # → LUKS UUID  (goes in hosts/server/default.nix)
+blkid /dev/sda1  # → EFI UUID   (goes in hosts/server/hardware-configuration.nix)
 ```
 
 ### 1c. Generate hardware config and update the repo

@@ -70,7 +70,7 @@
   # Boot / disk encryption
   # ---------------------------------------------------------------------------
   # The server uses LUKS-encrypted root.
-  # During installation, partition /dev/nvme0n1 (or your disk) with:
+  # During installation, partition the server disk (e.g. /dev/sda) with:
   #   p1: EFI system partition (~512 MiB, vfat)
   #   p2: LUKS container (rest of disk)
   # Then inside LUKS: LVM or a single ext4/btrfs partition.
