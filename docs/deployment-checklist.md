@@ -162,6 +162,24 @@ See `secrets/README.md` for the exact format of each file.
 
 Download [NixOS minimal ISO](https://nixos.org/download), boot from USB.
 
+**To SSH into the installer from your workstation** (recommended — easier to
+copy/paste commands):
+
+On the installer console:
+```bash
+# Set a password for the nixos user
+passwd
+# Enter any password you like — it's temporary and only used for this session.
+
+# Find the machine's IP
+ip addr show
+```
+
+Then from your workstation:
+```bash
+ssh nixos@<ip>
+```
+
 ### 1b. Partition and encrypt the server disk
 
 ```bash
@@ -262,7 +280,14 @@ Insert the SD card into the Pi 5. The Pi will boot from it.
 ### 2b. Boot NixOS AArch64 installer on Pi 5
 
 Connect the Pi to your network and power it on.
-SSH in once it boots (default NixOS installer user: `nixos`, no password, sudo without password):
+
+If SSH asks for a password, set one first on the Pi console:
+```bash
+passwd   # set any temporary password
+ip addr show  # note the IP
+```
+
+Then from your workstation:
 ```bash
 ssh nixos@<pi-ip>
 ```
