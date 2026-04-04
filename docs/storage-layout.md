@@ -36,14 +36,37 @@ Main Server
     └── b/   →  NFS  →  pi5:/mnt/storage-b
 ```
 
-## Server-local state (always-on, fast, small)
+## Server-local state — host root (always available, unencrypted)
+
+These paths live on `/dev/sda2` and are accessible at boot without any unlock.
 
 ```
 /var/lib/
 ├── caddy/             Caddy TLS state, internal CA keys
-├── tang/              Tang key pairs (BACK THIS UP)
 ├── hass/              Home Assistant config + SQLite DB
 ├── authentik/         Authentik media, certs
+├── postgresql/        PostgreSQL data directory
+├── frigate/
+│   ├── config/        frigate.yml
+│   └── db/            Frigate SQLite event DB
+├── grafana/           Grafana dashboards, users, alert state
+├── influxdb2/         InfluxDB data + WAL (BACK THIS UP)
+├── mosquitto/         Mosquitto broker state
+├── homepage/          Homepage config (stateless, managed in repo)
+└── containers/        Podman container image storage
+
+/var/lib/tang/         ← bind mount from /mnt/control/tang (control LUKS)
+                         Tang key pairs (BACK THIS UP — only available when
+                         control is unlocked)
+```
+
+## Server-local state — workload LUKS (available after `unlock-workload`)
+
+These paths are mode-0000 stubs on host root. When workload is unlocked they
+are overlaid by bind mounts from `/mnt/workload/`.
+
+```
+/mnt/workload/
 ├── nextcloud/         Nextcloud app + config (bulk data is on Pi)
 ├── immich/
 │   ├── db/            Immich PostgreSQL data (pgvecto.rs)
@@ -51,17 +74,13 @@ Main Server
 │   ├── encoded-video/ Re-encoded video previews
 │   ├── profile/       User profile photos
 │   └── model-cache/   CLIP / face detection ML models (~4 GB)
-├── frigate/
-│   ├── config/        frigate.yml
-│   └── db/            Frigate SQLite event DB
+├── jellyfin/          Jellyfin metadata and configuration
 ├── qbittorrent/       qBittorrent config + fast-resume data
 ├── bitmagnet/         Bitmagnet config
-├── homepage/          Homepage config
 ├── vaultwarden/       Vaultwarden SQLite DB + attachments (BACK THIS UP)
-├── grafana/           Grafana dashboards, users, alert state
-├── influxdb2/         InfluxDB data + WAL (BACK THIS UP)
-└── syncthing/         Syncthing config + SQLite index (BACK THIS UP)
-                       (actual synced files are on Pi/b/syncthing)
+├── syncthing/         Syncthing config + SQLite index (BACK THIS UP)
+│                      (actual synced files are on Pi/b/syncthing)
+└── samba/             Samba configuration and state
 
 /var/cache/
 ├── jellyfin/          Jellyfin transcodes + metadata cache (safe to delete)

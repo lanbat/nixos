@@ -43,10 +43,13 @@
   # Unattended upgrades
   # ---------------------------------------------------------------------------
   # The git pull pre-service is in modules/common/auto-upgrade.nix.
-  # allowReboot is true — the Pi unlocks its drives via Clevis/Tang
-  # automatically on reboot, so unattended reboots are safe as long as the
-  # server (and Tang) are running.  The reboot window keeps reboots in the
-  # early hours so they don't interrupt evening use.
+  # allowReboot is true — the Pi boots from the SD card unconditionally.
+  # After a reboot, storage-a-unlock and storage-b-unlock services attempt
+  # Clevis/Tang unlock automatically (retrying every 5 min until Tang is
+  # reachable).  If the server's control LUKS is still locked when the Pi
+  # reboots, the NVMe drives will stay locked until the server admin runs
+  # unlock-control on the server.  The Pi OS itself continues to run.
+  # The reboot window keeps reboots in the early hours to minimise disruption.
   system.autoUpgrade = {
     enable      = true;
     flake       = "/etc/nixos#pi";

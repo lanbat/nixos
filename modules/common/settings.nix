@@ -161,6 +161,61 @@
     };
 
     # -------------------------------------------------------------------------
+    # Server disk — three-layer design
+    # -------------------------------------------------------------------------
+    # The server uses two manually-unlocked LUKS volumes that stay locked at boot.
+    # Host root (sda2) is plain ext4 — no passphrase required at boot.
+    # See modules/server/secure-layers.nix for the full design.
+
+    serverControlLuksUuid = lib.mkOption {
+      type        = lib.types.str;
+      default     = "CHANGE_ME_CONTROL_LUKS_UUID";
+      description = ''
+        UUID of the server's control LUKS partition (sda3).
+        Contains Tang keys. Stays locked at boot; unlocked manually.
+        Find with: blkid /dev/sda3
+      '';
+    };
+
+    serverWorkloadLuksUuid = lib.mkOption {
+      type        = lib.types.str;
+      default     = "CHANGE_ME_WORKLOAD_LUKS_UUID";
+      description = ''
+        UUID of the server's workload LUKS partition (sda4).
+        Contains all container data, databases, service state.
+        Stays locked at boot; unlocked manually.
+        Find with: blkid /dev/sda4
+      '';
+    };
+
+    # -------------------------------------------------------------------------
+    # Raspberry Pi encrypted storage drives
+    # -------------------------------------------------------------------------
+    # Both NVMe drives are bound to the server's Tang service via Clevis.
+    # Find stable by-id paths with:
+    #   ls -la /dev/disk/by-id/ | grep nvme | grep -v part
+
+    piStorageDriveA = lib.mkOption {
+      type        = lib.types.str;
+      default     = "CHANGE_ME_PI_DRIVE_A";
+      example     = "nvme-Samsung_SSD_970_EVO_1TB_ABC123";
+      description = ''
+        Stable /dev/disk/by-id/ filename for the Pi's NVMe storage drive A.
+        Do not include the /dev/disk/by-id/ prefix — just the filename.
+      '';
+    };
+
+    piStorageDriveB = lib.mkOption {
+      type        = lib.types.str;
+      default     = "CHANGE_ME_PI_DRIVE_B";
+      example     = "nvme-Samsung_SSD_970_EVO_1TB_XYZ456";
+      description = ''
+        Stable /dev/disk/by-id/ filename for the Pi's NVMe storage drive B.
+        Do not include the /dev/disk/by-id/ prefix — just the filename.
+      '';
+    };
+
+    # -------------------------------------------------------------------------
     # Access
     # -------------------------------------------------------------------------
     adminSshKey = lib.mkOption {

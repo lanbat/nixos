@@ -58,6 +58,12 @@ nix shell nixpkgs#hello --command hello
     - `haLatitude` — decimal degrees (e.g. `"51.5"`)
     - `haLongitude` — decimal degrees (e.g. `"-0.1"`)
     - `haElevation` — metres above sea level (e.g. `50`)
+  - **Server disk** (fill in after partitioning in step 1b):
+    - `serverControlLuksUuid`  — UUID of `/dev/sda3` (control LUKS, Tang keys)
+    - `serverWorkloadLuksUuid` — UUID of `/dev/sda4` (workload LUKS, service data)
+  - **Raspberry Pi NVMe drives** (fill in during Pi installation step 2c):
+    - `piStorageDriveA` — by-id filename for NVMe drive A (no `/dev/disk/by-id/` prefix)
+    - `piStorageDriveB` — by-id filename for NVMe drive B
   - **Access:**
     - `adminSshKey` — your SSH public key (`cat ~/.ssh/id_ed25519.pub`)
   - **Zigbee dongle** — plug the dongle into the **server** and run:
@@ -156,7 +162,18 @@ Then from your workstation:
 ssh nixos@<ip>
 ```
 
-### 1b. Partition and encrypt the server disk
+### 1b. Partition the server disk (three-layer layout)
+
+The server uses four partitions. Host root is **not** LUKS-encrypted — it
+boots without any passphrase. Control and workload partitions require manual
+unlock after boot. See `docs/secure-layers.md` for the full design.
+
+```
+sda1:  1 GiB   /boot       EFI, vfat          — systemd-boot kernels
+sda2: 50 GiB   /           ext4, plain         — host OS, SSH, admin tools
+sda3: 256 MiB  (raw)       LUKS2              — control layer (Tang keys)
+sda4: rest     (raw)       LUKS2              — workload layer (all service data)
+```
 
 ```bash
 # Identify your disk — the server uses a SATA disk (e.g. /dev/sda).
@@ -164,31 +181,48 @@ ssh nixos@<ip>
 # do NOT touch that one.
 lsblk
 
-# Partition (adjust /dev/sda if your disk has a different name)
+# Create four partitions
 parted /dev/sda -- mklabel gpt
-parted /dev/sda -- mkpart ESP fat32 1MiB 512MiB
+parted /dev/sda -- mkpart ESP fat32 1MiB 1025MiB
 parted /dev/sda -- set 1 esp on
-parted /dev/sda -- mkpart primary 512MiB 100%
+parted /dev/sda -- mkpart primary ext4 1025MiB 51GiB
+parted /dev/sda -- mkpart primary 51GiB 51256MiB
+parted /dev/sda -- mkpart primary 51256MiB 100%
 
-# Format EFI
+# Format EFI/boot partition
 mkfs.fat -F 32 -n BOOT /dev/sda1
 
-# Encrypt root partition
-cryptsetup luksFormat --type luks2 /dev/sda2
-# ↑ Enter the passphrase you will type at every boot.
-cryptsetup luksOpen /dev/sda2 cryptroot
+# Format host root (plain ext4 — no LUKS, boots without passphrase)
+mkfs.ext4 -L nixos /dev/sda2
 
-# Format root
-mkfs.ext4 -L nixos /dev/mapper/cryptroot
+# Format control LUKS (Tang keys — manually unlocked after boot)
+cryptsetup luksFormat --type luks2 /dev/sda3
+# ↑ Choose a strong passphrase. This unlocks Tang, which lets the Pi unlock its drives.
+cryptsetup luksOpen /dev/sda3 control
+mkfs.ext4 -L control /dev/mapper/control
+# Create the Tang key directory inside the control volume:
+mount /dev/mapper/control /tmp/ctrl-init
+mkdir -p /tmp/ctrl-init/tang
+umount /tmp/ctrl-init
+cryptsetup luksClose control
 
-# Mount
-mount /dev/mapper/cryptroot /mnt
+# Format workload LUKS (all service data — manually unlocked after boot)
+cryptsetup luksFormat --type luks2 /dev/sda4
+# ↑ Choose a passphrase (can be same or different from control passphrase).
+cryptsetup luksOpen /dev/sda4 workload
+mkfs.ext4 -L workload /dev/mapper/workload
+cryptsetup luksClose workload
+
+# Mount host root for installation
+mount /dev/sda2 /mnt
 mkdir -p /mnt/boot
 mount /dev/sda1 /mnt/boot
 
-# Note the UUIDs — you will need them in the next step.
-blkid /dev/sda2  # → LUKS UUID  (goes in hosts/server/default.nix)
-blkid /dev/sda1  # → EFI UUID   (goes in hosts/server/hardware-configuration.nix)
+# Note these UUIDs — needed in local.nix and hardware-configuration.nix
+blkid /dev/sda1  # → EFI UUID          → hardware-configuration.nix fileSystems."/boot"
+blkid /dev/sda2  # → root UUID         → hardware-configuration.nix fileSystems."/"
+blkid /dev/sda3  # → serverControlLuksUuid  → local.nix
+blkid /dev/sda4  # → serverWorkloadLuksUuid → local.nix
 ```
 
 ### 1c. Generate hardware config and update the repo
@@ -199,14 +233,14 @@ nixos-generate-config --root /mnt
 cat /mnt/etc/nixos/hardware-configuration.nix
 ```
 
-On your workstation, update the repo with the hardware specifics:
+On your workstation, update the repo:
 - Replace `hosts/server/hardware-configuration.nix` with the generated output.
-- Set the LUKS UUID in `hosts/server/default.nix`:
-  ```nix
-  boot.initrd.luks.devices."cryptroot".device =
-    "/dev/disk/by-uuid/<LUKS_UUID>";
-  ```
-- Commit and push (or make the repo available to the installer via USB/network).
+  **Important**: remove any `boot.initrd.luks.devices` entry that
+  `nixos-generate-config` may have added — the host root is not encrypted.
+- Update `local.nix`:
+  - `serverControlLuksUuid`  — UUID of `/dev/sda3` from `blkid /dev/sda3`
+  - `serverWorkloadLuksUuid` — UUID of `/dev/sda4` from `blkid /dev/sda4`
+- Commit and push the updated `hardware-configuration.nix`.
 
 ### 1d. Install NixOS on the server
 
@@ -244,12 +278,58 @@ nixos-install --flake /mnt/etc/nixos/repo#server --impure
 
 ### 1e. First boot
 
-- Type the LUKS passphrase at the boot prompt.
-- SSH in as `admin`.
-- Verify services: `systemctl status caddy authentik postgresql redis-authentik`
-- Wait for Caddy to generate the CA cert (usually 10-30 seconds after start).
-- Check Tang is running: `systemctl status tang`
-- Get Tang's advertise URL: `curl http://localhost:7500/adv`
+The server boots directly — no LUKS passphrase at boot console. Host layer only.
+
+- SSH in as `admin` (SSH is available immediately after boot).
+- **No application services are running yet — this is expected.**
+- Verify host layer: `systemctl status sshd`
+
+### 1f. Back up LUKS headers (do this before anything else)
+
+```bash
+# On the server (as root / sudo):
+cryptsetup luksHeaderBackup /dev/sda3 --header-backup-file /tmp/server-control-luks-header.img
+cryptsetup luksHeaderBackup /dev/sda4 --header-backup-file /tmp/server-workload-luks-header.img
+
+# Copy to your workstation:
+scp admin@server:/tmp/server-*-luks-header.img ~/
+# Store these files OFFLINE (USB drive, secure physical location).
+# A lost header means the volume is unrecoverable even with the passphrase.
+```
+
+### 1g. Unlock control layer and initialise Tang
+
+```bash
+sudo unlock-control
+# Enter the control LUKS passphrase.
+# Tang generates its key pair on first start (keys stored in /mnt/control/tang/).
+```
+
+Verify Tang:
+```bash
+curl http://127.0.0.1:7500/adv | jq -r '.keys[].alg'
+```
+
+**Back up Tang keys immediately** — see `docs/runbook.md § Backing up Tang keys`.
+
+### 1h. Unlock workload layer and start services
+
+```bash
+sudo unlock-workload
+# Enter the workload LUKS passphrase.
+# All services start. First start may be slow (pulling container images).
+```
+
+Verify:
+```bash
+sudo server-health
+systemctl status caddy authentik postgresql
+```
+
+Wait for Caddy to generate the CA cert (usually 10–30 seconds after start).
+
+> **Note**: Steps 3a (host SSH key for agenix) are still needed after this boot.
+> See Phase 3 below for full service configuration.
 
 ---
 
@@ -307,9 +387,9 @@ cryptsetup luksOpen /dev/disk/by-id/DRIVE_B_ID storage-b
 mkfs.xfs -L storage-b /dev/mapper/storage-b
 ```
 
-Now update the repo on your workstation with the actual drive paths:
-- `modules/pi/clevis-unlock.nix` — replace both `CHANGE_ME_DRIVE_A` / `CHANGE_ME_DRIVE_B`
-- `hosts/pi/services/storage.nix` — replace both `CHANGE_ME_DRIVE_A` / `CHANGE_ME_DRIVE_B`
+Now update `local.nix` on your workstation with the actual drive by-id paths:
+- `piStorageDriveA` — the drive A filename from the `ls -la /dev/disk/by-id/` output
+- `piStorageDriveB` — the drive B filename
 
 Commit and push (or make available to the Pi installer).
 

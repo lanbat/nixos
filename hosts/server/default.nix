@@ -17,6 +17,9 @@
     ../../modules/common/auto-upgrade.nix
 
     # Server-specific modules
+    ../../modules/server/secure-layers.nix        # three-layer LUKS design
+    ../../modules/server/workload-gate.nix         # service gating on workload
+    ../../modules/server/backups.nix               # restic backup framework
     ../../modules/server/nfs-mounts.nix
     ../../modules/server/nfs-dependent-service.nix
     ../../modules/server/on-demand.nix
@@ -54,9 +57,9 @@
   # Unattended upgrades
   # ---------------------------------------------------------------------------
   # The git pull pre-service is in modules/common/auto-upgrade.nix.
-  # allowReboot is false — the server requires a manual LUKS passphrase at
-  # boot, so it cannot reboot unattended.  Upgrades take effect at the next
-  # manual reboot or when `systemctl restart <service>` is run.
+  # allowReboot is false — after a reboot, both LUKS layers stay locked until
+  # an admin manually runs unlock-control and unlock-workload.  An unattended
+  # reboot would leave the server in host-only mode with no services running.
   system.autoUpgrade = {
     enable      = true;
     flake       = "/etc/nixos#server";
@@ -67,26 +70,19 @@
   };
 
   # ---------------------------------------------------------------------------
-  # Boot / disk encryption
+  # Boot
   # ---------------------------------------------------------------------------
-  # The server uses LUKS-encrypted root.
-  # During installation, partition the server disk (e.g. /dev/sda) with:
-  #   p1: EFI system partition (~512 MiB, vfat)
-  #   p2: LUKS container (rest of disk)
-  # Then inside LUKS: LVM or a single ext4/btrfs partition.
-  # See docs/deployment-checklist.md for the full partitioning guide.
+  # The server uses a three-layer design.  Host root (sda2) is plain ext4 —
+  # no passphrase is required at boot.  The control (sda3) and workload (sda4)
+  # LUKS volumes are opened manually after boot by an admin.
+  # See modules/server/secure-layers.nix for the full design.
+  # See docs/runbook.md for the unlock procedure.
   boot.loader = {
     systemd-boot.enable      = true;
     efi.canTouchEfiVariables = true;
   };
-
-  # LUKS device — update the UUID to match your actual partition.
-  boot.initrd.luks.devices."cryptroot" = {
-    device     = "/dev/disk/by-uuid/CHANGE_ME_SERVER_LUKS_UUID";
-    preLVM     = true;
-    # Interactive passphrase prompt at boot.  No network needed.
-    allowDiscards = true; # enable only on SSDs you trust
-  };
+  # No boot.initrd.luks entries — neither LUKS volume opens at boot.
+  # The host root (sda2) is unencrypted ext4 (declared in hardware-configuration.nix).
 
   # ---------------------------------------------------------------------------
   # Networking
@@ -200,28 +196,19 @@
   # ---------------------------------------------------------------------------
   # Server-local state directories
   # ---------------------------------------------------------------------------
+  # NOTE: /var/lib/* service data directories are created as mode-0000 stubs
+  # by modules/server/secure-layers.nix.  They are bind-mounted from the
+  # workload LUKS layer by modules/server/workload-gate.nix when that layer
+  # is unlocked.  Do NOT add /var/lib/authentik, /var/lib/immich, etc. here.
   systemd.tmpfiles.rules = [
-    # Config / state (survive reboots, should be backed up)
-    "d /var/lib/homelab                0755 root     root    -"
-    "d /var/lib/authentik              0750 root     root    -"
-    "d /var/lib/immich                 0750 immich   immich  -"
-    "d /var/lib/immich/db              0750 immich   immich  -"
-    "d /var/lib/immich/upload          0750 immich   immich  -"
-    "d /var/lib/immich/thumbs          0750 immich   immich  -"
-    "d /var/lib/immich/encoded-video   0750 immich   immich  -"
-    "d /var/lib/immich/profile         0750 immich   immich  -"
-    "d /var/lib/immich/model-cache     0750 immich   immich  -"
-    "d /var/lib/frigate                0750 frigate  frigate -"
-    "d /var/lib/frigate/db             0750 frigate  frigate -"
-    "d /var/lib/frigate/config         0750 frigate  frigate -"
-    "d /var/lib/qbittorrent            0750 qbt      qbt     -"
-    "d /var/lib/bitmagnet              0750 root     root    -"
-    "d /var/lib/homepage               0750 root     root    -"
-    "d /var/lib/ca-landing             0755 root     root    -"
+    # Non-sensitive host-root directories (not service data, no workload bind mount needed).
+    "d /var/lib/homelab    0755 root root -"
+    "d /var/lib/ca-landing 0755 root root -"
 
-    # Transcode / cache (okay to lose on reboot — put on tmpfs if desired)
-    "d /var/cache/jellyfin             0750 jellyfin jellyfin -"
-    "d /var/cache/frigate              0750 frigate  frigate  -"
+    # Transient caches — these can live on host root (derived, re-generatable).
+    # On a busy server, move these to a separate tmpfs or workload subdir.
+    "d /var/cache/jellyfin 0750 jellyfin jellyfin -"
+    "d /var/cache/frigate  0750 frigate  frigate  -"
   ];
 
   # ---------------------------------------------------------------------------

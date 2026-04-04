@@ -1,130 +1,113 @@
 # hosts/pi/services/storage.nix
 #
-# Pi storage — two LUKS-encrypted 4 TB XFS drives.
+# Raspberry Pi NVMe storage — directory initialisation and NFS dependency wiring.
 #
-# Physical layout
-# ---------------
-# Drive A (/dev/disk/by-id/CHANGE_ME_DRIVE_A):
-#   LUKS container → /dev/mapper/storage-a → XFS → /mnt/storage-a
+# ─────────────────────────────────────────────────────────────────────────────
+# PHYSICAL LAYOUT
+# ─────────────────────────────────────────────────────────────────────────────
 #
-#   Top-level directories:
-#     /mnt/storage-a/media/         — Jellyfin (movies, TV, music)
-#     /mnt/storage-a/downloads/     — qBittorrent (per-user subdirs)
-#     /mnt/storage-a/photos/        — Immich originals
-#     /mnt/storage-a/surveillance/  — Frigate recordings
+#  Drive A (/dev/disk/by-id/<piStorageDriveA>):
+#    LUKS2 → XFS (pquota) → /mnt/storage-a
+#    Directories:
+#      /mnt/storage-a/media/         — Jellyfin (movies, TV, music)
+#      /mnt/storage-a/downloads/     — qBittorrent (per-user subdirs)
+#      /mnt/storage-a/photos/        — Immich originals
+#      /mnt/storage-a/surveillance/  — Frigate recordings
 #
-# Drive B (/dev/disk/by-id/CHANGE_ME_DRIVE_B):
-#   LUKS container → /dev/mapper/storage-b → XFS → /mnt/storage-b
+#  Drive B (/dev/disk/by-id/<piStorageDriveB>):
+#    LUKS2 → XFS (pquota) → /mnt/storage-b
+#    Directories:
+#      /mnt/storage-b/nextcloud/     — Nextcloud external storage
+#      /mnt/storage-b/users/         — per-user SMB home dirs
+#      /mnt/storage-b/shared/        — shared SMB space
+#      /mnt/storage-b/backups/       — backup target (restic repositories)
 #
-#   Top-level directories:
-#     /mnt/storage-b/nextcloud/     — Nextcloud external storage
-#     /mnt/storage-b/users/         — per-user SMB home dirs
-#     /mnt/storage-b/shared/        — shared SMB space
-#     /mnt/storage-b/backups/       — backup target
+# ─────────────────────────────────────────────────────────────────────────────
+# UNLOCK MODEL
+# ─────────────────────────────────────────────────────────────────────────────
 #
-# XFS project quotas
-# ------------------
-# XFS project quotas allow per-directory quotas (not just per-user).
-# Setup requires a one-time manual step after formatting:
-#   1. Mount the filesystem with "pquota" option (set in fileSystems below).
-#   2. Run the quota setup script: pkgs/scripts/quota-setup.sh
-#   3. Quotas persist in the XFS superblock across remounts.
-# See docs/storage-layout.md for the full quota plan.
+#  LUKS unlock and mounting are handled by modules/pi/clevis-unlock.nix.
+#  That module creates:
+#    storage-a-unlock.service  — unlocks + mounts /mnt/storage-a
+#    storage-b-unlock.service  — unlocks + mounts /mnt/storage-b
 #
-# LUKS unlock
-# -----------
-# Clevis/Tang handles unlock at boot (see modules/pi/clevis-unlock.nix).
-# The fileSystems entries below assume the LUKS devices are already open.
-# If Clevis fails, the mounts simply don't happen and NFS exports stay empty.
+#  These services run after network-online.target, retry every 5 minutes if
+#  Tang is unreachable, and do NOT block boot on failure.
+#
+#  This file only handles what comes AFTER successful unlock:
+#    - creating the required directory tree (once per new filesystem)
+#    - wiring the NFS server dependency
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# XFS PROJECT QUOTAS
+# ─────────────────────────────────────────────────────────────────────────────
+#
+#  The drives are formatted with XFS + pquota (project quotas). Setup requires
+#  a one-time manual step after first formatting:
+#    mount -o pquota /dev/mapper/storage-a /mnt/storage-a
+#    # ... then run quota setup script
+#  See docs/storage-layout.md for the full quota plan.
+#
 { config, pkgs, lib, ... }:
 
 {
-  # ---------------------------------------------------------------------------
-  # Mount points for the LUKS-unlocked XFS volumes.
-  # ---------------------------------------------------------------------------
-  # "noauto" — don't mount at boot; wait for Clevis to open the LUKS device.
-  # "x-systemd.requires=clevis-unlock-storage-{a,b}.service" — explicit deps.
-  # "pquota" — enable project quotas on the XFS filesystem.
-
-  fileSystems."/mnt/storage-a" = {
-    device  = "/dev/mapper/storage-a";
-    fsType  = "xfs";
-    options = [
-      "noatime"
-      "pquota"           # project + user quotas
-      "noauto"
-      "x-systemd.requires=clevis-unlock-storage-a.service"
-      "x-systemd.after=clevis-unlock-storage-a.service"
-    ];
-  };
-
-  fileSystems."/mnt/storage-b" = {
-    device  = "/dev/mapper/storage-b";
-    fsType  = "xfs";
-    options = [
-      "noatime"
-      "pquota"
-      "noauto"
-      "x-systemd.requires=clevis-unlock-storage-b.service"
-      "x-systemd.after=clevis-unlock-storage-b.service"
-    ];
-  };
-
-  # ---------------------------------------------------------------------------
-  # Create top-level directories once drives are mounted.
-  # ---------------------------------------------------------------------------
-  # systemd-tmpfiles runs after mounts; use a one-shot service with
-  # After=mnt-storage-a.mount to be safe.
+  # ── Storage A initialisation ───────────────────────────────────────────────
+  # Runs once after storage-a is unlocked and mounted.
+  # Creates the top-level directory tree with correct permissions.
+  # Wired before nfs-server.service so NFS always exports a fully-initialised tree.
   systemd.services."storage-a-init" = {
-    description = "Initialize storage-a directory tree";
-    after       = [ "mnt-storage-a.mount" ];
-    requires    = [ "mnt-storage-a.mount" ];
-    before      = [ "nfs-server.service" ];
-    wantedBy    = [ "nfs-server.service" ];
+    description = "Initialise storage-a directory tree after unlock";
+    # Require successful unlock (which implies the filesystem is mounted).
+    requires = [ "storage-a-unlock.service" ];
+    after    = [ "storage-a-unlock.service" ];
+    # nfs-server.service wants this init, ensuring exports are ready before NFS starts.
+    before   = [ "nfs-server.service" ];
+    wantedBy = [ "nfs-server.service" ];
+
     serviceConfig = {
-      Type      = "oneshot";
+      Type            = "oneshot";
+      RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "init-storage-a" ''
         set -e
         base=/mnt/storage-a
-        install -d -m 0755 -o root    -g root    $base/media
-        install -d -m 0755 -o root    -g root    $base/media/movies
-        install -d -m 0755 -o root    -g root    $base/media/tv
-        install -d -m 0755 -o root    -g root    $base/media/music
-        install -d -m 0775 -o nobody  -g nogroup $base/downloads
-        install -d -m 0755 -o nobody  -g nogroup $base/photos
-        install -d -m 0755 -o nobody  -g nogroup $base/surveillance
-        install -d -m 0755 -o nobody  -g nogroup $base/surveillance/clips
-        install -d -m 0755 -o nobody  -g nogroup $base/surveillance/exports
-        echo "storage-a initialized."
+        install -d -m 0755 -o root   -g root    "$base/media"
+        install -d -m 0755 -o root   -g root    "$base/media/movies"
+        install -d -m 0755 -o root   -g root    "$base/media/tv"
+        install -d -m 0755 -o root   -g root    "$base/media/music"
+        install -d -m 0775 -o nobody -g nogroup "$base/downloads"
+        install -d -m 0755 -o nobody -g nogroup "$base/photos"
+        install -d -m 0755 -o nobody -g nogroup "$base/surveillance"
+        install -d -m 0755 -o nobody -g nogroup "$base/surveillance/clips"
+        install -d -m 0755 -o nobody -g nogroup "$base/surveillance/exports"
+        echo "storage-a directory tree ready."
       '';
-      RemainAfterExit = true;
     };
   };
 
+  # ── Storage B initialisation ───────────────────────────────────────────────
   systemd.services."storage-b-init" = {
-    description = "Initialize storage-b directory tree";
-    after       = [ "mnt-storage-b.mount" ];
-    requires    = [ "mnt-storage-b.mount" ];
-    before      = [ "nfs-server.service" ];
-    wantedBy    = [ "nfs-server.service" ];
+    description = "Initialise storage-b directory tree after unlock";
+    requires = [ "storage-b-unlock.service" ];
+    after    = [ "storage-b-unlock.service" ];
+    before   = [ "nfs-server.service" ];
+    wantedBy = [ "nfs-server.service" ];
+
     serviceConfig = {
-      Type      = "oneshot";
+      Type            = "oneshot";
+      RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "init-storage-b" ''
         set -e
         base=/mnt/storage-b
-        install -d -m 0755 -o root   -g root   $base/nextcloud
-        install -d -m 0755 -o nobody -g nogroup $base/users
-        install -d -m 0775 -o nobody -g nogroup $base/shared
-        install -d -m 0700 -o root   -g root   $base/backups
-        echo "storage-b initialized."
+        install -d -m 0755 -o root   -g root    "$base/nextcloud"
+        install -d -m 0755 -o nobody -g nogroup "$base/users"
+        install -d -m 0775 -o nobody -g nogroup "$base/shared"
+        install -d -m 0700 -o root   -g root    "$base/backups"
+        echo "storage-b directory tree ready."
       '';
-      RemainAfterExit = true;
     };
   };
 
-  # ---------------------------------------------------------------------------
-  # Packages needed for storage management.
-  # ---------------------------------------------------------------------------
+  # ── Packages for storage management ───────────────────────────────────────
   environment.systemPackages = with pkgs; [
     xfsprogs      # xfs_quota, xfs_admin
     cryptsetup

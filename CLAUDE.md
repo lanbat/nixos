@@ -4,7 +4,7 @@ This is a two-machine NixOS homelab:
 - **server** — x86_64, main compute + services
 - **pi** — Raspberry Pi 5 (aarch64), encrypted bulk storage + TV frontend
 
-Read `docs/architecture.md` for the full picture before making changes.
+Read `docs/architecture.md` and `docs/secure-layers.md` for the full picture before making changes.
 
 ---
 
@@ -15,14 +15,19 @@ Follow this checklist every time:
 1. **Create** `hosts/server/services/<name>.nix`
 2. **Import** it in `hosts/server/default.nix`
 3. **Add a Caddy vhost** in `hosts/server/services/caddy.nix`
-4. **Declare secrets** in both:
+4. **Decide the service tier** (see "Service tiers" section below):
+   - **Always-on**: service starts at boot, data lives on host root — do nothing extra
+   - **Workload-gated**: add to `bindMounts` and `gatedServices` in `modules/server/workload-gate.nix`,
+     and add a mode-0000 stub in `modules/server/secure-layers.nix`
+5. **Declare secrets** in both:
    - `secrets/secrets.nix` — agenix recipients
    - `hosts/server/default.nix` → `age.secrets` block
-5. **Update docs**:
+6. **Update docs**:
    - `docs/architecture.md` — auth matrix + hostname map + ASCII diagram if always-on
+   - `docs/secure-layers.md` — add to the correct tier table
    - `docs/backup.md` — if the service has state that must be backed up
    - `docs/failure-modes.md` — add to "stays up" or "pauses" list
-   - `docs/storage-layout.md` — add to server-local state listing and service table
+   - `docs/storage-layout.md` — add to the correct state section and service table
    - `docs/deployment-checklist.md` — if post-install steps are needed
    - `secrets/README.md` — add new secrets to the inventory table
 
@@ -60,6 +65,10 @@ Never hardcode network values, timezone, or the admin SSH key. All live in
 | `config.lanbat.haLatitude` | Home Assistant home latitude |
 | `config.lanbat.haLongitude` | Home Assistant home longitude |
 | `config.lanbat.haElevation` | Home Assistant home elevation (metres) |
+| `config.lanbat.serverControlLuksUuid` | UUID of server control LUKS (`/dev/sda3`) |
+| `config.lanbat.serverWorkloadLuksUuid` | UUID of server workload LUKS (`/dev/sda4`) |
+| `config.lanbat.piStorageDriveA` | Pi NVMe drive A by-id filename |
+| `config.lanbat.piStorageDriveB` | Pi NVMe drive B by-id filename |
 | `config.lanbat.adminSshKey` | Admin SSH public key (both hosts) |
 | `config.lanbat.zigbeeDongle` | Zigbee dongle `/dev/serial/by-id/` path |
 | `config.lanbat.zigbeeVendorId` | Zigbee dongle USB vendor ID |
@@ -69,6 +78,32 @@ For the domain specifically, the common pattern in service files is:
 ```nix
 let domain = config.lanbat.domain; in
 ```
+
+### Service tiers
+
+Services run in one of two tiers. Assign the tier based on data sensitivity and
+availability requirements:
+
+**Always-on** (start at boot, data on unencrypted host root):
+- Service starts automatically without any LUKS unlock
+- Data directory (`/var/lib/<name>`) is created by NixOS normally
+- Do NOT add a stub or bind mount for this service
+- Current members: Caddy, PostgreSQL, Authentik, Home Assistant, Grafana, InfluxDB,
+  Mosquitto, Frigate, Snapcast, Wyoming pipeline, SearXNG, Telegraf, Redis (Immich),
+  Homepage
+
+**Workload-gated** (start only after `unlock-workload`, data on encrypted LUKS):
+- Service is gated on `workload-online.target`
+- Data lives in `/mnt/workload/<name>/` and is bind-mounted to `/var/lib/<name>`
+- Requires three additions:
+  1. `modules/server/workload-gate.nix` → add to `bindMounts` and `gatedServices`
+  2. `modules/server/secure-layers.nix` → add a mode-0000 stub:
+     `"d /var/lib/<name> 0000 root root -"`
+- Current members: Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba,
+  qBittorrent, Bitmagnet
+
+When in doubt, prefer **always-on** for monitoring/automation/infrastructure services
+and **workload-gated** for personal data vaults (passwords, photos, documents, media).
 
 ### Prefer NixOS-native services over containers
 Use `services.<name>` when a good NixOS module exists.
@@ -160,3 +195,7 @@ throw a duplicate attribute error. Merge all rules into a single list.
   not `samba`
 - **Duplicate `systemd.tmpfiles.rules` blocks** in the same file
 - **Committing plaintext secrets** — all secrets go in `.age` files only
+- **Adding a mode-0000 stub for an always-on service** — stubs are only for workload-gated
+  services; always-on services manage their own `/var/lib/*` directories
+- **Forgetting the bind mount or stub when adding a workload-gated service** — both
+  `bindMounts` in `workload-gate.nix` and the stub in `secure-layers.nix` are required

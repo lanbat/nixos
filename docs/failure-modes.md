@@ -2,17 +2,20 @@
 
 ## Normal boot (server then Pi)
 
-1. Server boots, prompts for LUKS passphrase.
-2. After passphrase, all server services start: PostgreSQL, Redis, Caddy, Authentik, HA, etc.
-3. Tang starts and is ready on port 7500.
-4. Pi boots. initrd brings up the network.
-5. Clevis contacts Tang, gets the key material, unlocks both LUKS drives.
-6. `/mnt/storage-a` and `/mnt/storage-b` mount.
-7. NFS server starts.
-8. **Server** automounts `/srv/storage/a` and `/srv/storage/b` on first access.
-9. NFS-dependent services (Jellyfin, qBittorrent, Frigate, Samba) start.
+1. Server boots. Host layer comes up immediately — SSH reachable, both LUKS layers locked.
+2. Always-on services start automatically: Caddy, PostgreSQL, Authentik, HA, Grafana,
+   InfluxDB, Mosquitto, Frigate, Snapcast, Wyoming, SearXNG, Telegraf.
+3. Admin SSHes in and runs `sudo unlock-control` → Tang starts on port 7500.
+4. Admin runs `sudo unlock-workload` → Nextcloud, Immich, Jellyfin, Vaultwarden,
+   Syncthing, Samba, qBittorrent, Bitmagnet come up.
+5. Pi boots from SD card. After network is up, `storage-a-unlock` and `storage-b-unlock`
+   contact Tang, unlock both NVMe drives (retries every 5 min until Tang is reachable).
+6. `/mnt/storage-a` and `/mnt/storage-b` mount on the Pi. NFS server starts.
+7. Server automounts `/srv/storage/a` and `/srv/storage/b` on first access.
+8. NFS-dependent services (Jellyfin, qBittorrent, Frigate, Samba) fully operational.
 
-Everything comes up automatically. No manual intervention after the server LUKS prompt.
+Steps 1–2 are automatic. Steps 3–4 require a single SSH session after reboot.
+Use `sudo unlock-all` to run both in sequence.
 
 ---
 
@@ -37,36 +40,29 @@ Once the Pi comes up and NFS becomes available:
 
 ## Pi boots before server
 
-1. Pi boots. initrd tries Clevis unlock.
-2. Tang is not available → Clevis fails.
-3. Drives stay **encrypted and locked**.
-4. Pi boots successfully — NFS server starts but exports empty paths.
-5. Server eventually comes up. Tang starts.
-6. **Pi must be rebooted** (or drives manually unlocked) for drives to become available.
+1. Pi boots from SD card. Always-on Pi services come up normally.
+2. `storage-a-unlock` and `storage-b-unlock` attempt Clevis unlock — Tang is not
+   reachable → both services fail and schedule a retry in 5 minutes.
+3. Drives stay **encrypted and locked**. NFS server starts but exports empty paths.
+4. Server eventually comes up. Admin runs `unlock-control` → Tang starts.
+5. On the next retry (within 5 minutes), the Pi's unlock services succeed automatically.
+6. Drives mount. NFS becomes available. Server NFS-dependent services restart.
 
-This is the one case that requires manual intervention.
+**No manual intervention needed** — the Pi retries automatically until Tang is reachable.
 
-**Recovery:**
-
-Option A — Reboot the Pi (simplest):
+If you want to trigger unlock immediately without waiting for the retry:
 ```bash
-ssh admin@pi5 sudo reboot
-# Pi will re-run Clevis during the next boot, which will now succeed.
+ssh admin@pi
+sudo systemctl restart storage-a-unlock.service storage-b-unlock.service
 ```
 
-Option B — Manual unlock on the Pi:
+Fallback passphrase (if Clevis binding is lost or Tang is permanently unavailable):
 ```bash
-ssh admin@pi5
-sudo clevis luks unlock -d /dev/disk/by-id/DRIVE_A_ID -n storage-a
-sudo clevis luks unlock -d /dev/disk/by-id/DRIVE_B_ID -n storage-b
-sudo systemctl start mnt-storage-a.mount mnt-storage-b.mount
-sudo systemctl start nfs-server
-```
-
-Option C — Fallback passphrase (if Clevis binding is lost):
-```bash
+ssh admin@pi
 sudo cryptsetup luksOpen /dev/disk/by-id/DRIVE_A_ID storage-a
-# Enter the LUKS passphrase set during initial formatting.
+sudo mount /dev/mapper/storage-a /mnt/storage-a
+sudo cryptsetup luksOpen /dev/disk/by-id/DRIVE_B_ID storage-b
+sudo mount /dev/mapper/storage-b /mnt/storage-b
 ```
 
 ---
@@ -84,25 +80,23 @@ sudo cryptsetup luksOpen /dev/disk/by-id/DRIVE_A_ID storage-a
 **Expected total outage for NFS-dependent services: Pi reboot time + ~30s.**
 Usually 2-3 minutes total.
 
-Services that stay up during Pi reboot:
+Services that stay up during Pi reboot (always-on tier):
 - Caddy ✓
+- PostgreSQL ✓
 - Authentik ✓
 - Home Assistant ✓
-- Homepage ✓
-- SearXNG ✓
-- MQTT / Mosquitto ✓
-- PostgreSQL ✓
-- Redis ✓
-- Vaultwarden ✓
 - Grafana ✓
 - InfluxDB ✓
+- Mosquitto ✓
+- Frigate ✓ (local DB; live stream from cameras unaffected)
+- SearXNG ✓
 - Snapserver ✓
 - Wyoming pipeline (STT/TTS/wake word) ✓
 - Telegraf (server) ✓
-- InfluxDB ✓
-- Grafana ✓
+- Redis (Immich) ✓
+- Homepage ✓
 
-Services that pause and restart:
+Workload-gated services that pause and restart (NFS-dependent):
 - Jellyfin ⏸→▶
 - qBittorrent ⏸→▶
 - Frigate ⏸→▶
@@ -149,10 +143,10 @@ this is harmless until the next manual maintenance window.
 
 | Situation | Manual action needed? |
 |---|---|
-| Server LUKS at boot | Yes — type passphrase |
-| Pi boots before server | Yes — reboot Pi after server is up |
+| Server LUKS at boot | Yes — SSH in, run `unlock-control` then `unlock-workload` |
+| Pi boots before server | No — Pi retries every 5 min until Tang is reachable |
 | Normal Pi reboot | No |
-| Normal server reboot | No (after passphrase) |
+| Normal server reboot | Yes — SSH in, run `unlock-all` |
 | Server NIC failure | No (Pi retries) |
 | Tang key rotation | Yes — re-bind Clevis on Pi |
 | Drives fill up | Yes — cleanup or expand |

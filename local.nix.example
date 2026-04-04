@@ -54,6 +54,32 @@
     haElevation    = 11;               # metres above sea level, e.g. 11 (London)
 
     # -------------------------------------------------------------------------
+    # Server disk encryption — three-layer design
+    #
+    # Partition layout (adjust sda to match your disk name):
+    #   sda1:  1 GiB   /boot (EFI, vfat)              — systemd-boot kernels
+    #   sda2: 50 GiB   /     (ext4, no encryption)     — host OS, SSH, admin
+    #   sda3: 256 MiB  control LUKS → /mnt/control     — Tang keys only
+    #   sda4: rest     workload LUKS → /mnt/workload   — all container data
+    #
+    # Get UUIDs with:
+    #   blkid /dev/sda3   # → serverControlLuksUuid
+    #   blkid /dev/sda4   # → serverWorkloadLuksUuid
+    # -------------------------------------------------------------------------
+    serverControlLuksUuid  = "CHANGE_ME";  # UUID of /dev/sda3 (control LUKS)
+    serverWorkloadLuksUuid = "CHANGE_ME";  # UUID of /dev/sda4 (workload LUKS)
+
+    # -------------------------------------------------------------------------
+    # Raspberry Pi NVMe storage drives
+    # Both drives are Clevis/Tang bound and stay locked until Tang is reachable.
+    # Get stable by-id paths with (on the Pi):
+    #   ls -la /dev/disk/by-id/ | grep nvme | grep -v part
+    # Use only the filename, not the /dev/disk/by-id/ prefix.
+    # -------------------------------------------------------------------------
+    piStorageDriveA = "CHANGE_ME";  # e.g. "nvme-Samsung_SSD_970_EVO_1TB_ABC123"
+    piStorageDriveB = "CHANGE_ME";  # e.g. "nvme-Samsung_SSD_970_EVO_1TB_XYZ456"
+
+    # -------------------------------------------------------------------------
     # Admin SSH public key — same for both machines.
     # Generate with: ssh-keygen -t ed25519
     # Get the value with: cat ~/.ssh/id_ed25519.pub

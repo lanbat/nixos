@@ -3,68 +3,72 @@
 ## Overview
 
 ```
-                         ┌─────────────────────────────────────────────────────┐
-                         │                  MAIN SERVER                        │
-                         │                                                     │
-  LAN clients            │  Caddy (443)  ──►  *.<domain>                 │
-  ──────────────────────►│  IPv4 + IPv6  ──►  TLS internal CA                 │
-  (SMB: 445)             │                                                     │
-                         │  ┌──────────────────────────────────────────────┐  │
-                         │  │ Always-on services                           │  │
-                         │  │  Authentik (9000)    PostgreSQL (5432)       │  │
-                         │  │  Home Assistant (8123)  Redis (6379, 6380)  │  │
-                         │  │  Homepage (3000)     Tang (7500) ──►──────┐ │  │
-                         │  │  SearXNG (8888)      Mosquitto (1883)     │ │  │
-                         │  │  Nextcloud (8080)    Samba (445)          │ │  │
-                         │  │  Vaultwarden (8222)                       │ │  │
-                         │  │  Grafana (3030)      InfluxDB (8086)      │ │  │
-                         │  │  Snapserver (1704/1780)                   │ │  │
-                         │  │  Wyoming pipeline (10300/10301/10302)     │ │  │
-                         │  │  Telegraf → InfluxDB (8086)               │ │  │
-                         │  └──────────────────────────────────────────┘│ │  │
-                         │                                               │ │  │
-                         │  ┌───────────────────────────────────────┐   │ │  │
-                         │  │ NFS-dependent services                │   │ │  │
-                         │  │  Jellyfin (8096)   qBittorrent (8090) │   │ │  │
-                         │  │  Frigate (5000)    Immich (2283)      │   │ │  │
-                         │  │  Syncthing (8384/22000)               │   │ │  │
-                         │  └───────────────────────────────────────┘   │ │  │
-                         │            │ NFS (port 2049)                 │ │  │
-                         │            │                                 │ │  │
-                         └────────────┼─────────────────────────────────┼─┘  │
-                                      │                                 │
-                                      │   CLEVIS/TANG unlock            │
-                                      │ (Tang TCP 7500) ◄───────────────┘
-                                      │
-                         ┌────────────▼────────────────────────────────────────┐
-                         │              RASPBERRY PI 5                         │
-                         │                                                     │
-                         │  NFS server  ──►  exports /mnt/storage-{a,b}       │
-                         │  TV Launcher (openbox)                              │
-                         │    ├── Kodi                                         │
-                         │    └── RetroArch                                    │
-                         │  Snapclient ──► server:1704                         │
-                         │  Wyoming Satellite (10700) ◄── HA on server         │
-                         │  Telegraf → server:8086                             │
-                         │                                                     │
-                         │  Drive A /dev/nvme0n1                              │
-                         │  ┌─────────────────────────────────────────────┐   │
-                         │  │ LUKS2  →  XFS (pquota)                     │   │
-                         │  │  /mnt/storage-a/media/       (Jellyfin)    │   │
-                         │  │  /mnt/storage-a/downloads/   (qBittorrent) │   │
-                         │  │  /mnt/storage-a/photos/      (Immich)      │   │
-                         │  │  /mnt/storage-a/surveillance/(Frigate)     │   │
-                         │  └─────────────────────────────────────────────┘   │
-                         │                                                     │
-                         │  Drive B /dev/nvme1n1                              │
-                         │  ┌─────────────────────────────────────────────┐   │
-                         │  │ LUKS2  →  XFS (pquota)                     │   │
-                         │  │  /mnt/storage-b/nextcloud/   (Nextcloud)   │   │
-                         │  │  /mnt/storage-b/users/       (SMB homes)   │   │
-                         │  │  /mnt/storage-b/shared/      (SMB shared)  │   │
-                         │  │  /mnt/storage-b/backups/     (server bkp)  │   │
-                         │  └─────────────────────────────────────────────┘   │
-                         └────────────────────────────────────────────────────┘
+                         ┌──────────────────────────────────────────────────────────────┐
+                         │                     SERVER                                   │
+                         │                                                              │
+                         │  /dev/sda2 — host root (ext4, plain — available at boot)     │
+                         │  ┌─────────────────────────────────────────────────────┐    │
+                         │  │ SSH (22)  networking  firewall  admin tools          │    │
+                         │  │ unlock-control / unlock-workload scripts             │    │
+                         │  └────────────────────────┬────────────────────────────┘    │
+                         │                           │ manual unlock (passphrase)       │
+                         │  /dev/sda3 — control LUKS → /mnt/control                    │
+                         │  ┌─────────────────────────────────────────────────────┐    │
+                         │  │ Tang (7500) ──────────────────────────────────────┐ │    │
+                         │  │  /mnt/control/tang/ ←→ /var/lib/tang (bind mount) │ │    │
+                         │  └───────────────────────────────────────────────────┼─┘    │
+                         │                           │ manual unlock (passphrase)│      │
+  LAN clients            │  /dev/sda4 — workload LUKS → /mnt/workload           │      │
+  ──────────────────────►│  ┌─────────────────────────────────────────────────┐ │      │
+  (SMB: 445)             │  │ workload-online.target (all services)           │ │      │
+                         │  │  Caddy (443/80)         PostgreSQL (5432)       │ │      │
+                         │  │  Authentik (9000)        Redis (6379, 6380)     │ │      │
+                         │  │  Home Assistant (8123)   Mosquitto (1883)       │ │      │
+                         │  │  Nextcloud (8080)        Samba (445)            │ │      │
+                         │  │  Vaultwarden (8222)      Grafana (3030)         │ │      │
+                         │  │  InfluxDB (8086)         Snapserver (1704/1780) │ │      │
+                         │  │  Wyoming pipeline        Telegraf               │ │      │
+                         │  │  Jellyfin / Frigate / Immich / qBittorrent      │ │      │
+                         │  │  Bitmagnet / Syncthing / Homepage / SearXNG     │ │      │
+                         │  └──────────────────────────┬──────────────────────┘ │      │
+                         │                             │ NFS (2049)              │      │
+                         └─────────────────────────────┼─────────────────────────┼──────┘
+                                                       │                         │
+                                                       │   CLEVIS/TANG unlock    │
+                                                       │ (Tang TCP 7500) ◄───────┘
+                                                       │ retries every 5 min
+                                                       │ until Tang reachable
+                         ┌─────────────────────────────▼────────────────────────────────┐
+                         │                   RASPBERRY PI                               │
+                         │                                                              │
+                         │  SD card: NixOS OS (boots independently of Tang)            │
+                         │                                                              │
+                         │  NFS server  ──►  exports /mnt/storage-{a,b}               │
+                         │  TV Launcher (openbox)                                       │
+                         │    ├── Kodi                                                  │
+                         │    └── RetroArch                                             │
+                         │  Snapclient ──► server:1704                                  │
+                         │  Wyoming Satellite (10700) ◄── HA on server                  │
+                         │  Telegraf → server:8086                                      │
+                         │                                                              │
+                         │  /dev/nvme0n1 — NVMe drive A                                │
+                         │  ┌──────────────────────────────────────────────────────┐   │
+                         │  │ LUKS2  →  XFS (pquota)   [locked until Tang replies] │   │
+                         │  │  /mnt/storage-a/media/       (Jellyfin)              │   │
+                         │  │  /mnt/storage-a/downloads/   (qBittorrent)           │   │
+                         │  │  /mnt/storage-a/photos/      (Immich)                │   │
+                         │  │  /mnt/storage-a/surveillance/(Frigate)               │   │
+                         │  └──────────────────────────────────────────────────────┘   │
+                         │                                                              │
+                         │  /dev/nvme1n1 — NVMe drive B                                │
+                         │  ┌──────────────────────────────────────────────────────┐   │
+                         │  │ LUKS2  →  XFS (pquota)   [locked until Tang replies] │   │
+                         │  │  /mnt/storage-b/nextcloud/   (Nextcloud)             │   │
+                         │  │  /mnt/storage-b/users/       (SMB homes)             │   │
+                         │  │  /mnt/storage-b/shared/      (SMB shared)            │   │
+                         │  │  /mnt/storage-b/backups/     (backup target)         │   │
+                         │  └──────────────────────────────────────────────────────┘   │
+                         └──────────────────────────────────────────────────────────────┘
 ```
 
 ## Service responsibilities

@@ -8,6 +8,8 @@ NixOS configuration for a two-machine homelab:
 ## Quick links
 
 - [Architecture](docs/architecture.md)
+- [Secure layers design](docs/secure-layers.md)
+- [Operational runbook](docs/runbook.md)
 - [Deployment checklist](docs/deployment-checklist.md)
 - [Storage layout](docs/storage-layout.md)
 - [Failure modes](docs/failure-modes.md)
@@ -32,7 +34,7 @@ modules/
     nfs-dependent-service.nix  module: declare NFS dependencies for services
     on-demand.nix            on-demand service activator framework
   pi/
-    clevis-unlock.nix        Clevis/Tang initrd unlock
+    clevis-unlock.nix        post-boot Clevis/Tang unlock (retries until Tang reachable)
     launcher.nix             TV launcher (X11 + openbox + Python/GTK)
 hosts/
   server/
@@ -94,29 +96,36 @@ docs/
 
 ## Services
 
-### Always-on
+Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) for the full design.
+
+### Start at boot (no unlock needed)
 
 | Service | URL | Auth |
 |---|---|---|
 | Homepage | `home.<domain>` | none |
 | Authentik | `auth.<domain>` | local |
-| Nextcloud | `cloud.<domain>` | OIDC |
-| Immich | `photos.<domain>` | OIDC |
-| Jellyfin | `media.<domain>` | OIDC / local |
 | Home Assistant | `ha.<domain>` | OIDC + local |
 | Frigate | `nvr.<domain>` | Caddy fwd-auth |
-| qBittorrent | `torrent.<domain>` | Caddy fwd-auth |
+| Grafana | `grafana.<domain>` | OIDC |
 | SearXNG | `search.<domain>` | **none (intentional)** |
 | CA page | `ca.<domain>` | none |
-| Vaultwarden | `vault.<domain>` | own account system |
-| Grafana | `grafana.<domain>` | OIDC |
-| Samba | SMB port 445 | local smbpasswd |
 | Mosquitto | MQTT port 1883 | local password file |
 | InfluxDB | internal only | token auth |
-| Syncthing | `sync.<domain>` | Caddy fwd-auth |
 | Snapcast | `audio.<domain>` | Caddy fwd-auth |
 | Wyoming voice assistant | no web UI (LAN-internal) | firewall-restricted |
 | Telegraf | no web UI (writes to InfluxDB) | internal only |
+
+### Workload-gated (require `unlock-workload` after reboot)
+
+| Service | URL | Auth |
+|---|---|---|
+| Nextcloud | `cloud.<domain>` | OIDC |
+| Immich | `photos.<domain>` | OIDC |
+| Jellyfin | `media.<domain>` | OIDC / local |
+| qBittorrent | `torrent.<domain>` | Caddy fwd-auth |
+| Vaultwarden | `vault.<domain>` | own account system |
+| Syncthing | `sync.<domain>` | Caddy fwd-auth |
+| Samba | SMB port 445 | local smbpasswd |
 
 ### On-demand
 

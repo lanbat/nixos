@@ -2,19 +2,39 @@
 
 ## Encryption at rest
 
-### Server
-- Root filesystem is LUKS2-encrypted (`cryptroot`).
-- Passphrase is entered interactively at boot — **no key escrow**.
-- If the server is stolen, the encrypted disk reveals nothing without the passphrase.
-- `allowDiscards = true` is set for SSD performance — TRIM leaks which blocks are used but not their content. Acceptable for a homelab; disable on HDDs or if you disagree.
+### Server — three-layer design
+
+The server uses a three-layer design. See `docs/secure-layers.md` for full detail.
+
+- **`/dev/sda2` (host root)** — plain ext4, **not encrypted**. Contains NixOS, SSH,
+  networking, admin tools, and always-on service data (PostgreSQL, Authentik, HA,
+  Grafana, InfluxDB, Mosquitto, Frigate, Caddy TLS certs). Always available after boot.
+  This is intentional: the server must be remotely administrable after reboot without
+  physical presence. An encrypted root would require console access for every reboot.
+
+- **`/dev/sda3` (control LUKS)** — LUKS2-encrypted. Contains only Tang key material.
+  Unlocked manually by admin after each reboot (`unlock-control`). Until unlocked, Tang
+  is unavailable and the Pi cannot auto-unlock its NVMe drives.
+
+- **`/dev/sda4` (workload LUKS)** — LUKS2-encrypted. Contains workload-gated service
+  data: Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent,
+  Bitmagnet. Unlocked manually by admin after each reboot (`unlock-workload`).
+
+**Threat model**: if the server is stolen while both LUKS layers are locked, the
+attacker gets SSH access to an empty host but cannot reach Tang (Pi drives stay locked)
+and cannot access workload data. Host-root data (PostgreSQL, HA history, etc.) is
+visible, so it is treated as lower-sensitivity data.
 
 ### Pi
-- Both 4 TB drives are LUKS2-encrypted.
-- Clevis/Tang unlocks them automatically when the trusted server is reachable.
-- If the Pi is stolen without the server, drives cannot be decrypted.
-- If both server and Pi are stolen, drives cannot be decrypted (Tang key is on server, which is also encrypted and requires a passphrase).
+- Both NVMe drives are LUKS2-encrypted.
+- After boot, post-boot services (`storage-a-unlock`, `storage-b-unlock`) contact Tang
+  and unlock the drives via Clevis. They retry every 5 minutes until Tang is reachable.
+- If the Pi is stolen without the server, drives cannot be decrypted (Tang is unreachable).
+- If both server and Pi are stolen while LUKS layers are locked, drives cannot be
+  decrypted — Tang keys are on the server's control LUKS, which is locked.
 - Fallback LUKS passphrase exists for recovery (set during initial formatting).
-- **Back up the Tang key directory** (`/var/lib/tang`) — if lost, the LUKS slots bound to Tang cannot be opened without the fallback passphrase.
+- **Back up the Tang key directory** (`/mnt/control/tang/`) — if lost, the LUKS slots
+  bound to Tang cannot be opened without the fallback passphrase.
 
 ## Network trust
 
@@ -43,7 +63,7 @@
 
 - Authentik is the single point of failure for most service auth.
 - If Authentik is compromised, all OIDC-integrated services are compromised.
-- Mitigation: Authentik runs only on the server, which requires a LUKS passphrase at boot.
+- Mitigation: Authentik runs only on the server (always-on tier, starts at boot).
 - All services retain break-glass local admin accounts (Nextcloud admin, HA admin, etc.) — these do not go through Authentik.
 - Authentik's own PostgreSQL password is managed via agenix (encrypted at rest in git).
 

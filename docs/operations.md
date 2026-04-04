@@ -128,6 +128,10 @@ sudo chmod 0700 /srv/storage/b/users/alice
 
 ## Tang key management
 
+Control LUKS must be unlocked before any of these commands (`sudo unlock-control`).
+`/var/lib/tang` is a bind mount from `/mnt/control/tang` — it is only available
+when the control layer is mounted.
+
 ```bash
 # Check Tang is serving keys
 curl http://localhost:7500/adv | jq
@@ -191,7 +195,7 @@ journalctl -t podman -f
 journalctl -u srv-storage-a.mount -f
 
 # System boot log (useful for Clevis unlock debugging)
-journalctl -b 0 | grep -i clevis
+journalctl -u storage-a-unlock -u storage-b-unlock -n 50  # on Pi: post-boot Clevis unlock
 ```
 
 ## Backup status
