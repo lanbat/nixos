@@ -36,78 +36,50 @@
   services.telegraf = {
     enable = true;
 
-    extraConfig = lib.mkForce ''
-      [agent]
-        interval          = "30s"
-        flush_interval    = "30s"
-        round_interval    = true
-        metric_batch_size = 1000
-        metric_buffer_limit = 10000
-        collection_jitter = "5s"
-        flush_jitter      = "5s"
-        precision         = "0s"
-        # hostname tags all metrics — defaults to system hostname.
+    extraConfig = lib.mkForce {
+      agent = {
+        interval            = "30s";
+        flush_interval      = "30s";
+        round_interval      = true;
+        metric_batch_size   = 1000;
+        metric_buffer_limit = 10000;
+        collection_jitter   = "5s";
+        flush_jitter        = "5s";
+        precision           = "0s";
+      };
 
-      # -----------------------------------------------------------------------
-      # Output: InfluxDB 2
-      # -----------------------------------------------------------------------
-      [[outputs.influxdb_v2]]
-        urls         = ["http://127.0.0.1:8086"]
-        token        = "$TELEGRAF_INFLUXDB_TOKEN"
-        organization = "homelab"
-        bucket       = "metrics"
+      outputs.influxdb_v2 = [{
+        urls         = [ "http://127.0.0.1:8086" ];
+        token        = "$TELEGRAF_INFLUXDB_TOKEN";
+        organization = "homelab";
+        bucket       = "metrics";
+      }];
 
-      # -----------------------------------------------------------------------
-      # System metrics
-      # -----------------------------------------------------------------------
-      [[inputs.cpu]]
-        percpu   = true
-        totalcpu = true
-        collect_cpu_time = false
-        report_active    = false
-
-      [[inputs.mem]]
-
-      [[inputs.disk]]
-        ignore_fs = ["tmpfs", "devtmpfs", "devfs", "iso9660", "overlay", "aufs", "squashfs", "nsfs"]
-
-      [[inputs.diskio]]
-
-      [[inputs.net]]
-        ignore_protocol_stats = true
-
-      [[inputs.system]]
-
-      [[inputs.processes]]
-
-      [[inputs.temp]]
-
-      # -----------------------------------------------------------------------
-      # systemd service health
-      # Reports active_state (active/failed/inactive) for all units.
-      # Use this in Grafana to alert when a service enters "failed" state.
-      # -----------------------------------------------------------------------
-      [[inputs.systemd_units]]
-        unit_type = "service"
-
-      # -----------------------------------------------------------------------
-      # Podman container stats (via Docker compat socket)
-      # Requires telegraf user to be in the docker group (see below).
-      # -----------------------------------------------------------------------
-      [[inputs.docker]]
-        endpoint       = "unix:///run/docker.sock"
-        gather_services = false
-        timeout        = "5s"
-        perdevice      = false
-        total          = true
-
-      # -----------------------------------------------------------------------
-      # NFS client — mount operation counters and latency
-      # Useful for spotting when Pi NFS mounts are slow or stalling.
-      # -----------------------------------------------------------------------
-      [[inputs.nfsclient]]
-        fullstat = false
-    '';
+      inputs.cpu = [{
+        percpu          = true;
+        totalcpu        = true;
+        collect_cpu_time = false;
+        report_active   = false;
+      }];
+      inputs.mem        = [{}];
+      inputs.disk       = [{
+        ignore_fs = [ "tmpfs" "devtmpfs" "devfs" "iso9660" "overlay" "aufs" "squashfs" "nsfs" ];
+      }];
+      inputs.diskio     = [{}];
+      inputs.net        = [{ ignore_protocol_stats = true; }];
+      inputs.system     = [{}];
+      inputs.processes  = [{}];
+      inputs.temp       = [{}];
+      inputs.systemd_units = [{ unit_type = "service"; }];
+      inputs.docker     = [{
+        endpoint        = "unix:///run/docker.sock";
+        gather_services = false;
+        timeout         = "5s";
+        perdevice       = false;
+        total           = true;
+      }];
+      inputs.nfsclient  = [{ fullstat = false; }];
+    };
   };
 
   # Inject the InfluxDB write token at runtime — never stored in Nix store.
