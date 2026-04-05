@@ -70,7 +70,7 @@
       inputs.system     = [{}];
       inputs.processes  = [{}];
       inputs.temp       = [{}];
-      inputs.systemd_units = [{ unit_type = "service"; }];
+      inputs.systemd_units = [{}];
       inputs.docker     = [{
         endpoint        = "unix:///run/docker.sock";
         gather_services = false;

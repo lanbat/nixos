@@ -33,7 +33,7 @@
 
 let
   immichVersion   = "release"; # CHANGE_ME: pin to a specific tag, e.g. "v1.118.2"
-  immichDbVersion = "vectorchord0.3.0-pg16"; # matches immich's expected postgres image
+  immichDbVersion = "pg16-vectorchord0.3.0"; # matches immich's expected postgres image
   domain          = config.lanbat.domain;
 in
 {
