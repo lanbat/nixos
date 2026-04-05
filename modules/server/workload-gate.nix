@@ -198,8 +198,10 @@ in
           # Samba: winbindd requires private/ to exist before it starts.
           mkdir -p "$W/samba/private" "$W/samba/usershares"
 
-          # Nextcloud: setup script checks that the dir is owned by 'nextcloud'.
-          chown nextcloud:nextcloud "$W/nextcloud"
+          # Nextcloud: setup script checks /var/lib/nextcloud/config with -O (owned
+          # by current user). Create it here so the check passes on first run.
+          install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud"
+          install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud/config"
         '';
       };
     };

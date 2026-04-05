@@ -33,7 +33,7 @@
 
 let
   immichVersion   = "release"; # CHANGE_ME: pin to a specific tag, e.g. "v1.118.2"
-  immichDbVersion = "pg16-vectorchord0.3.0"; # matches immich's expected postgres image
+  immichDbVersion = "14-vectorchord0.4.3-pgvectors0.2.0"; # matches official immich docker-compose
   domain          = config.lanbat.domain;
 in
 {
