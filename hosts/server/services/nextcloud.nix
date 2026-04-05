@@ -55,8 +55,8 @@ let domain = config.lanbat.domain; in
       "opcache.memory_consumption"      = "128";
       "opcache.save_comments"           = "1";
       "opcache.revalidate_freq"         = "1";
-      upload_max_filesize = "16G";
-      post_max_size       = "16G";
+      upload_max_filesize = lib.mkForce "16G";
+      post_max_size       = lib.mkForce "16G";
       memory_limit        = "512M";
     };
 
