@@ -159,7 +159,7 @@
     # (required by Immich for vector/ML search). Minor version upgrades are
     # backward-compatible so no data migration is needed.
     package     = pkgs.unstable.postgresql_16;
-    extensions  = _: [ pkgs.unstable.postgresql16Packages.vectorchord ];
+    extensions  = _: with pkgs.unstable.postgresql16Packages; [ pgvector vectorchord ];
 
     # Listen on localhost only; containers access via --network host.
     settings = {
