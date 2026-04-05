@@ -86,8 +86,13 @@ in
         time_zone    = config.lanbat.timezone;
       };
 
-      # Zigbee: do not declare zha here — configure via UI only.
-      # Settings → Integrations → Add → Zigbee Home Automation → /dev/zigbee
+      # Zigbee via ZHA.
+      # The UI config flow is broken in HA 2024.11.x on non-Hass.io installs
+      # (KeyError: 'hassio' in list_serial_ports). Configure via yaml instead.
+      # usb_path is deprecated but functional; remove once HA is upgraded.
+      zha = {
+        usb_path = "/dev/zigbee";
+      };
 
       # Recorder — keep 30 days in SQLite.
       recorder = {
