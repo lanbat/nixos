@@ -123,7 +123,7 @@ let
   # bindsTo             — service stops if workload-online.target stops
   gateService = _name: {
     wantedBy = lib.mkForce [ "workload-online.target" ];
-    after    = lib.mkAfter  [ "workload-online.target" ];
+    after    = lib.mkAfter  [ "workload-online.target" "workload-init.service" ];
     bindsTo  = [ "workload-online.target" ];
   };
 
