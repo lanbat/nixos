@@ -156,7 +156,7 @@
     package = pkgs.postgresql_16;
 
     # Listen on localhost only; containers access via --network host.
-    settings.listen_addresses = "127.0.0.1";
+    settings.listen_addresses = lib.mkForce "127.0.0.1";
 
     authentication = lib.mkForce ''
       # TYPE  DATABASE        USER            ADDRESS           METHOD
