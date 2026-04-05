@@ -49,7 +49,7 @@
         # Operator token — used by Grafana as the datasource credential.
         tokenFile    = config.age.secrets.influxdb-admin-token.path;
         # Infinite retention — prune old data manually or per-bucket as needed.
-        retention    = "0";
+        retention    = 0;
       };
     };
   };
