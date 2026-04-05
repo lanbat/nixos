@@ -155,8 +155,11 @@
   # vectorchord (pgvecto.rs successor) is now available in nixpkgs for pg16.
   services.postgresql = {
     enable  = true;
-    package     = pkgs.postgresql_16;
-    extensions  = _: [ pkgs.postgresql16Packages.vectorchord ];
+    # Use unstable postgresql_16 — 24.11 stable doesn't include vectorchord
+    # (required by Immich for vector/ML search). Minor version upgrades are
+    # backward-compatible so no data migration is needed.
+    package     = pkgs.unstable.postgresql_16;
+    extensions  = _: [ pkgs.unstable.postgresql16Packages.vectorchord ];
 
     # Listen on localhost only; containers access via --network host.
     settings = {
