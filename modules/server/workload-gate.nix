@@ -239,6 +239,10 @@ in
           # by current user). Create it here so the check passes on first run.
           install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud"
           install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud/config"
+
+          # Immich: podman requires volume host paths to exist before container start.
+          mkdir -p "$W/immich/db" "$W/immich/thumbs" "$W/immich/encoded-video" \
+                   "$W/immich/profile" "$W/immich/model-cache"
         '';
       };
     };
