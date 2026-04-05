@@ -64,8 +64,6 @@ in
       "stream"
       "camera"
       "ffmpeg"
-      # Frigate integration
-      "frigate"
       # Wyoming voice assistant protocol
       "wyoming"
     ];
