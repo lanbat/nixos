@@ -156,7 +156,7 @@
   services.postgresql = {
     enable  = true;
     package     = pkgs.postgresql_16;
-    extensions  = ps: [ ps.vectorchord ];
+    extensions  = _: [ pkgs.postgresql16Packages.vectorchord ];
 
     # Listen on localhost only; containers access via --network host.
     settings = {
