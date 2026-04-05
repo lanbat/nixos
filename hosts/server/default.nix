@@ -204,8 +204,8 @@
         set -euo pipefail
         POSTGRES_PASSWORD=""
         source ${config.age.secrets.immich-db-password.path}
-        psql -v "pw=$POSTGRES_PASSWORD" -c "ALTER USER immich WITH ENCRYPTED PASSWORD :'pw';"
-        psql -d immich -c "CREATE EXTENSION IF NOT EXISTS vchord;"
+        ${config.services.postgresql.package}/bin/psql -v "pw=$POSTGRES_PASSWORD" -c "ALTER USER immich WITH ENCRYPTED PASSWORD :'pw';"
+        ${config.services.postgresql.package}/bin/psql -d immich -c "CREATE EXTENSION IF NOT EXISTS vchord;"
       '';
     };
   };
