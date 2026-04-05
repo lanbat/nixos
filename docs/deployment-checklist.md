@@ -129,7 +129,36 @@ automatically — those that depend on external setup:
 | `rclone-frigate-config.age` | Run `rclone config`, paste result (step 3g) |
 | `telegraf-token.age` | After deploying InfluxDB (step 3i) |
 
-Then commit the generated `.age` files:
+All of these files **must exist** before `nixos-install` will succeed — agenix
+requires every declared secret file to be present at build time even if it won't
+be decrypted until later. Create placeholders now for the ones you can't fill in
+yet, and overwrite them at the relevant post-install step.
+
+The mosquitto passwords should be real values now (Home Assistant and Frigate
+need them on first start). Pick strong passwords with e.g. `pwgen -s 32 2`.
+
+```bash
+cd secrets
+
+# Mosquitto — use real passwords
+echo -n "YOUR_HA_PASSWORD"     | agenix -e mosquitto-ha-pass.age
+echo -n "YOUR_FRIGATE_PASSWORD" | agenix -e mosquitto-frigate-pass.age
+
+# OIDC — placeholders, overwritten at step 3b
+echo "NEXTCLOUD_OIDC_CLIENT_ID=CHANGE_ME
+NEXTCLOUD_OIDC_CLIENT_SECRET=CHANGE_ME" | agenix -e nextcloud-oidc-env.age
+
+echo "IMMICH_OAUTH_CLIENT_ID=CHANGE_ME
+IMMICH_OAUTH_CLIENT_SECRET=CHANGE_ME" | agenix -e immich-oidc-env.age
+
+# Telegraf — placeholder, overwritten at step 3i
+echo "TELEGRAF_INFLUXDB_TOKEN=CHANGE_ME" | agenix -e telegraf-token.age
+
+# rclone — placeholder, overwritten at step 3g
+printf "[remote]\ntype = s3\n" | agenix -e rclone-frigate-config.age
+```
+
+Then commit all generated `.age` files:
 ```bash
 git add secrets/*.age && git commit -m "add initial secrets"
 ```
