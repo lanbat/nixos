@@ -36,15 +36,11 @@ let domain = config.lanbat.domain; in
 
     https = true;
 
-    database.createLocally = false;
+    # Use local PostgreSQL via Unix socket (peer auth — no password needed).
+    # The module creates the database and user automatically.
+    database.createLocally = true;
 
     config = {
-      dbtype     = "pgsql";
-      dbhost     = "127.0.0.1:5432";
-      dbname     = "nextcloud";
-      dbuser     = "nextcloud";
-      dbpassFile = config.age.secrets.nextcloud-db-pass.path;
-
       adminuser     = "admin";
       adminpassFile = config.age.secrets.nextcloud-admin-pass.path;
     };

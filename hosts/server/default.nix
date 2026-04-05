@@ -224,7 +224,7 @@
     authentik-env = { file = ../../secrets/authentik-env.age; owner = "root"; };
 
     # ---- Nextcloud ----
-    nextcloud-db-pass    = { file = ../../secrets/nextcloud-db-pass.age;    owner = "nextcloud"; };
+    # nextcloud-db-pass removed — using createLocally = true (Unix socket, no password)
     nextcloud-admin-pass = { file = ../../secrets/nextcloud-admin-pass.age; owner = "nextcloud"; };
     # File format:
     #   NEXTCLOUD_OIDC_CLIENT_ID=<value>
