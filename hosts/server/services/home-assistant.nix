@@ -86,11 +86,8 @@ in
         time_zone    = config.lanbat.timezone;
       };
 
-      # Zigbee via ZHA.
-      # usb_path is deprecated since HA 2024.x — configure the ZHA integration
-      # via the UI (Settings → Integrations → Zigbee Home Automation).
-      # The device path is /dev/zigbee (udev symlink) or /dev/ttyUSB0.
-      zha = {};
+      # Zigbee: do not declare zha here — configure via UI only.
+      # Settings → Integrations → Add → Zigbee Home Automation → /dev/zigbee
 
       # Recorder — keep 30 days in SQLite.
       recorder = {
