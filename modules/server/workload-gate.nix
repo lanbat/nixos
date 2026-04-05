@@ -155,6 +155,39 @@ let
 
 in
 {
+  # ── Workload directory initialisation ────────────────────────────────────
+  # Runs after /mnt/workload is mounted, before bind mounts activate.
+  # Creates any missing subdirectories and sets service-specific ownership
+  # that the workload filesystem won't have on first use.
+  systemd.services."workload-init" = {
+    description = "Initialize workload directory structure";
+    after    = [ "mnt-workload.mount" ];
+    requires = [ "mnt-workload.mount" ];
+    before   = bindMountUnits;
+    wantedBy = [ "workload-online.target" ];
+    partOf   = [ "workload-online.target" ];
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "workload-init" ''
+        set -euo pipefail
+        W=/mnt/workload
+
+        # Ensure each bind-mount source directory exists.
+        for d in nextcloud immich jellyfin vaultwarden syncthing \
+                  qbittorrent bitmagnet samba; do
+          mkdir -p "$W/$d"
+        done
+
+        # Samba: winbindd requires private/ to exist before it starts.
+        mkdir -p "$W/samba/private" "$W/samba/usershares"
+
+        # Nextcloud: setup script checks that the dir is owned by 'nextcloud'.
+        chown nextcloud:nextcloud "$W/nextcloud"
+      '';
+    };
+  };
+
   # ── Workload bind mounts ──────────────────────────────────────────────────
   fileSystems = lib.mapAttrs (_path: subdir: mkWorkloadBind subdir) bindMounts;
 
