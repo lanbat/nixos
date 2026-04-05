@@ -46,9 +46,10 @@ in
     # For each registered service, wire up the systemd dependencies.
     systemd.services = lib.mapAttrs' (svcName: drives:
       lib.nameValuePair svcName {
-        after    = map mountUnitName drives;
-        bindsTo  = map mountUnitName drives;
-        unitConfig.RequiresMountsFor = concatStringsSep " " (map mountPath drives);
+        after   = map mountUnitName drives;
+        bindsTo = map mountUnitName drives;
+        # after + bindsTo already express the dependency; RequiresMountsFor
+        # is redundant and conflicts with values set by NixOS service modules.
         # Restart on failure so the service comes back when the mount is restored.
         serviceConfig.Restart = lib.mkDefault "on-failure";
         serviceConfig.RestartSec = lib.mkDefault "10s";
