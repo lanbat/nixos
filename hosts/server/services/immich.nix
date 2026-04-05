@@ -46,6 +46,8 @@ in
       POSTGRES_USER     = "immich";
       POSTGRES_DB       = "immich";
       POSTGRES_INITDB_ARGS = "--data-checksums";
+      # Use port 5433 to avoid conflict with the host NixOS PostgreSQL on 5432.
+      PGPORT            = "5433";
     };
     environmentFiles = [ config.age.secrets.immich-db-password.path ];
     # POSTGRES_PASSWORD must be set in the secret file:
@@ -66,7 +68,7 @@ in
     extraOptions = [ "--network=host" ];
     environment = {
       DB_HOSTNAME      = "127.0.0.1";
-      DB_PORT          = "5432";
+      DB_PORT          = "5433";
       DB_USERNAME      = "immich";
       DB_DATABASE_NAME = "immich";
       REDIS_HOSTNAME   = "127.0.0.1";
