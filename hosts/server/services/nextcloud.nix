@@ -60,12 +60,12 @@ let domain = config.lanbat.domain; in
       memory_limit        = "512M";
     };
 
-    extraApps = with config.services.nextcloud.package.packages.apps; [
+    extraApps = with config.services.nextcloud.package.packages.apps; {
       # user_oidc is the OIDC login app.
       # It may not be in the generated apps attrset for all NC versions;
       # if it isn't, install it via occ app:install user_oidc post-deploy.
-      # user_oidc
-    ];
+      # inherit user_oidc;
+    };
     extraAppsEnable = true;
 
     settings = {
