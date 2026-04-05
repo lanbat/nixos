@@ -87,10 +87,10 @@ in
       };
 
       # Zigbee via ZHA.
-      zha = {
-        usb_path       = zigbeeDevice;
-        database_path  = "/var/lib/hass/zha_zigbee.db";
-      };
+      # usb_path is deprecated since HA 2024.x — configure the ZHA integration
+      # via the UI (Settings → Integrations → Zigbee Home Automation).
+      # The device path is /dev/zigbee (udev symlink) or /dev/ttyUSB0.
+      zha = {};
 
       # Recorder — keep 30 days in SQLite.
       recorder = {
@@ -115,6 +115,8 @@ in
       ATTRS{idProduct}=="${config.lanbat.zigbeeProductId}", \
       SYMLINK+="zigbee", GROUP="ha", MODE="0660"
   '';
+
+  users.groups.ha = {};
 
   users.users.hass = {
     extraGroups = [ "dialout" "ha" ];
