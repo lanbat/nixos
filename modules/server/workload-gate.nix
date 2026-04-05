@@ -123,8 +123,13 @@ let
   # bindsTo             — service stops if workload-online.target stops
   gateService = _name: {
     wantedBy = lib.mkForce [ "workload-online.target" ];
-    after    = lib.mkAfter  [ "workload-online.target" "workload-init.service" ];
-    bindsTo  = [ "workload-online.target" ];
+    # workload-fix-permissions restores bind-mount dir ownership/modes after
+    # systemd-tmpfiles-resetup resets them (it has no RemainAfterExit so
+    # systemd re-runs it each time a gated service needs to start).
+    after  = lib.mkAfter [ "workload-online.target" "workload-init.service"
+                            "workload-fix-permissions.service" ];
+    wants  = [ "workload-fix-permissions.service" ];
+    bindsTo = [ "workload-online.target" ];
   };
 
   # Names of all systemd services that must be gated on workload.
@@ -175,6 +180,23 @@ in
   # workload-init runs after /mnt/workload is mounted, before bind mounts activate,
   # to create missing subdirectories and set service-specific ownership.
   systemd.services = lib.genAttrs gatedServices gateService // {
+    # Runs after bind mounts are active (no RemainAfterExit so it re-runs each
+    # time a gated service starts, restoring permissions that tmpfiles-resetup reset).
+    "workload-fix-permissions" = {
+      description = "Restore workload bind-mount directory permissions";
+      after    = bindMountUnits ++ [ "mnt-workload.mount" ];
+      requires = [ "mnt-workload.mount" ];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = pkgs.writeShellScript "workload-fix-permissions" ''
+          set -euo pipefail
+          W=/mnt/workload
+          [ -d "$W/nextcloud" ]        && install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud"
+          [ -d "$W/nextcloud/config" ] && install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud/config"
+        '';
+      };
+    };
+
     "workload-init" = {
       description = "Initialize workload directory structure";
       after    = [ "mnt-workload.mount" ];
