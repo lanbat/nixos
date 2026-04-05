@@ -185,9 +185,9 @@ lsblk
 parted /dev/sda -- mklabel gpt
 parted /dev/sda -- mkpart ESP fat32 1MiB 1025MiB
 parted /dev/sda -- set 1 esp on
-parted /dev/sda -- mkpart primary ext4 1025MiB 51GiB
-parted /dev/sda -- mkpart primary 51GiB 51256MiB
-parted /dev/sda -- mkpart primary 51256MiB 100%
+parted /dev/sda -- mkpart primary ext4 1025MiB 51200MiB
+parted /dev/sda -- mkpart primary 51200MiB 51456MiB
+parted /dev/sda -- mkpart primary 51456MiB 100%
 
 # Format EFI/boot partition
 mkfs.fat -F 32 -n BOOT /dev/sda1
@@ -198,13 +198,13 @@ mkfs.ext4 -L nixos /dev/sda2
 # Format control LUKS (Tang keys — manually unlocked after boot)
 cryptsetup luksFormat --type luks2 /dev/sda3
 # ↑ Choose a strong passphrase. This unlocks Tang, which lets the Pi unlock its drives.
-cryptsetup luksOpen /dev/sda3 control
-mkfs.ext4 -L control /dev/mapper/control
+cryptsetup luksOpen /dev/sda3 ctrl
+mkfs.ext4 -L control /dev/mapper/ctrl
 # Create the Tang key directory inside the control volume:
-mount /dev/mapper/control /tmp/ctrl-init
+mount /dev/mapper/ctrl /tmp/ctrl-init
 mkdir -p /tmp/ctrl-init/tang
 umount /tmp/ctrl-init
-cryptsetup luksClose control
+cryptsetup luksClose ctrl
 
 # Format workload LUKS (all service data — manually unlocked after boot)
 cryptsetup luksFormat --type luks2 /dev/sda4

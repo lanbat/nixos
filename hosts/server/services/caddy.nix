@@ -301,7 +301,7 @@ class H(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         from urllib.parse import urlparse, parse_qs
         q = parse_qs(urlparse(self.path).query)
-        domain = q.get('domain', [''])[0]
+        domain = q.get('domain', ['''])[0]
         code = 200 if ALLOWED.match(domain) else 403
         self.send_response(code)
         self.end_headers()
