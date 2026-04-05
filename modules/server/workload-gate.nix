@@ -188,9 +188,9 @@ in
       description = "Restore workload bind-mount directory permissions";
       after    = bindMountUnits ++ [ "mnt-workload.mount" ];
       requires = [ "mnt-workload.mount" ];
+      unitConfig.StartLimitIntervalSec = 0;
       serviceConfig = {
         Type = "oneshot";
-        StartLimitIntervalSec = 0;
         ExecStart = pkgs.writeShellScript "workload-fix-permissions" ''
           set -euo pipefail
           W=/mnt/workload

@@ -41,6 +41,7 @@ let domain = config.lanbat.domain; in
     database.createLocally = true;
 
     config = {
+      dbtype    = "pgsql";
       adminuser     = "admin";
       adminpassFile = config.age.secrets.nextcloud-admin-pass.path;
     };
