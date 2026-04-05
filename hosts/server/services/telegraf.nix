@@ -30,13 +30,13 @@
 # Then store it: cd secrets && agenix -e telegraf-token.age
 #
 # Always-on: yes. No NFS dependency.
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 {
   services.telegraf = {
     enable = true;
 
-    extraConfig = ''
+    extraConfig = lib.mkForce ''
       [agent]
         interval          = "30s"
         flush_interval    = "30s"
