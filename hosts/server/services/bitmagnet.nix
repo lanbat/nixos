@@ -58,7 +58,7 @@
     after   = [ "postgresql.service" ];
     requires = [ "postgresql.service" ];
     serviceConfig = {
-      Restart    = "on-failure";
+      Restart    = lib.mkForce "on-failure";
       RestartSec = "10s";
     };
   };

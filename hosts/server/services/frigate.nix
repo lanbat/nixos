@@ -144,7 +144,7 @@
   systemd.services."podman-frigate" = {
     wantedBy   = [ "multi-user.target" ];
     serviceConfig = {
-      Restart    = "on-failure";
+      Restart    = lib.mkForce "on-failure";
       RestartSec = "15s";
     };
   };

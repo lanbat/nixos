@@ -62,7 +62,7 @@
     after      = [ "srv-storage-a.mount" ];
     bindsTo    = [ "srv-storage-a.mount" ];
     serviceConfig = {
-      Restart    = "on-failure";
+      Restart    = lib.mkForce "on-failure";
       RestartSec = "15s";
     };
   };
