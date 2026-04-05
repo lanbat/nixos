@@ -41,6 +41,7 @@ in
 {
   services.home-assistant = {
     enable = true;
+    package = pkgs.unstable.home-assistant;
     openFirewall = false; # Caddy handles exposure.
 
     # Install extra Python components declaratively.
@@ -84,14 +85,6 @@ in
         elevation    = config.lanbat.haElevation;
         unit_system  = "metric";
         time_zone    = config.lanbat.timezone;
-      };
-
-      # Zigbee via ZHA.
-      # The UI config flow is broken in HA 2024.11.x on non-Hass.io installs
-      # (KeyError: 'hassio' in list_serial_ports). Configure via yaml instead.
-      # usb_path is deprecated but functional; remove once HA is upgraded.
-      zha = {
-        usb_path = "/dev/zigbee";
       };
 
       # Recorder — keep 30 days in SQLite.
