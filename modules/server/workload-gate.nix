@@ -182,12 +182,15 @@ in
   systemd.services = lib.genAttrs gatedServices gateService // {
     # Runs after bind mounts are active (no RemainAfterExit so it re-runs each
     # time a gated service starts, restoring permissions that tmpfiles-resetup reset).
+    # StartLimitIntervalSec=0 prevents rate-limit failures when multiple gated
+    # services start it simultaneously.
     "workload-fix-permissions" = {
       description = "Restore workload bind-mount directory permissions";
       after    = bindMountUnits ++ [ "mnt-workload.mount" ];
       requires = [ "mnt-workload.mount" ];
       serviceConfig = {
         Type = "oneshot";
+        StartLimitIntervalSec = 0;
         ExecStart = pkgs.writeShellScript "workload-fix-permissions" ''
           set -euo pipefail
           W=/mnt/workload
@@ -195,6 +198,18 @@ in
           [ -d "$W/nextcloud/config" ] && install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud/config"
         '';
       };
+    };
+
+    # nextcloud-setup and nextcloud-update-db run BEFORE nextcloud.service itself,
+    # so they bypass the after=workload-fix-permissions we set on nextcloud.
+    # Add the dependency directly so they wait for permissions to be restored.
+    "nextcloud-setup" = {
+      after = lib.mkAfter [ "workload-fix-permissions.service" "workload-init.service" ];
+      wants = [ "workload-fix-permissions.service" ];
+    };
+    "nextcloud-update-db" = {
+      after = lib.mkAfter [ "workload-fix-permissions.service" "workload-init.service" ];
+      wants = [ "workload-fix-permissions.service" ];
     };
 
     "workload-init" = {
