@@ -76,7 +76,7 @@ in
   };
 
   # Keep rpcbind out — NFSv4 doesn't need it.
-  services.rpcbind.enable = false;
+  services.rpcbind.enable = lib.mkForce false;
 
   # Make sure the network is up before attempting mounts.
   # The automount units already carry _netdev, but belt-and-suspenders:
