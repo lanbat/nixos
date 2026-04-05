@@ -58,8 +58,6 @@ general:
   enable_metrics: false
 
 server:
-  port: 8080
-  bind_address: "0.0.0.0"
   secret_key: "CHANGE_ME_SEARXNG_SECRET"
   limiter: false
   image_proxy: true
@@ -75,32 +73,9 @@ search:
   autocomplete: ""
   default_lang: "auto"
 
-engines:
-  - name: google
-    engine: google
-    use_mobile_ui: false
-
-  - name: bing
-    engine: bing
-
-  - name: ddg definitions
-    engine: ddg_definitions
-    categories: general
-
-  - name: wikipedia
-    engine: wikipedia
-    language: en
-
-  - name: openstreetmap
-    engine: openstreetmap
-
-  - name: github
-    engine: github
-
 outgoing:
   request_timeout: 6.0
   max_request_timeout: 15.0
-  useragent_suffix: ""
   pool_connections: 100
   pool_maxsize: 10
 YAML
