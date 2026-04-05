@@ -2,16 +2,10 @@
 #
 # Immich — self-hosted photo/video library.
 #
-# Why fully containerized?
-#   Immich requires pgvecto.rs (a PostgreSQL extension) which is not in
-#   standard nixpkgs PostgreSQL packages.  Using Immich's own postgres
-#   container (which ships pgvecto.rs) is far simpler than patching the
-#   NixOS postgresql module.
-#
 # Storage split
 # -------------
 # Server-local (always-on):
-#   /var/lib/immich/db/           — PostgreSQL data (pgvecto.rs)
+#   /var/lib/postgresql/          — PostgreSQL data (shared instance, vectorchord)
 #   /var/lib/immich/model-cache/  — ML model cache (~4 GB on first run)
 #   /var/lib/immich/thumbs/       — generated thumbnails
 #   /var/lib/immich/encoded-video/— re-encoded videos
@@ -32,34 +26,10 @@
 { config, pkgs, lib, ... }:
 
 let
-  immichVersion   = "release"; # CHANGE_ME: pin to a specific tag, e.g. "v1.118.2"
-  immichDbVersion = "14-vectorchord0.4.3-pgvectors0.2.0"; # matches official immich docker-compose
-  domain          = config.lanbat.domain;
+  immichVersion = "release"; # CHANGE_ME: pin to a specific tag, e.g. "v1.118.2"
+  domain        = config.lanbat.domain;
 in
 {
-  # ---------------------------------------------------------------------------
-  # PostgreSQL for Immich (containerized — pgvecto.rs / vectorchord required)
-  # ---------------------------------------------------------------------------
-  virtualisation.oci-containers.containers."immich-postgres" = {
-    image = "ghcr.io/immich-app/postgres:${immichDbVersion}";
-    environment = {
-      POSTGRES_USER     = "immich";
-      POSTGRES_DB       = "immich";
-      POSTGRES_INITDB_ARGS = "--data-checksums";
-      # Use port 5433 to avoid conflict with the host NixOS PostgreSQL on 5432.
-      PGPORT            = "5433";
-    };
-    environmentFiles = [ config.age.secrets.immich-db-password.path ];
-    # POSTGRES_PASSWORD must be set in the secret file:
-    #   POSTGRES_PASSWORD=<value>
-    volumes = [ "/var/lib/immich/db:/var/lib/postgresql/data" ];
-    extraOptions = [
-      "--network=host"
-      "--shm-size=128m"
-    ];
-    autoStart = true;
-  };
-
   # ---------------------------------------------------------------------------
   # Immich server container
   # ---------------------------------------------------------------------------
@@ -68,7 +38,7 @@ in
     extraOptions = [ "--network=host" ];
     environment = {
       DB_HOSTNAME      = "127.0.0.1";
-      DB_PORT          = "5433";
+      DB_PORT          = "5432";
       DB_USERNAME      = "immich";
       DB_DATABASE_NAME = "immich";
       REDIS_HOSTNAME   = "127.0.0.1";
@@ -106,7 +76,6 @@ in
       "/var/lib/immich/profile:/usr/src/app/profile"
       "/etc/localtime:/etc/localtime:ro"
     ];
-    dependsOn  = [ "immich-postgres" ];
     autoStart  = true;
   };
 

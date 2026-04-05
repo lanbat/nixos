@@ -53,7 +53,7 @@
 #
 #  /mnt/workload/
 #    nextcloud/      — Nextcloud home (config, data, apps)
-#    immich/         — Immich thumbnails, encoded-video, profile, model-cache, DB
+#    immich/         — Immich thumbnails, encoded-video, profile, model-cache (DB in shared PostgreSQL)
 #    jellyfin/       — Jellyfin metadata and configuration
 #    caddy/          — Caddy TLS certificates and state
 #    vaultwarden/    — Vaultwarden vault database and attachments
@@ -151,7 +151,6 @@ let
     "avahi-daemon"          # mDNS — depends on samba being up
 
     # ── OCI containers (podman-<name>) ──
-    "podman-immich-postgres"
     "podman-immich-server"
     "podman-immich-machine-learning"
     "podman-qbittorrent"
@@ -241,7 +240,8 @@ in
           install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud/config"
 
           # Immich: podman requires volume host paths to exist before container start.
-          mkdir -p "$W/immich/db" "$W/immich/thumbs" "$W/immich/encoded-video" \
+          # (db is excluded — lives in the shared NixOS PostgreSQL, not workload)
+          mkdir -p "$W/immich/thumbs" "$W/immich/encoded-video" \
                    "$W/immich/profile" "$W/immich/model-cache"
         '';
       };

@@ -150,13 +150,19 @@
   # ---------------------------------------------------------------------------
   # Authentik, Nextcloud, and Bitmagnet share a single PostgreSQL instance.
   # Each service gets its own database and user.
-  # Immich uses its own containerized PostgreSQL (requires pgvecto.rs).
+  # Shared PostgreSQL instance for Authentik, Nextcloud, Bitmagnet, and Immich.
+  # Immich previously used its own containerized PostgreSQL (pgvecto.rs), but
+  # vectorchord (pgvecto.rs successor) is now available in nixpkgs for pg16.
   services.postgresql = {
     enable  = true;
-    package = pkgs.postgresql_16;
+    package = pkgs.postgresql_16.withPackages (ps: [ ps.vectorchord ]);
 
     # Listen on localhost only; containers access via --network host.
-    settings.listen_addresses = lib.mkForce "127.0.0.1";
+    settings = {
+      listen_addresses = lib.mkForce "127.0.0.1";
+      # vectorchord requires preloading its shared library.
+      shared_preload_libraries = "vchord.so";
+    };
 
     authentication = lib.mkForce ''
       # TYPE  DATABASE        USER            ADDRESS           METHOD
@@ -168,13 +174,36 @@
       "authentik"
       "nextcloud"
       "bitmagnet"
+      "immich"
     ];
 
     ensureUsers = [
       { name = "authentik";  ensureDBOwnership = true; }
       { name = "nextcloud";  ensureDBOwnership = true; }
       { name = "bitmagnet";  ensureDBOwnership = true; }
+      { name = "immich";     ensureDBOwnership = true; }
     ];
+  };
+
+  # Set the immich PostgreSQL password (needed for TCP auth from the container).
+  # Runs after postgresql.service each boot; idempotent.
+  systemd.services."postgresql-immich-init" = {
+    description = "Initialize Immich PostgreSQL user password and extension";
+    after    = [ "postgresql.service" ];
+    wantedBy = [ "postgresql.service" ];
+    unitConfig.ConditionPathExists = config.age.secrets.immich-db-password.path;
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      User            = "postgres";
+      ExecStart = pkgs.writeShellScript "postgresql-immich-init" ''
+        set -euo pipefail
+        POSTGRES_PASSWORD=""
+        source ${config.age.secrets.immich-db-password.path}
+        psql -v "pw=$POSTGRES_PASSWORD" -c "ALTER USER immich WITH ENCRYPTED PASSWORD :'pw';"
+        psql -d immich -c "CREATE EXTENSION IF NOT EXISTS vchord;"
+      '';
+    };
   };
 
   # Redis — named instances per service.
@@ -234,7 +263,7 @@
     # ---- Immich ----
     # File format:
     #   POSTGRES_PASSWORD=<value>
-    immich-db-password   = { file = ../../secrets/immich-db-password.age;   owner = "immich"; };
+    immich-db-password   = { file = ../../secrets/immich-db-password.age;   owner = "postgres"; };
     # File format:
     #   IMMICH_OAUTH_CLIENT_ID=<value>
     #   IMMICH_OAUTH_CLIENT_SECRET=<value>

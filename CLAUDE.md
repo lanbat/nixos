@@ -150,8 +150,7 @@ Check for conflicts before assigning a port. Current allocations:
 | 3030 | Grafana |
 | 3332 | Bitmagnet on-demand activator |
 | 5000 | Frigate |
-| 5432 | PostgreSQL (NixOS shared instance) |
-| 5433 | PostgreSQL (Immich containerized instance) |
+| 5432 | PostgreSQL (shared: Authentik, Nextcloud, Bitmagnet, Immich) |
 | 6379 | Redis (Authentik) |
 | 6380 | Redis (Immich) |
 | 7500 | Tang |
