@@ -350,7 +350,7 @@ http.server.HTTPServer(('127.0.0.1', 9999), H).serve_forever()
     serviceConfig = {
       Type      = "oneshot";
       ExecStart = pkgs.writeShellScript "install-ca-landing" ''
-        cp -r ${pkgs.callPackage ../../pkgs/ca-landing-page { }}/. /var/lib/ca-landing/
+        cp -r ${pkgs.callPackage ../../../pkgs/ca-landing-page { }}/. /var/lib/ca-landing/
         chmod -R 644 /var/lib/ca-landing/*
         chmod 755    /var/lib/ca-landing
       '';
