@@ -31,10 +31,7 @@
     };
   };
 
-  # Allow unfree packages (Jellyfin HEVC firmware, etc.).
-  nixpkgs.config.allowUnfree = true;
-
-  # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
   # Base packages available on both machines
   # ---------------------------------------------------------------------------
   environment.systemPackages = with pkgs; [

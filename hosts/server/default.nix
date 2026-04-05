@@ -97,7 +97,7 @@
         prefixLength = 24;
       }];
     };
-    defaultGateway = config.lanbat.gatewayIp;
+    defaultGateway = { address = config.lanbat.gatewayIp; interface = "eno1"; };
     nameservers    = [ config.lanbat.gatewayIp "1.1.1.1" ];
 
     # IPv6 — accept RA from router; do not expose services by default.

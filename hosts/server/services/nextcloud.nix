@@ -40,8 +40,7 @@ let domain = config.lanbat.domain; in
 
     config = {
       dbtype     = "pgsql";
-      dbhost     = "127.0.0.1";
-      dbport     = 5432;
+      dbhost     = "127.0.0.1:5432";
       dbname     = "nextcloud";
       dbuser     = "nextcloud";
       dbpassFile = config.age.secrets.nextcloud-db-pass.path;
