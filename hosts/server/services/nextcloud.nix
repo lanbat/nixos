@@ -121,6 +121,11 @@ let domain = config.lanbat.domain; in
     };
   };
 
+  # Configure nginx to listen on the internal port so Caddy can own :80/:443.
+  services.nginx.virtualHosts."cloud.${domain}" = {
+    listen = [{ addr = "127.0.0.1"; port = 8080; ssl = false; }];
+  };
+
   # External storage paths (created when NFS is mounted).
   systemd.tmpfiles.rules = [
     "d /srv/storage/b/nextcloud          0750 nextcloud nextcloud -"
