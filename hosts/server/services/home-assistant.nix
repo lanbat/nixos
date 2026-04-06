@@ -50,6 +50,7 @@ in
       "default_config"
       "met"             # weather
       "radio_browser"
+      "google_translate" # TTS — gtts dependency
       "mqtt"            # Zigbee devices arrive via Zigbee2MQTT → MQTT discovery
       "mobile_app"
       "person"
