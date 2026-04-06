@@ -61,6 +61,7 @@ let
         attrs:
           name: "Frigate"
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           mode: forward_single
           external_host: "https://nvr.${domain}"
 
@@ -83,6 +84,7 @@ let
         attrs:
           name: "qBittorrent"
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           mode: forward_single
           external_host: "https://torrent.${domain}"
 
@@ -105,6 +107,7 @@ let
         attrs:
           name: "Bitmagnet"
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           mode: forward_single
           external_host: "https://bitmagnet.${domain}"
 
@@ -127,6 +130,7 @@ let
         attrs:
           name: "Syncthing"
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           mode: forward_single
           external_host: "https://sync.${domain}"
 
@@ -149,6 +153,7 @@ let
         attrs:
           name: "Snapcast"
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           mode: forward_single
           external_host: "https://audio.${domain}"
 
@@ -171,6 +176,7 @@ let
         attrs:
           name: "Zigbee2MQTT"
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           mode: forward_single
           external_host: "https://zigbee.${domain}"
 
@@ -225,6 +231,7 @@ let
           client_secret: !Env "AUTHENTIK_GRAFANA_CLIENT_SECRET"
           client_type: confidential
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           redirect_uris:
             - url: "https://grafana.${domain}/login/generic_oauth"
               matching_mode: strict
@@ -258,6 +265,7 @@ let
           client_secret: !Env "AUTHENTIK_NEXTCLOUD_CLIENT_SECRET"
           client_type: confidential
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           redirect_uris:
             - url: "https://cloud.${domain}/apps/user_oidc/code"
               matching_mode: strict
@@ -291,6 +299,7 @@ let
           client_secret: !Env "AUTHENTIK_IMMICH_CLIENT_SECRET"
           client_type: confidential
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           redirect_uris:
             - url: "https://photos.${domain}/auth/login"
               matching_mode: strict
@@ -331,6 +340,7 @@ let
           client_secret: !Env "AUTHENTIK_HA_CLIENT_SECRET"
           client_type: confidential
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           redirect_uris:
             - url: "https://ha.${domain}/auth/external/callback"
               matching_mode: strict
@@ -372,6 +382,7 @@ let
           client_secret: !Env "AUTHENTIK_JELLYFIN_CLIENT_SECRET"
           client_type: confidential
           authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
           redirect_uris:
             - url: "https://media.${domain}/sso/OID/redirect/authentik"
               matching_mode: strict
