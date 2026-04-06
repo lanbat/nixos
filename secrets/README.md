@@ -181,6 +181,7 @@ agenix -r
 | `immich-oidc-env.age` | `KEY=value` × 2 | Immich server container |
 | `mosquitto-ha-pass.age` | plaintext password | Mosquitto (Home Assistant user) |
 | `mosquitto-frigate-pass.age` | plaintext password | Mosquitto (Frigate user) |
+| `frigate-rtsp-env.age` | `FRIGATE_RTSP_USER=<value>`, `FRIGATE_RTSP_PASSWORD=<value>` | Frigate camera RTSP auth |
 | `rclone-frigate-config.age` | full rclone config file | Frigate rclone sync |
 | `influxdb-admin-password.age` | plaintext password | InfluxDB initial setup |
 | `influxdb-admin-token.age` | plaintext token | InfluxDB + Grafana datasource |

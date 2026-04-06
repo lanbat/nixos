@@ -84,6 +84,12 @@ GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS}
 GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=FILL_IN_AFTER_AUTHENTIK_SETUP
 INFLUXDB_TOKEN=FILL_IN_SAME_AS_influxdb-admin-token.age"
 
+# ---- Frigate ----
+# Random RTSP credentials — set the same values in the camera's web UI.
+encrypt frigate-rtsp-env.age \
+  "FRIGATE_RTSP_USER=$(openssl rand -hex 8)
+FRIGATE_RTSP_PASSWORD=$(rand 24)"
+
 # ---- Vaultwarden ----
 encrypt vaultwarden-env.age "ADMIN_TOKEN=$(rand 48)"
 

@@ -2,90 +2,42 @@
 #
 # Frigate NVR — camera recording and detection.
 #
-# Storage split
-# -------------
-# Server-local:
-#   /var/lib/frigate/config/   — frigate.yml
-#   /var/lib/frigate/db/       — frigate.db (SQLite event metadata)
-#   /var/cache/frigate/        — clips buffer / tmpfs safe to lose
+# Storage
+# -------
+# All state is local (always-on tier):
+#   /var/lib/frigate/db/      — SQLite event metadata
+#   /var/lib/frigate/recordings/ — 24h rolling recordings
+#   /var/cache/frigate/       — clip buffer (safe to lose)
 #
-# Pi-backed via NFS (/srv/storage/a):
-#   /srv/storage/a/surveillance/         — recordings (24h-rolling)
-#   /srv/storage/a/surveillance/clips/   — event clips
-#   /srv/storage/a/surveillance/exports/ — manually exported clips
+# rclone cloud sync will be added later.
 #
-# NFS dependency:
-#   Frigate's recording engine depends on the surveillance path.
-#   If NFS disappears, Frigate should stop recording rather than write to
-#   wrong paths.  We declare the dependency.
-#   Frigate itself can still be running for live view if desired — but
-#   the cleanest model is to stop it entirely and restart when NFS returns.
+# Detector
+# --------
+# Intel OpenVINO via /dev/dri (iGPU).
 #
-# Hardware acceleration
-# ---------------------
-# Frigate supports several detectors:
-#   - CPU (works everywhere, slow)
-#   - Google Coral USB/PCIe (fast, low power — recommended for house cameras)
-#   - OpenVINO (Intel iGPU — good if server has Intel graphics)
-#   - NVIDIA CUDA (if server has NVIDIA GPU)
-# Set FRIGATE_DETECTOR below.  Default is CPU so it works out of the box.
+# Credentials
+# -----------
+# Camera RTSP credentials: secrets/frigate-rtsp-env.age
+#   FRIGATE_RTSP_USER=<camera user>
+#   FRIGATE_RTSP_PASSWORD=<camera password>
+# MQTT password: secrets/mosquitto-frigate-pass.age (plaintext)
 #
-# Cloud sync (rclone)
-# -------------------
-# A systemd service runs rclone sync after each new recording file closes.
-# Uses inotifywait to detect file-close events in the recordings dir.
-# Uploads clips (event-driven) and optionally full recordings.
-# See rclone config template in pkgs/scripts/rclone-sync-frigate.sh.
+# Both are combined into /run/frigate-env by ExecStartPre and injected
+# into the container via environmentFiles.
 #
 # Home Assistant integration
 # --------------------------
 # Frigate publishes events via MQTT → Home Assistant listens.
-# HA sends push notifications via the mobile app.
-# Set the MQTT broker to localhost (Mosquitto — see services/mosquitto.nix).
 { config, pkgs, lib, ... }:
 
-{
-  # ---------------------------------------------------------------------------
-  # Frigate container
-  # ---------------------------------------------------------------------------
-  virtualisation.oci-containers.containers."frigate" = {
-    image = "ghcr.io/blakeblackshear/frigate:stable";
-
-    environment = {
-      FRIGATE_RTSP_PASSWORD = "CHANGE_ME"; # not used if cameras are RTSP URL only
-    };
-
-    volumes = [
-      "/var/lib/frigate/config/frigate.yml:/config/config.yml:ro"
-      "/var/lib/frigate/db:/media/frigate/db"
-      "/var/lib/frigate/recordings:/media/frigate/recordings"
-      "/var/cache/frigate:/tmp/cache"
-      "/etc/localtime:/etc/localtime:ro"
-      # Coral USB: uncomment below and add the device option
-      # "/dev/bus/usb:/dev/bus/usb"
-    ];
-
-    ports = [ "127.0.0.1:5000:5000" "127.0.0.1:8554:8554" ];
-
-    extraOptions = [
-      # Memory-mapped shm for Frigate's frame buffer.
-      "--shm-size=256m"
-      # For Intel OpenVINO: "--device=/dev/dri"
-      # For Coral USB:      "--device=/dev/bus/usb"
-    ];
-
-    autoStart = true;
-  };
-
-  # ---------------------------------------------------------------------------
-  # Frigate config file — edit cameras here.
-  # ---------------------------------------------------------------------------
-  environment.etc."frigate/frigate.yml".text = ''
+let
+  frigateConfig = pkgs.writeText "frigate.yml" ''
     mqtt:
       enabled: true
       host: 127.0.0.1
       port: 1883
-      # user / password if Mosquitto requires auth — set via MQTT_USER/MQTT_PASSWORD
+      user: frigate
+      password: "{FRIGATE_MQTT_PASSWORD}"
 
     database:
       path: /media/frigate/db/frigate.db
@@ -93,11 +45,11 @@
     record:
       enabled: true
       retain:
-        days: 7          # keep 7 days of 24h recordings on Pi storage
-        mode: all        # record all motion + events
+        days: 7
+        mode: all
       events:
         retain:
-          default: 30    # keep event clips for 30 days
+          default: 30
           mode: active_objects
 
     snapshots:
@@ -106,46 +58,89 @@
         default: 30
 
     detectors:
-      cpu1:
-        type: cpu       # CHANGE_ME: set to "coral", "openvino", or "tensorrt"
-        num_threads: 3
+      ov:
+        type: openvino
+        device: AUTO
+        model:
+          path: /openvino-model/ssdlite_mobilenet_v2.xml
 
-    # Define cameras here.  One example:
     cameras:
-      EXAMPLE_CAMERA_NAME:
+      c1:
         ffmpeg:
           inputs:
-            - path: rtsp://CAMERA_USER:CAMERA_PASS@EXAMPLE_CAMERA_IP/stream1
-              roles: [ detect, record ]
+            - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_sub
+              roles: [ detect ]
+            - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_main
+              roles: [ record ]
         detect:
-          width:  1920
-          height: 1080
+          width:  640
+          height: 480
           fps:    5
         motion:
           mask: []
   '';
+in
+{
+  # ---------------------------------------------------------------------------
+  # Frigate container
+  # ---------------------------------------------------------------------------
+  virtualisation.oci-containers.containers."frigate" = {
+    image = "ghcr.io/blakeblackshear/frigate:stable";
 
-  systemd.services."frigate-config-link" = {
-    description = "Link Frigate config";
-    wantedBy    = [ "podman-frigate.service" ];
-    before      = [ "podman-frigate.service" ];
-    serviceConfig = {
-      Type      = "oneshot";
-      ExecStart = "${pkgs.bash}/bin/bash -c 'cp /etc/frigate/frigate.yml /var/lib/frigate/config/frigate.yml'";
-      RemainAfterExit = true;
-    };
+    environmentFiles = [ "/run/frigate-env" ];
+
+    volumes = [
+      "${frigateConfig}:/config/config.yml:ro"
+      "/var/lib/frigate/db:/media/frigate/db"
+      "/var/lib/frigate/recordings:/media/frigate/recordings"
+      "/var/cache/frigate:/tmp/cache"
+      "/etc/localtime:/etc/localtime:ro"
+    ];
+
+    ports = [ "127.0.0.1:5000:5000" "127.0.0.1:8554:8554" ];
+
+    extraOptions = [
+      "--shm-size=256m"
+      "--device=/dev/dri"
+    ];
+
+    autoStart = true;
   };
 
+  # ---------------------------------------------------------------------------
+  # Write combined env file before container starts
+  # ---------------------------------------------------------------------------
   systemd.services."podman-frigate" = {
     serviceConfig = {
       Restart    = lib.mkForce "on-failure";
       RestartSec = "15s";
+      ExecStartPre = [
+        "+${pkgs.writeShellScript "frigate-write-env" ''
+          set -euo pipefail
+          {
+            cat ${config.age.secrets.frigate-rtsp-env.path}
+            printf 'FRIGATE_MQTT_PASSWORD=%s\n' \
+              "$(tr -d '\n' < ${config.age.secrets.mosquitto-frigate-pass.path})"
+          } > /run/frigate-env
+          chmod 600 /run/frigate-env
+        ''}"
+      ];
     };
   };
 
+  # ---------------------------------------------------------------------------
+  # Secrets
+  # ---------------------------------------------------------------------------
+  age.secrets.frigate-rtsp-env = {
+    file  = ../../../secrets/frigate-rtsp-env.age;
+    owner = "root";
+  };
+
+  # ---------------------------------------------------------------------------
+  # State directories
+  # ---------------------------------------------------------------------------
   systemd.tmpfiles.rules = [
-    "d /var/lib/frigate/config      0750 frigate frigate -"
+    "d /var/lib/frigate/db          0750 frigate frigate -"
     "d /var/lib/frigate/recordings  0750 frigate frigate -"
   ];
-
 }
