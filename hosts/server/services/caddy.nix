@@ -277,6 +277,17 @@ in
       };
 
       # ------------------------------------------------------------------
+      # Zigbee2MQTT web UI
+      # ------------------------------------------------------------------
+      "zigbee.${domain}" = {
+        extraConfig = ''
+          ${tls}
+          ${authentikFwdAuth}
+          reverse_proxy localhost:8099
+        '';
+      };
+
+      # ------------------------------------------------------------------
       # Samba / file access helper (optional web UI redirect)
       # Future: add a Filebrowser or similar here.
       # ------------------------------------------------------------------

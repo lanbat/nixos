@@ -161,6 +161,7 @@ Check for conflicts before assigning a port. Current allocations:
 | 8123 | Home Assistant |
 | 8222 | Vaultwarden |
 | 8554 | Frigate RTSP |
+| 8099 | Zigbee2MQTT web UI |
 | 8888 | SearXNG |
 | 9000 | Authentik |
 | 8384 | Syncthing web UI |

@@ -8,10 +8,11 @@
 #   It is significantly easier to maintain than a container for HA specifically
 #   because NixOS can manage the Python component set declaratively.
 #
-# USB/Zigbee dongle
-# -----------------
-# The Zigbee USB dongle (e.g. ConBee II, Sonoff Zigbee 3.0) appears as
-# /dev/serial/by-id/... — set ZIGBEE_DEVICE_PATH below.
+# Zigbee
+# ------
+# Zigbee devices are bridged via Zigbee2MQTT (see zigbee2mqtt.nix).
+# Z2M owns the USB dongle and publishes to Mosquitto; HA discovers devices
+# via MQTT auto-discovery.  Do NOT add ZHA here — it would conflict with Z2M.
 #
 # Auth with Authentik
 # -------------------
@@ -35,8 +36,7 @@
 { config, pkgs, lib, ... }:
 
 let
-  domain      = config.lanbat.domain;
-  zigbeeDevice = "/dev/serial/by-id/${config.lanbat.zigbeeDongle}";
+  domain = config.lanbat.domain;
 in
 {
   services.home-assistant = {
@@ -50,9 +50,7 @@ in
       "default_config"
       "met"             # weather
       "radio_browser"
-      "zha"             # Zigbee Home Automation (works with most dongles)
-      # "deconz"        # alternative: deCONZ / ConBee
-      "mqtt"
+      "mqtt"            # Zigbee devices arrive via Zigbee2MQTT → MQTT discovery
       "mobile_app"
       "person"
       "history"
@@ -102,19 +100,6 @@ in
       # it lets HA trust the X-Forwarded-For header from Caddy so that
       # IP-based rate limiting works correctly.
     };
-  };
-
-  # Give HA access to the Zigbee USB dongle.
-  services.udev.extraRules = ''
-    SUBSYSTEM=="tty", ATTRS{idVendor}=="${config.lanbat.zigbeeVendorId}", \
-      ATTRS{idProduct}=="${config.lanbat.zigbeeProductId}", \
-      SYMLINK+="zigbee", GROUP="ha", MODE="0660"
-  '';
-
-  users.groups.ha = {};
-
-  users.users.hass = {
-    extraGroups = [ "dialout" "ha" ];
   };
 
   # HA state lives entirely on server-local storage — resilient to Pi loss.

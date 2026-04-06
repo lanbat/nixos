@@ -51,6 +51,12 @@
             passwordFile = config.age.secrets.mosquitto-frigate-pass.path;
             acl = [ "readwrite frigate/#" "readwrite homeassistant/#" ];
           };
+
+          # Zigbee2MQTT user.
+          zigbee2mqtt = {
+            passwordFile = config.age.secrets.mosquitto-z2m-pass.path;
+            acl = [ "readwrite zigbee2mqtt/#" "readwrite homeassistant/#" ];
+          };
         };
       }
     ];

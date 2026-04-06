@@ -39,6 +39,7 @@
     ./services/homepage.nix
     ./services/samba.nix
     ./services/mosquitto.nix
+    ./services/zigbee2mqtt.nix
     ./services/vaultwarden.nix
     ./services/influxdb.nix
     ./services/grafana.nix
@@ -278,8 +279,9 @@
 
     # ---- MQTT / Mosquitto ----
     # Each file contains a single-line plaintext password.
-    mosquitto-ha-pass     = { file = ../../secrets/mosquitto-ha-pass.age;    owner = "mosquitto"; };
+    mosquitto-ha-pass      = { file = ../../secrets/mosquitto-ha-pass.age;     owner = "mosquitto"; };
     mosquitto-frigate-pass = { file = ../../secrets/mosquitto-frigate-pass.age; owner = "mosquitto"; };
+    mosquitto-z2m-pass     = { file = ../../secrets/mosquitto-z2m-pass.age;    owner = "mosquitto"; };
 
   };
 
