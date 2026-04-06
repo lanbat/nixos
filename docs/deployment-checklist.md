@@ -534,85 +534,68 @@ nixos-rebuild switch --flake .#pi     --target-host admin@pi5    --impure
 
 ### 3b. Authentik initial setup
 
-Visit `https://auth.<domain>/if/flow/initial-setup/` and create the initial admin account.
+Visit `https://auth.<domain>/if/flow/initial-setup/` and create the initial
+admin account.
 
-#### OIDC providers (native SSO)
+#### Automated: providers, applications, and outpost
 
-For each service below, go to **Applications → Providers → Create → OAuth2/OpenID Provider**:
-set Client type to `Confidential`, Signing Key to `authentik Self-signed Certificate`,
-scopes to `openid email profile`. Then create an **Application** linked to that provider.
+All Authentik providers, applications, and the embedded outpost are configured
+automatically via blueprints (`hosts/server/services/authentik-blueprints.nix`).
+The blueprints are applied by Authentik on every startup — no manual UI work
+needed for the Authentik side.
 
-| Service | Redirect URI |
-|---|---|
-| Home Assistant | `https://ha.<domain>/auth/oidc/callback` |
-| Nextcloud | `https://cloud.<domain>/apps/user_oidc/code` |
-| Immich | `https://photos.<domain>/auth/login` and `app.immich:/` |
-| Jellyfin (optional) | `https://media.<domain>/sso/OID/redirect/authentik` |
-| Grafana | `https://grafana.<domain>/login/generic_oauth` |
-
-After creating each provider, update the corresponding secret and follow the
-per-service UI steps below:
+To wire the shared OIDC client secrets, run the generator script:
 
 ```bash
-cd secrets
-agenix -e nextcloud-oidc-env.age   # NEXTCLOUD_OIDC_CLIENT_ID + _SECRET
-agenix -e immich-oidc-env.age      # IMMICH_OAUTH_CLIENT_ID + _SECRET
-agenix -e grafana-env.age          # update GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET
+bash secrets/generate-oidc-secrets.sh
 ```
-Also set `CHANGE_ME_GRAFANA_OIDC_CLIENT_ID` in `hosts/server/services/grafana.nix`.
 
-Rebuild to apply the updated secrets:
+This creates `authentik-oidc-secrets.age` and updates `grafana-env.age`,
+`nextcloud-oidc-env.age`, and `immich-oidc-env.age` with matching values.
+The script prints the client credentials needed for Home Assistant and Jellyfin
+(see manual steps below).
+
+Deploy to apply the new secrets:
+
 ```bash
 nixos-rebuild switch --flake .#server --target-host admin@server --impure
 ```
 
-**Nextcloud** — enable the OIDC app and connect it to Authentik:
-1. Log in to `https://cloud.<domain>` as the local `admin`.
-2. Apps → Search "OpenID Connect user backend" → Enable.
-3. Settings → OpenID Connect → Add provider:
-   - Identifier: `authentik`
-   - Client ID / Secret: from `nextcloud-oidc-env.age`
-   - Discovery endpoint: `https://auth.<domain>/application/o/<app-slug>/.well-known/openid-configuration`
+After the deploy, Authentik restarts and the blueprints run automatically.
+Grafana and Immich OIDC come up fully automatically.  Nextcloud needs one
+extra step (see below).
 
-**Immich** — enable OAuth in Immich settings:
-1. Log in to `https://photos.<domain>` as the local admin.
-2. Administration → Settings → OAuth → Enable OAuth.
-3. Fill in Issuer URL, Client ID, Client Secret from `immich-oidc-env.age`.
-   Issuer URL: `https://auth.<domain>/application/o/<app-slug>/`
+#### Nextcloud — install the OIDC app
 
-**Home Assistant** — configure OIDC via the UI:
-1. Log in to `https://ha.<domain>`.
-2. Settings → People → Add Auth Provider → OpenID Connect.
-3. Fill in Client ID/Secret from the Authentik application.
-   Discovery URL: `https://auth.<domain>/application/o/<app-slug>/.well-known/openid-configuration`
+The `user_oidc` Nextcloud app must be installed before OIDC will work.
+Log in at `https://cloud.<domain>` as the local `admin`, then either:
 
-**Jellyfin** (optional) — requires the SSO plugin:
-1. Log in to `https://media.<domain>` as admin.
-2. Dashboard → Plugins → Catalog → SSO-Auth → Install. Restart Jellyfin.
-3. Dashboard → SSO-Auth → Add provider:
-   - OID Endpoint: `https://auth.<domain>/application/o/<app-slug>/`
-   - Client ID/Secret from the Authentik application.
+- **Via the Nextcloud Apps UI:** Apps → Search "OpenID Connect user backend" → Install & Enable.
+- **Via occ:** `sudo -u nextcloud nextcloud-occ app:install user_oidc`
 
-#### Forward-auth providers (Caddy proxy)
+Once the app is enabled, the `nextcloud-oidc-setup` systemd service runs
+automatically and registers the Authentik provider.  No further steps needed.
 
-For each service below, go to **Applications → Providers → Create → Proxy Provider**,
-choose **Forward auth (single application)**, set the external host, then create an Application.
+#### Home Assistant — manual UI setup
 
-| Service | External host |
-|---|---|
-| Frigate | `https://nvr.<domain>` |
-| qBittorrent | `https://torrent.<domain>` |
-| Bitmagnet | `https://bitmagnet.<domain>` |
-| Snapcast | `https://audio.<domain>` |
-| Syncthing | `https://sync.<domain>` |
+1. Install the HACS integration from the [HACS store](https://hacs.xyz) or use
+   the built-in "Home Assistant OAuth2" integration if available.
+2. Settings → Devices & Services → Add Integration → search "Authentik".
+3. Use the values printed by `generate-oidc-secrets.sh`:
+   - client_id: `home-assistant`
+   - client_secret: (from the script output)
+   - discovery URL: `https://auth.<domain>/application/o/home-assistant/.well-known/openid-configuration`
 
-After creating all proxy providers:
-1. Go to **Applications → Outposts**.
-2. Edit the **embedded-outpost**.
-3. Add all five proxy applications to its list and save.
+#### Jellyfin — manual UI setup
 
-The embedded outpost (built into the `authentik-server` container) activates within seconds.
-No rebuild required.
+1. Dashboard → Plugins → Catalog → **SSO Authentication** → Install. Restart Jellyfin.
+2. Dashboard → SSO-Auth → Add provider with values from `generate-oidc-secrets.sh`:
+   - Provider name: `authentik`
+   - client_id: `jellyfin`
+   - client_secret: (from the script output)
+   - Authorization URL: `https://auth.<domain>/application/o/authorize/`
+   - Token URL: `https://auth.<domain>/application/o/token/`
+   - Userinfo URL: `https://auth.<domain>/application/o/userinfo/`
 
 ### 3c. Samba user setup
 

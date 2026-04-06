@@ -62,7 +62,7 @@ let domain = config.lanbat.domain; in
         allow_sign_up         = true;
         # Client ID is not a secret — set it here directly.
         # CHANGE_ME: replace with the client ID from the Authentik application.
-        client_id             = "CHANGE_ME_GRAFANA_OIDC_CLIENT_ID";
+        client_id             = "grafana";
         client_secret         = "$__env{GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}";
         scopes                = "openid email profile";
         auth_url              = "https://auth.${domain}/application/o/authorize/";

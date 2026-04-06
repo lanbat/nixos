@@ -56,8 +56,19 @@ Run the generator script — it creates all purely-random secrets automatically:
 bash secrets/generate-secrets.sh
 ```
 
-For secrets that need manual input (OIDC credentials, MQTT passwords, rclone
-config, Telegraf token), the script prints instructions at the end.
+For secrets that need manual input (MQTT passwords, rclone config, Telegraf
+token), the script prints instructions at the end.
+
+Once Authentik is deployed and running, generate the OIDC client secrets with:
+
+```bash
+bash secrets/generate-oidc-secrets.sh
+```
+
+This creates `authentik-oidc-secrets.age` and wires the matching secrets into
+`grafana-env.age`, `nextcloud-oidc-env.age`, and `immich-oidc-env.age`.  It
+also prints the client credentials needed for manual UI setup in Home Assistant
+and Jellyfin.
 
 The full list for reference:
 

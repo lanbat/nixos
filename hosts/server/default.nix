@@ -28,6 +28,7 @@
     ./services/tang.nix
     ./services/caddy.nix
     ./services/authentik.nix
+    ./services/authentik-blueprints.nix
     ./services/home-assistant.nix
     ./services/nextcloud.nix
     ./services/immich.nix

@@ -15,13 +15,14 @@
 #   - Never overwrites an existing .age file — safe to re-run.
 #
 # Secrets that still need manual input AFTER running this script:
-#   secrets/nextcloud-oidc-env.age   — fill in after creating Authentik OIDC app
-#   secrets/immich-oidc-env.age      — fill in after creating Authentik OIDC app
-#   secrets/grafana-env.age          — GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET needs Authentik
-#   secrets/mosquitto-ha-pass.age    — choose a password for the HA MQTT user
+#   secrets/mosquitto-ha-pass.age      — choose a password for the HA MQTT user
 #   secrets/mosquitto-frigate-pass.age — choose a password for the Frigate MQTT user
-#   secrets/rclone-frigate-config.age — run: rclone config, then paste the result
-#   secrets/telegraf-token.age       — fill in after deploying InfluxDB (step 3i)
+#   secrets/rclone-frigate-config.age  — run: rclone config, then paste the result
+#   secrets/telegraf-token.age         — fill in after deploying InfluxDB (step 3i)
+#
+# OIDC client secrets (Grafana, Nextcloud, Immich, HA, Jellyfin) are handled
+# by a separate script once Authentik is running:
+#   bash secrets/generate-oidc-secrets.sh
 
 set -euo pipefail
 
@@ -89,18 +90,6 @@ encrypt vaultwarden-env.age "ADMIN_TOKEN=$(rand 48)"
 echo
 echo "Done. Secrets that still need manual input:"
 echo
-echo "  secrets/nextcloud-oidc-env.age     — after creating Authentik OIDC app (step 3b):"
-echo "    NEXTCLOUD_OIDC_CLIENT_ID=<value>"
-echo "    NEXTCLOUD_OIDC_CLIENT_SECRET=<value>"
-echo
-echo "  secrets/immich-oidc-env.age        — after creating Authentik OIDC app (step 3b):"
-echo "    IMMICH_OAUTH_CLIENT_ID=<value>"
-echo "    IMMICH_OAUTH_CLIENT_SECRET=<value>"
-echo
-echo "  secrets/grafana-env.age            — update GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET"
-echo "                                       and INFLUXDB_TOKEN after step 3b/3h."
-echo "    agenix -e secrets/grafana-env.age"
-echo
 echo "  secrets/mosquitto-ha-pass.age      — choose a password for the HA MQTT user:"
 echo "    agenix -e secrets/mosquitto-ha-pass.age"
 echo
@@ -113,6 +102,12 @@ echo
 echo "  secrets/telegraf-token.age         — fill in after deploying InfluxDB (step 3i):"
 echo "    TELEGRAF_INFLUXDB_TOKEN=<value>"
 echo "    agenix -e secrets/telegraf-token.age"
+echo
+echo "  secrets/grafana-env.age            — update INFLUXDB_TOKEN after step 3h:"
+echo "    agenix -e secrets/grafana-env.age"
+echo
+echo "OIDC client secrets are handled separately once Authentik is running:"
+echo "  bash secrets/generate-oidc-secrets.sh"
 echo
 echo "Commit the generated .age files:"
 echo "  git add secrets/*.age && git commit -m 'add initial secrets'"
