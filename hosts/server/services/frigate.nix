@@ -58,7 +58,7 @@
     volumes = [
       "/var/lib/frigate/config/frigate.yml:/config/config.yml:ro"
       "/var/lib/frigate/db:/media/frigate/db"
-      "/srv/storage/a/surveillance:/media/frigate/recordings"
+      "/var/lib/frigate/recordings:/media/frigate/recordings"
       "/var/cache/frigate:/tmp/cache"
       "/etc/localtime:/etc/localtime:ro"
       # Coral USB: uncomment below and add the device option
@@ -74,7 +74,7 @@
       # For Coral USB:      "--device=/dev/bus/usb"
     ];
 
-    autoStart = false; # managed via NFS dependency
+    autoStart = true;
   };
 
   # ---------------------------------------------------------------------------
@@ -136,13 +136,7 @@
     };
   };
 
-  # ---------------------------------------------------------------------------
-  # NFS dependency
-  # ---------------------------------------------------------------------------
-  lanbat.nfsDependentServices."podman-frigate" = [ "a" ];
-
   systemd.services."podman-frigate" = {
-    wantedBy   = [ "multi-user.target" ];
     serviceConfig = {
       Restart    = lib.mkForce "on-failure";
       RestartSec = "15s";
@@ -150,38 +144,8 @@
   };
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/frigate/config             0750 frigate frigate -"
-    "d /srv/storage/a/surveillance         0750 frigate media   -"
-    "d /srv/storage/a/surveillance/clips   0750 frigate media   -"
-    "d /srv/storage/a/surveillance/exports 0750 frigate media   -"
+    "d /var/lib/frigate/config      0750 frigate frigate -"
+    "d /var/lib/frigate/recordings  0750 frigate frigate -"
   ];
 
-  # ---------------------------------------------------------------------------
-  # rclone cloud sync for Frigate clips
-  # ---------------------------------------------------------------------------
-  # Watches the clips directory and uploads each clip after it is closed.
-  # rclone config is in config.age.secrets.rclone-frigate-config.
-  systemd.services."frigate-rclone-sync" = {
-    description = "Frigate clips cloud sync via rclone";
-    after    = [ "podman-frigate.service" "srv-storage-a.mount" ];
-    bindsTo  = [ "srv-storage-a.mount" ];
-    wantedBy = [ "podman-frigate.service" ];
-    path     = [ pkgs.rclone pkgs.inotify-tools ];
-    serviceConfig = {
-      Type       = "simple";
-      User       = "frigate";
-      Restart    = "on-failure";
-      RestartSec = "15s";
-      ExecStart  = pkgs.writeShellScript "frigate-rclone" ''
-        CLIPS_DIR=/srv/storage/a/surveillance/clips
-        RCLONE_CONF=${config.age.secrets.rclone-frigate-config.path}
-        # Upload clips immediately after they close.
-        inotifywait -m -e close_write --format "%w%f" "$CLIPS_DIR" | while read path; do
-          rclone --config "$RCLONE_CONF" copyto "$path" \
-            "EXAMPLE_BUCKET:frigate-clips/$(basename "$path")" \
-            --s3-no-check-bucket 2>&1 || true
-        done
-      '';
-    };
-  };
 }
