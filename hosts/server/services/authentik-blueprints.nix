@@ -193,6 +193,7 @@ let
         identifiers:
           name: "authentik Embedded Outpost"
         attrs:
+          type: proxy
           providers:
             - !KeyOf provider-frigate
             - !KeyOf provider-qbittorrent
