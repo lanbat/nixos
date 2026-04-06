@@ -62,8 +62,10 @@
     ];
   };
 
-  # Allow LAN devices to reach MQTT.
+  # Allow LAN devices and localhost to reach MQTT.
+  # Localhost must be explicitly allowed — HA and Z2M connect from 127.0.0.1.
   networking.firewall.extraCommands = ''
+    iptables -I INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT
     iptables -I INPUT -p tcp --dport 1883 -s ${config.lanbat.lanSubnet} -j ACCEPT
     iptables -I INPUT -p tcp --dport 1883 ! -s ${config.lanbat.lanSubnet} -j DROP
   '';

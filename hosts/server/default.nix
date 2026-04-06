@@ -190,6 +190,26 @@
     ];
   };
 
+  # Set the authentik PostgreSQL password (needed for TCP auth from the container).
+  # Runs after postgresql.service each boot; idempotent.
+  systemd.services."postgresql-authentik-init" = {
+    description = "Initialize Authentik PostgreSQL user password";
+    after    = [ "postgresql.service" ];
+    wantedBy = [ "postgresql.service" ];
+    unitConfig.ConditionPathExists = config.age.secrets.authentik-env.path;
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      User            = "postgres";
+      ExecStart = pkgs.writeShellScript "postgresql-authentik-init" ''
+        set -euo pipefail
+        AUTHENTIK_POSTGRESQL__PASSWORD=""
+        source ${config.age.secrets.authentik-env.path}
+        ${config.services.postgresql.package}/bin/psql -c "ALTER USER authentik WITH ENCRYPTED PASSWORD '$AUTHENTIK_POSTGRESQL__PASSWORD';"
+      '';
+    };
+  };
+
   # Set the immich PostgreSQL password (needed for TCP auth from the container).
   # Runs after postgresql.service each boot; idempotent.
   systemd.services."postgresql-immich-init" = {
