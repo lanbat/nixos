@@ -112,11 +112,13 @@ in
   # ---------------------------------------------------------------------------
   # State directories
   # ---------------------------------------------------------------------------
+  # Authentik container runs as uid/gid 1000 — directories must be owned by 1000.
   systemd.tmpfiles.rules = [
-    "d /var/lib/authentik                  0750 root root -"
-    "d /var/lib/authentik/media            0750 root root -"
-    "d /var/lib/authentik/certs            0750 root root -"
-    "d /var/lib/authentik/custom-templates 0750 root root -"
+    "d /var/lib/authentik                        0750 root root -"
+    "d /var/lib/authentik/media                  0750 1000 1000 -"
+    "d /var/lib/authentik/media/public           0750 1000 1000 -"
+    "d /var/lib/authentik/certs                  0750 1000 1000 -"
+    "d /var/lib/authentik/custom-templates       0750 1000 1000 -"
   ];
 
   # Authentik waits for PostgreSQL and Redis before starting.
