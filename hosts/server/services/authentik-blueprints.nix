@@ -191,7 +191,7 @@ let
       - model: authentik_outposts.outpost
         state: present
         identifiers:
-          name: "authentik Embedded Outpost"
+          managed: "goauthentik.io/outposts/embedded"
         attrs:
           type: proxy
           providers:
