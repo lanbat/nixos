@@ -167,6 +167,9 @@
       listen_addresses = lib.mkForce "127.0.0.1";
       # vectorchord requires preloading its shared library.
       shared_preload_libraries = "vchord.so";
+      # Authentik (Django + Celery) + Nextcloud + Immich + Bitmagnet exhaust
+      # the default of 100.  200 leaves headroom without excessive memory cost.
+      max_connections = 200;
     };
 
     authentication = lib.mkForce ''
