@@ -64,9 +64,18 @@
 
   # Allow LAN devices and localhost to reach MQTT.
   # Localhost must be explicitly allowed — HA and Z2M connect from 127.0.0.1.
+  #
+  # Rule order: insert DROP first so it ends up at the bottom after the two
+  # ACCEPT rules (each -I pushes earlier insertions down).
+  # extraStopCommands removes the rules on reload to prevent accumulation.
   networking.firewall.extraCommands = ''
-    iptables -I INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT
-    iptables -I INPUT -p tcp --dport 1883 -s ${config.lanbat.lanSubnet} -j ACCEPT
     iptables -I INPUT -p tcp --dport 1883 ! -s ${config.lanbat.lanSubnet} -j DROP
+    iptables -I INPUT -p tcp --dport 1883 -s ${config.lanbat.lanSubnet} -j ACCEPT
+    iptables -I INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT
+  '';
+  networking.firewall.extraStopCommands = ''
+    iptables -D INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT 2>/dev/null || true
+    iptables -D INPUT -p tcp --dport 1883 -s ${config.lanbat.lanSubnet} -j ACCEPT 2>/dev/null || true
+    iptables -D INPUT -p tcp --dport 1883 ! -s ${config.lanbat.lanSubnet} -j DROP 2>/dev/null || true
   '';
 }
