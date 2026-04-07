@@ -22,63 +22,50 @@
 # Shares telegraf-token.age with the server — same write token, separate
 # agenix declaration in hosts/pi/default.nix.
 #
-{ config, pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 {
   services.telegraf = {
     enable = true;
 
-    extraConfig = ''
-      [agent]
-        interval          = "30s"
-        flush_interval    = "30s"
-        round_interval    = true
-        metric_batch_size = 1000
-        metric_buffer_limit = 10000
-        collection_jitter = "5s"
-        flush_jitter      = "5s"
-        precision         = "0s"
+    extraConfig = lib.mkForce {
+      agent = {
+        interval            = "30s";
+        flush_interval      = "30s";
+        round_interval      = true;
+        metric_batch_size   = 1000;
+        metric_buffer_limit = 10000;
+        collection_jitter   = "5s";
+        flush_jitter        = "5s";
+        precision           = "0s";
+      };
 
-      # -----------------------------------------------------------------------
-      # Output: InfluxDB 2 on the server
-      # -----------------------------------------------------------------------
-      [[outputs.influxdb_v2]]
-        urls         = ["http://${config.lanbat.serverIp}:8086"]
-        token        = "$TELEGRAF_INFLUXDB_TOKEN"
-        organization = "homelab"
-        bucket       = "metrics"
+      outputs.influxdb_v2 = [{
+        urls         = [ "http://${config.lanbat.serverIp}:8086" ];
+        token        = "$TELEGRAF_INFLUXDB_TOKEN";
+        organization = "homelab";
+        bucket       = "metrics";
+      }];
 
-      # -----------------------------------------------------------------------
-      # System metrics
-      # -----------------------------------------------------------------------
-      [[inputs.cpu]]
-        percpu   = true
-        totalcpu = true
-        collect_cpu_time = false
-        report_active    = false
-
-      [[inputs.mem]]
-
-      [[inputs.disk]]
-        # Include the LUKS-mounted drives so we can track their fill levels.
-        mount_points = ["/", "/mnt/storage-a", "/mnt/storage-b"]
-        ignore_fs = ["tmpfs", "devtmpfs", "devfs", "iso9660", "overlay", "aufs", "squashfs", "nsfs"]
-
-      [[inputs.diskio]]
-
-      [[inputs.net]]
-        ignore_protocol_stats = true
-
-      [[inputs.system]]
-
-      [[inputs.processes]]
-
-      # -----------------------------------------------------------------------
-      # Raspberry Pi CPU temperature
-      # Reads from the thermal zone exposed by the kernel.
-      # -----------------------------------------------------------------------
-      [[inputs.temp]]
-    '';
+      inputs.cpu = [{
+        percpu           = true;
+        totalcpu         = true;
+        collect_cpu_time = false;
+        report_active    = false;
+      }];
+      inputs.mem     = [{}];
+      inputs.disk    = [{
+        # Include the LUKS-mounted drives to track fill levels.
+        mount_points = [ "/" "/mnt/storage-a" "/mnt/storage-b" ];
+        ignore_fs    = [ "tmpfs" "devtmpfs" "devfs" "iso9660" "overlay" "aufs" "squashfs" "nsfs" ];
+      }];
+      inputs.diskio    = [{}];
+      inputs.net       = [{ ignore_protocol_stats = true; }];
+      inputs.system    = [{}];
+      inputs.processes = [{}];
+      # Raspberry Pi CPU temperature via kernel thermal zone.
+      inputs.temp      = [{}];
+    };
   };
 
   # Inject the InfluxDB write token at runtime.

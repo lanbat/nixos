@@ -36,6 +36,8 @@ in
   virtualisation.oci-containers.containers."immich-server" = {
     image   = "ghcr.io/immich-app/immich-server:${immichVersion}";
     extraOptions = [ "--network=host" ];
+    podman.user = "immich";
+    user = "0";
     environment = {
       DB_HOSTNAME      = "127.0.0.1";
       DB_PORT          = "5432";
@@ -85,6 +87,8 @@ in
   virtualisation.oci-containers.containers."immich-machine-learning" = {
     image   = "ghcr.io/immich-app/immich-machine-learning:${immichVersion}";
     extraOptions = [ "--network=host" ];
+    podman.user = "immich";
+    user = "0";
     environment = {
       # ML service binds on 3003 by default; server reaches it on localhost.
       MACHINE_LEARNING_WORKERS       = "1";

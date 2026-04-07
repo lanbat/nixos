@@ -36,6 +36,8 @@ let domain = config.lanbat.domain; in
 
     ports = [ "127.0.0.1:8888:8080" ];
 
+    podman.user = "searxng";
+    user = "0";
     autoStart = true;
   };
 
@@ -87,6 +89,6 @@ YAML
   };
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/searxng 0750 root root -"
+    "d /var/lib/searxng 0750 searxng searxng -"
   ];
 }

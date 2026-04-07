@@ -32,22 +32,21 @@ in
     desktopManager.xterm.enable = false;
     windowManager.openbox.enable = true;
 
-    # Autologin the media user straight into openbox.
-    displayManager = {
-      lightdm = {
-        enable = true;
-        # Hide the greeter entirely.
-        autoLogin = {
-          enable = true;
-          user   = "media";
-        };
-        extraConfig = ''
-          [LightDM]
-          minimum-vt=1
-        '';
-      };
-      defaultSession = "none+openbox";
+    displayManager.lightdm = {
+      enable = true;
+      extraConfig = ''
+        [LightDM]
+        minimum-vt=1
+      '';
     };
+  };
+
+  # Autologin the media user into openbox.
+  # These options moved to services.displayManager in NixOS 24.11.
+  services.displayManager = {
+    autoLogin.enable = true;
+    autoLogin.user   = "media";
+    defaultSession   = "none+openbox";
   };
 
   # ---------------------------------------------------------------------------
@@ -76,8 +75,8 @@ in
     openbox
     launcherPkg
 
-    # Controller support
-    joystick
+    # Controller support (joydev module loaded via boot.kernelModules)
+    jstest-gtk  # joystick testing / calibration utility
   ];
 
   # Load the joystick input module against the running kernel.
@@ -100,7 +99,13 @@ in
     });
   '';
 
-  # Audio — PulseAudio for simplicity on a single-user TV box.
-  hardware.pulseaudio.enable = true;
-  hardware.pulseaudio.support32Bit = true;
+  # Audio — PipeWire with PulseAudio compat (required; PulseAudio conflicts
+  # with PipeWire in NixOS 24.11+).  Kodi, RetroArch, and snapclient all use
+  # the PulseAudio compatibility socket.
+  hardware.pulseaudio.enable = false;
+  services.pipewire = {
+    enable       = true;
+    alsa.enable  = true;
+    pulse.enable = true;
+  };
 }

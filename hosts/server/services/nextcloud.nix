@@ -32,7 +32,11 @@ let domain = config.lanbat.domain; in
   services.nextcloud = {
     enable   = true;
     hostName = "cloud.${domain}";
-    package  = pkgs.nextcloud30;
+    # UPGRADE NOTE: If the server was running NC30 on nixos-24.11, you must
+    # upgrade to NC31 first (on nixos-25.11 stable) before jumping to NC32,
+    # because Nextcloud doesn't support skipping major versions.
+    # If this is a fresh install, NC32 is fine directly.
+    package  = pkgs.nextcloud32;
 
     https = true;
 

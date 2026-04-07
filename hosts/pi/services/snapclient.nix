@@ -24,15 +24,21 @@
 { config, pkgs, lib, ... }:
 
 {
-  # System-wide PulseAudio — required for system services to reach audio.
-  hardware.pulseaudio.systemWide = true;
+  # Audio is handled by PipeWire (see frontend.nix); snapclient uses PulseAudio
+  # compat socket provided by services.pipewire.pulse.enable = true.
 
-  # Grant the snapclient system user access to PulseAudio.
-  users.users.snapclient.extraGroups = [ "audio" ];
-
-  services.snapclient = {
-    enable = true;
-    host   = config.lanbat.serverIp;
-    port   = 1704;
+  # nixos-24.11 has no services.snapclient module — run it manually.
+  systemd.services.snapclient = {
+    description = "Snapcast client";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "network.target" "sound.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.snapcast}/bin/snapclient --host ${config.lanbat.serverIp} --port 1704";
+      Restart      = "on-failure";
+      RestartSec   = "5s";
+      User         = "snapclient";
+      DynamicUser  = true;
+      SupplementaryGroups = [ "audio" ];
+    };
   };
 }

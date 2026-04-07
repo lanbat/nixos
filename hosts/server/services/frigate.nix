@@ -102,8 +102,13 @@ in
     extraOptions = [
       "--shm-size=256m"
       "--device=/dev/dri"
+      # Grant access to the GPU device nodes (required for OpenVINO inference).
+      "--group-add=render"
+      "--group-add=video"
     ];
 
+    podman.user = "frigate";
+    user = "0";
     autoStart = true;
   };
 
@@ -115,6 +120,10 @@ in
       Restart    = lib.mkForce "on-failure";
       RestartSec = "15s";
       ExecStartPre = [
+        # Runs as root (+ prefix) even though the service User=frigate.
+        # Combines both secrets into /run/frigate-env and hands ownership
+        # to the frigate user so Podman (running rootless as frigate) can
+        # read the env file.
         "+${pkgs.writeShellScript "frigate-write-env" ''
           set -euo pipefail
           {
@@ -122,6 +131,7 @@ in
             printf 'FRIGATE_MQTT_PASSWORD=%s\n' \
               "$(tr -d '\n' < ${config.age.secrets.mosquitto-frigate-pass.path})"
           } > /run/frigate-env
+          chown frigate:frigate /run/frigate-env
           chmod 600 /run/frigate-env
         ''}"
       ];

@@ -52,10 +52,8 @@
   services.wyoming.openwakeword = {
     enable = true;
     uri    = "tcp://127.0.0.1:10300";
-    preloadModels = [
-      "ok_nabu"       # default HA wake word
-      # "hey_jarvis"  # uncomment to enable as alternative
-    ];
+    # preloadModels was removed in wyoming-openwakeword 2.0 — models are now
+    # loaded on demand when a wake-word detection request arrives.
   };
 
   # ---------------------------------------------------------------------------

@@ -19,10 +19,15 @@ Follow this checklist every time:
    - **Always-on**: service starts at boot, data lives on host root — do nothing extra
    - **Workload-gated**: add to `bindMounts` and `gatedServices` in `modules/server/workload-gate.nix`,
      and add a mode-0000 stub in `modules/server/secure-layers.nix`
-5. **Declare secrets** in both:
+5. **If the service is an OCI container**, add a dedicated service account (see "Rootless containers"):
+   - Add the group and user in `modules/common/users.nix` with a stable UID/GID in 990–999
+   - Set `podman.user = "<name>"` on the container and `user = "0"` (or `--uidmap` for images that run as non-root internally)
+   - Own the service's data directories with the new user in `systemd.tmpfiles.rules`
+   - Set `owner = "<name>"` on any agenix secrets the container reads
+6. **Declare secrets** in both:
    - `secrets/secrets.nix` — agenix recipients
    - `hosts/server/default.nix` → `age.secrets` block
-6. **Update docs**:
+7. **Update docs**:
    - `docs/architecture.md` — auth matrix + hostname map + ASCII diagram if always-on
    - `docs/secure-layers.md` — add to the correct tier table
    - `docs/backup.md` — if the service has state that must be backed up

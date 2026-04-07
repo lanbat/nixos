@@ -26,7 +26,7 @@ in
   services.nfs.server = {
     enable = true;
     # NFSv4 only — no portmap required.
-    nfsd.nproc = 8;
+    nproc = 8;
 
     exports = ''
       /mnt/storage-a  ${serverIp}(${exportOpts})
@@ -43,8 +43,8 @@ in
   };
 
   # rpcbind is needed for NFSv3 clients; not required for v4-only.
-  # Leave it disabled unless you have v3 clients.
-  services.rpcbind.enable = false;
+  # mkForce to override the default-true set by the nfs module.
+  services.rpcbind.enable = lib.mkForce false;
 
   # NFSv4 ID mapping domain — must match server config.
   services.nfs.idmapd.settings = {

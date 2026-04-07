@@ -23,32 +23,29 @@
   # ---------------------------------------------------------------------------
   # Video acceleration — Pi 5 uses V3D (not VC4 like Pi 4).
   # ---------------------------------------------------------------------------
-  hardware.raspberry-pi."5".fkms-3d.enable = lib.mkDefault false;
-  # V3D is the KMS driver for Pi 5; it should be enabled automatically by
-  # the nixos-hardware module.  If Kodi has no acceleration, check:
-  #   /sys/class/drm — should show card0 and render devices.
+  # V3D is the KMS driver for Pi 5; enabled automatically by nixos-hardware.
+  # If Kodi has no acceleration, check /sys/class/drm for card0/render devices.
 
-  hardware.opengl = {
-    enable          = true;
-    driSupport      = true;
-    driSupport32Bit = false; # Pi is aarch64, no 32-bit needed
+  hardware.graphics.enable = true;
+  # hardware.opengl was renamed to hardware.graphics in NixOS 24.11.
+
+  # ---------------------------------------------------------------------------
+  # Audio — PipeWire (default in NixOS 24.11+)
+  # ---------------------------------------------------------------------------
+  # PipeWire with PulseAudio compatibility so Kodi, RetroArch, and snapclient
+  # all share the same audio graph without fighting over ALSA.
+  services.pipewire = {
+    enable       = true;
+    alsa.enable  = true;
+    pulse.enable = true;  # PulseAudio-compatible socket for snapclient
   };
-
-  # ---------------------------------------------------------------------------
-  # Audio
-  # ---------------------------------------------------------------------------
-  # PulseAudio for simplicity.  Kodi and RetroArch both work with PA.
-  hardware.pulseaudio.enable = true;
-
-  # HDMI audio — ensure the HDMI audio device is available.
-  sound.enable = true;
+  # sound.enable and hardware.pulseaudio.enable are deprecated — removed.
 
   # ---------------------------------------------------------------------------
   # Gamepad / controller
   # ---------------------------------------------------------------------------
-  hardware.joystick = {
-    enable = true;
-  };
+  # Load the joydev kernel module so gamepad devices appear under /dev/input.
+  boot.kernelModules = [ "joydev" ];
 
   # Udev rules for common controllers (Xbox, PS4/5, 8BitDo).
   services.udev.packages = with pkgs; [

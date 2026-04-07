@@ -55,37 +55,26 @@
 { config, pkgs, lib, ... }:
 
 {
+  users.groups.wyoming-satellite = {};
+  users.users.wyoming-satellite = {
+    isSystemUser = true;
+    group        = "wyoming-satellite";
+    # audio group membership is handled via SupplementaryGroups in the systemd unit
+  };
+
   services.wyoming.satellite = {
     enable = true;
     name   = "Pi Satellite";
     uri    = "tcp://0.0.0.0:10700";
+    user   = "wyoming-satellite";
+    group  = "wyoming-satellite";
 
     # Microphone: 16 kHz mono S16LE — required by the Wyoming STT pipeline.
-    microphone.command = [
-      "${pkgs.alsa-utils}/bin/arecord"
-      "-D" "default"
-      "-r" "16000"
-      "-c" "1"
-      "-f" "S16_LE"
-      "-t" "raw"
-      "-q"
-    ];
+    microphone.command = "${pkgs.alsa-utils}/bin/arecord -D default -r 16000 -c 1 -f S16_LE -t raw -q";
 
     # Speaker: TTS responses arrive as 22050 Hz mono S16LE from piper.
-    sound = {
-      enable  = true;
-      command = [
-        "${pkgs.alsa-utils}/bin/aplay"
-        "-D" "default"
-        "-r" "22050"
-        "-c" "1"
-        "-f" "S16_LE"
-        "-t" "raw"
-        "-q"
-      ];
-    };
+    sound.command = "${pkgs.alsa-utils}/bin/aplay -D default -r 22050 -c 1 -f S16_LE -t raw -q";
   };
 
-  # Give the satellite service user access to ALSA audio devices.
-  users.users.wyoming-satellite.extraGroups = [ "audio" ];
+  # audio group access provided via SupplementaryGroups in the systemd unit (by the module).
 }

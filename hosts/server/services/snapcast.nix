@@ -47,30 +47,32 @@
 {
   services.snapserver = {
     enable = true;
-    port   = 1704;
 
-    http = {
-      enable        = true;
-      port          = 1780;
-      listenAddress = "127.0.0.1"; # Caddy proxies this; do not expose directly
-    };
-
-    tcp = {
-      enable        = true;
-      port          = 1705;
-      listenAddress = "0.0.0.0"; # snapclient needs to reach this from the LAN
-    };
-
-    streams = {
-      main = {
-        type     = "pipe";
-        location = "/run/snapserver/main.fifo";
-        query = {
-          sampleformat = "48000:16:2"; # CHANGE_ME if your source differs
-          codec        = "flac";
-          mode         = "read";
-        };
+    settings = {
+      # Streaming port — snapclient connects here from the LAN.
+      tcp-streaming = {
+        enabled         = true;
+        port            = 1704;
+        bind_to_address = "0.0.0.0";
       };
+
+      # Control/JSON-RPC port — snapclient + web UI use this.
+      tcp-control = {
+        enabled         = true;
+        port            = 1705;
+        bind_to_address = "0.0.0.0"; # snapclient needs to reach this from the LAN
+      };
+
+      # HTTP JSON-RPC + web UI — Caddy proxies this; localhost-only.
+      http = {
+        enabled         = true;
+        port            = 1780;
+        bind_to_address = "127.0.0.1";
+      };
+
+      # Audio source: named pipe written by MPD/librespot/shairport-sync.
+      # URI format: pipe://<path>?name=<stream-name>&<key>=<val>&...
+      stream.source = "pipe:///run/snapserver/main.fifo?name=main&sampleformat=48000:16:2&codec=flac&mode=read";
     };
   };
 

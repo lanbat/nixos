@@ -433,6 +433,6 @@ in
 
   age.secrets.authentik-oidc-secrets = {
     file  = ../../../secrets/authentik-oidc-secrets.age;
-    owner = "root";
+    owner = "authentik";
   };
 }

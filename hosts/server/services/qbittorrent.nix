@@ -33,8 +33,10 @@
     image = "lscr.io/linuxserver/qbittorrent:latest";
 
     environment = {
-      PUID          = "994";   # qbt uid from users.nix
-      PGID          = "994";
+      # PUID/PGID=0: linuxserver entrypoint stays as root inside the container.
+      # In rootless mode, container root maps to the host "qbt" user (UID 994).
+      PUID          = "0";
+      PGID          = "0";
       TZ            = config.lanbat.timezone;
       WEBUI_PORT    = "8090";
     };
@@ -47,6 +49,8 @@
     # Do NOT use --network host; bridge mode + port mapping is fine here.
     ports = [ "127.0.0.1:8090:8090" ];
 
+    podman.user = "qbt";
+    user = "0";
     autoStart = false; # managed by the NFS dependency below
   };
 

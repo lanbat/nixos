@@ -39,6 +39,8 @@
 
     extraOptions = [ "--network=host" ];
 
+    podman.user = "bitmagnet";
+    user = "0";
     # autoStart = false — the on-demand activator manages this.
     autoStart = false;
   };
@@ -64,6 +66,6 @@
   };
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/bitmagnet 0750 root root -"
+    "d /var/lib/bitmagnet 0750 bitmagnet bitmagnet -"
   ];
 }

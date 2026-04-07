@@ -75,7 +75,18 @@ in
   virtualisation.oci-containers.containers."authentik-server" = {
     image   = "ghcr.io/goauthentik/server:${authentikVersion}";
     cmd     = [ "server" ];
-    extraOptions = [ "--network=host" ];
+    extraOptions = [
+      "--network=host"
+      # Remap container UID/GID 1000 (authentik's internal user) to the host
+      # "authentik" service account (UID/GID 998).  All other container UIDs
+      # map into the sub-UID range so they cannot escape the user namespace.
+      "--uidmap=0:1:1000"
+      "--uidmap=1000:0:1"
+      "--uidmap=1001:1001:64535"
+      "--gidmap=0:1:1000"
+      "--gidmap=1000:0:1"
+      "--gidmap=1001:1001:64535"
+    ];
 
     environment    = authentikEnv;
     environmentFiles = [ authentikEnvFile ];
@@ -86,6 +97,7 @@ in
       "/var/lib/authentik/custom-templates:/templates"
     ];
 
+    podman.user = "authentik";
     autoStart = true;
   };
 
@@ -95,7 +107,15 @@ in
   virtualisation.oci-containers.containers."authentik-worker" = {
     image       = "ghcr.io/goauthentik/server:${authentikVersion}";
     cmd         = [ "worker" ];
-    extraOptions = [ "--network=host" ];
+    extraOptions = [
+      "--network=host"
+      "--uidmap=0:1:1000"
+      "--uidmap=1000:0:1"
+      "--uidmap=1001:1001:64535"
+      "--gidmap=0:1:1000"
+      "--gidmap=1000:0:1"
+      "--gidmap=1001:1001:64535"
+    ];
 
     environment    = authentikEnv;
     environmentFiles = [ authentikEnvFile ];
@@ -105,6 +125,7 @@ in
       "/var/lib/authentik/certs:/certs"
     ];
 
+    podman.user = "authentik";
     autoStart  = true;
     dependsOn  = [ "authentik-server" ];
   };
@@ -112,13 +133,15 @@ in
   # ---------------------------------------------------------------------------
   # State directories
   # ---------------------------------------------------------------------------
-  # Authentik container runs as uid/gid 1000 — directories must be owned by 1000.
+  # The --uidmap flags remap container UID 1000 → host "authentik" (UID 998),
+  # so directories must be owned by the "authentik" service account on the host.
+  # Inside the container, these appear as owned by UID 1000 as Authentik expects.
   systemd.tmpfiles.rules = [
-    "d /var/lib/authentik                        0750 root root -"
-    "d /var/lib/authentik/media                  0750 1000 1000 -"
-    "d /var/lib/authentik/media/public           0750 1000 1000 -"
-    "d /var/lib/authentik/certs                  0750 1000 1000 -"
-    "d /var/lib/authentik/custom-templates       0750 1000 1000 -"
+    "d /var/lib/authentik                        0750 authentik authentik -"
+    "d /var/lib/authentik/media                  0750 authentik authentik -"
+    "d /var/lib/authentik/media/public           0750 authentik authentik -"
+    "d /var/lib/authentik/certs                  0750 authentik authentik -"
+    "d /var/lib/authentik/custom-templates       0750 authentik authentik -"
   ];
 
   # Authentik waits for PostgreSQL and Redis before starting.

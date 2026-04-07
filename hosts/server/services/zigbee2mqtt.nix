@@ -33,8 +33,7 @@
       # Zigbee dongle — created by udev rule below.
       serial.port = "/dev/zigbee";
 
-      # Enable Home Assistant MQTT discovery.
-      homeassistant = true;
+      # homeassistant MQTT discovery is enabled by default in the Z2M module.
 
       # Do not allow new devices to join by default.
       # Toggle from the Z2M web UI or via MQTT when pairing.

@@ -81,7 +81,7 @@
         prefixLength = 24;
       }];
     };
-    defaultGateway = config.lanbat.gatewayIp;
+    defaultGateway = { address = config.lanbat.gatewayIp; interface = "eth0"; };
     nameservers    = [ config.lanbat.gatewayIp ];
   };
 
@@ -132,5 +132,9 @@
     smartmontools
   ];
 
+  # Pi uses extlinux / U-Boot, not GRUB.  Silence the grub assertion.
+  boot.loader.grub.enable = false;
+
+  # wyoming-satellite depends on pysilero-vad which is marked broken in 24.11.
   system.stateVersion = "24.11";
 }

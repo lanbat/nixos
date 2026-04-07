@@ -5,10 +5,12 @@
   # Inputs
   # ---------------------------------------------------------------------------
   inputs = {
-    # Stable channel. Bump to nixos-25.05 once it is released.
+    # Stable channel — kept as a reference but the server now uses unstable.
+    # The Pi still uses stable for maximum reliability on embedded hardware.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
 
-    # Occasional unstable package overrides — available as pkgs.unstable.<name>.
+    # Unstable channel — server runs on this for up-to-date security fixes
+    # and features (rootless Podman support in oci-containers, latest packages).
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     # Raspberry Pi hardware quirks (including Pi 5).
@@ -27,20 +29,45 @@
   # ---------------------------------------------------------------------------
   outputs = { self, nixpkgs, nixpkgs-unstable, nixos-hardware, agenix, ... }@inputs:
   let
-    # Expose unstable packages as pkgs.unstable in every module.
-    unstableOverlay = final: prev: {
-      unstable = import nixpkgs-unstable {
+    # Expose stable packages as pkgs.stable in every module (for Pi compat).
+    stableOverlay = final: prev: {
+      stable = import nixpkgs {
         system = prev.system;
         config.allowUnfree = true;
       };
     };
 
-    # Build a pkgs set with our overlays.
-    mkPkgs = system: import nixpkgs {
+    # Legacy alias: pkgs.unstable still works, now points to unstable itself
+    # (a no-op overlay on the unstable base, kept for backwards compat).
+    unstableOverlay = final: prev: {
+      unstable = prev;
+    };
+
+    # Server pkgs: based on unstable for security-forward package set.
+    mkServerPkgs = system: import nixpkgs-unstable {
       inherit system;
       config.allowUnfree = true;
       overlays = [
+        stableOverlay
         unstableOverlay
+        (import ./overlays)
+      ];
+    };
+
+    # Pi pkgs: based on stable for maximum reliability on embedded hardware.
+    # allowBroken: wyoming-satellite depends on pysilero-vad which is marked
+    # broken in 24.11; allow it until the Pi is upgraded to a newer channel.
+    mkPiPkgs = system: import nixpkgs {
+      inherit system;
+      config.allowUnfree = true;
+      config.allowBroken = true;
+      overlays = [
+        (final: prev: {
+          unstable = import nixpkgs-unstable {
+            system = prev.system;
+            config.allowUnfree = true;
+          };
+        })
         (import ./overlays)
       ];
     };
@@ -55,9 +82,9 @@
       # -----------------------------------------------------------------
       # Main server (x86_64)
       # -----------------------------------------------------------------
-      server = nixpkgs.lib.nixosSystem {
+      server = nixpkgs-unstable.lib.nixosSystem {
         system = "x86_64-linux";
-        pkgs   = mkPkgs "x86_64-linux";
+        pkgs   = mkServerPkgs "x86_64-linux";
         specialArgs = { inherit inputs; };
         modules = [
           agenix.nixosModules.default
@@ -70,7 +97,7 @@
       # -----------------------------------------------------------------
       pi = nixpkgs.lib.nixosSystem {
         system = "aarch64-linux";
-        pkgs   = mkPkgs "aarch64-linux";
+        pkgs   = mkPiPkgs "aarch64-linux";
         specialArgs = { inherit inputs; };
         modules = [
           agenix.nixosModules.default
