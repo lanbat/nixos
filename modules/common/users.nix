@@ -31,11 +31,13 @@
     ha        = { gid = 993; };
     qbt       = { gid = 994; };
     frigate   = { gid = 995; };
-    searxng   = { gid = 996; };
-    # GID 997 is taken by nsncd on nixpkgs-unstable — use 986 instead.
-    homepage  = { gid = 986; };
-    authentik = { gid = 998; };
-    bitmagnet = { gid = 999; };
+    # UIDs/GIDs 996-999 are all taken by NixOS dynamic services on unstable
+    # (redis-authentik=996, nscd=997, influxdb2=998, avahi=999).
+    # Use 960-963 which are below the NixOS dynamic allocation zone.
+    searxng   = { gid = 960; };
+    homepage  = { gid = 961; };
+    authentik = { gid = 962; };
+    bitmagnet = { gid = 963; };
   };
 
   # Service accounts.
@@ -80,7 +82,7 @@
     };
 
     searxng = {
-      uid = 996; group = "searxng"; isSystemUser = true;
+      uid = 960; group = "searxng"; isSystemUser = true;
       linger = true;
       home = "/var/lib/containers/searxng"; createHome = true;
       subUidRanges = [{ startUid = 396608; count = 65536; }];
@@ -88,8 +90,7 @@
     };
 
     homepage = {
-      # UID 997 is taken by nsncd on nixpkgs-unstable; use 986 to avoid conflict.
-      uid = 986; group = "homepage"; isSystemUser = true;
+      uid = 961; group = "homepage"; isSystemUser = true;
       linger = true;
       home = "/var/lib/containers/homepage"; createHome = true;
       subUidRanges = [{ startUid = 462144; count = 65536; }];
@@ -97,11 +98,11 @@
     };
 
     # Authentik image runs as internal UID 1000 ("authentik" inside the container).
-    # We remap container UID 1000 → host authentik (UID 998) via --uidmap in the
+    # We remap container UID 1000 → host authentik (UID 962) via --uidmap in the
     # container extraOptions.  Directories owned by authentik on the host appear
     # as UID 1000 inside the container.
     authentik = {
-      uid = 998; group = "authentik"; isSystemUser = true;
+      uid = 962; group = "authentik"; isSystemUser = true;
       linger = true;
       home = "/var/lib/containers/authentik"; createHome = true;
       # subUid start 527680: container UID 0-999 → 527680-528679,
@@ -111,7 +112,7 @@
     };
 
     bitmagnet = {
-      uid = 999; group = "bitmagnet"; isSystemUser = true;
+      uid = 963; group = "bitmagnet"; isSystemUser = true;
       linger = true;
       home = "/var/lib/containers/bitmagnet"; createHome = true;
       subUidRanges = [{ startUid = 593216; count = 65536; }];

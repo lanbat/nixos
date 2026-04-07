@@ -33,8 +33,8 @@
       # Zigbee dongle — created by udev rule below.
       serial = {
         port    = "/dev/zigbee";
-        # Sonoff ZBDongle-P (CC2652P) — required in Z2M 2.x; auto-detect removed.
-        adapter = "znp";
+        # Sonoff ZBDongle-P (CC2652P) — Z2M 2.x renamed "znp" → "zstack".
+        adapter = "zstack";
       };
 
       # homeassistant MQTT discovery is enabled by default in the Z2M module.
