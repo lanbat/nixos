@@ -279,7 +279,9 @@
     # File format (two KEY=value lines):
     #   AUTHENTIK_POSTGRESQL__PASSWORD=<value>
     #   AUTHENTIK_SECRET_KEY=<50+ random chars>
-    authentik-env = { file = ../../secrets/authentik-env.age; owner = "authentik"; };
+    # group = "postgres" + mode 0440: both authentik (owner) and postgres (group)
+    # can read — needed for postgresql-authentik-init which runs as postgres.
+    authentik-env = { file = ../../secrets/authentik-env.age; owner = "authentik"; group = "postgres"; mode = "0440"; };
 
     # ---- Nextcloud ----
     # nextcloud-db-pass removed — using createLocally = true (Unix socket, no password)
@@ -292,7 +294,9 @@
     # ---- Immich ----
     # File format:
     #   POSTGRES_PASSWORD=<value>
-    immich-db-password   = { file = ../../secrets/immich-db-password.age;   owner = "immich"; };
+    # group = "postgres" + mode 0440: both immich (owner) and postgres (group)
+    # can read — needed for postgresql-immich-init which runs as postgres.
+    immich-db-password   = { file = ../../secrets/immich-db-password.age;   owner = "immich"; group = "postgres"; mode = "0440"; };
     # File format:
     #   IMMICH_OAUTH_CLIENT_ID=<value>
     #   IMMICH_OAUTH_CLIENT_SECRET=<value>

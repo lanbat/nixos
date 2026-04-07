@@ -205,12 +205,21 @@ in
     serviceConfig.ExecStartPre = [
       "+${pkgs.writeShellScript "homepage-fix-ca-perms" ''
         set -euo pipefail
-        CERT=/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
-        if [ -f "$CERT" ]; then
-          chmod o+r "$CERT"
-          chmod o+x "$(dirname "$CERT")"
-          chmod o+x "$(dirname "$(dirname "$CERT")")"
-          chmod o+x "$(dirname "$(dirname "$(dirname "$CERT")")")"
+        # Rootless Podman (running as 'homepage' UID) must be able to statfs every
+        # parent directory of the bind-mount source.  Caddy's state dir is 0700, so
+        # we grant o+x all the way down.  We do this unconditionally whenever Caddy
+        # has created the PKI structure — the cert file itself may not exist yet on
+        # first boot (Caddy generates it lazily on the first TLS request).
+        CERT_DIR=/var/lib/caddy/.local/share/caddy/pki/authorities/local
+        if [ -d "$CERT_DIR" ]; then
+          chmod o+x /var/lib/caddy
+          chmod o+x /var/lib/caddy/.local
+          chmod o+x /var/lib/caddy/.local/share
+          chmod o+x /var/lib/caddy/.local/share/caddy
+          chmod o+x /var/lib/caddy/.local/share/caddy/pki
+          chmod o+x /var/lib/caddy/.local/share/caddy/pki/authorities
+          chmod o+x "$CERT_DIR"
+          [ -f "$CERT_DIR/root.crt" ] && chmod o+r "$CERT_DIR/root.crt"
         fi
       ''}"
     ];

@@ -87,7 +87,10 @@ in
   virtualisation.oci-containers.containers."frigate" = {
     image = "ghcr.io/blakeblackshear/frigate:stable";
 
-    environmentFiles = [ "/run/frigate-env" ];
+    # environmentFiles would become systemd EnvironmentFile= (read before
+    # ExecStartPre runs, so the file doesn't exist yet).  Use --env-file in
+    # extraOptions instead — podman reads it during ExecStart, after ExecStartPre
+    # has already created /run/frigate-env.
 
     volumes = [
       "${frigateConfig}:/config/config.yml:ro"
@@ -107,6 +110,8 @@ in
       # using group names would look them up in the container's /etc/group, which
       # doesn't have render/video.
       "--group-add=keep-groups"
+      # Env file created by ExecStartPre — pass directly to the container.
+      "--env-file=/run/frigate-env"
     ];
 
     podman.user = "frigate";
