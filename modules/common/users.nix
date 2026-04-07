@@ -32,7 +32,8 @@
     qbt       = { gid = 994; };
     frigate   = { gid = 995; };
     searxng   = { gid = 996; };
-    homepage  = { gid = 997; };
+    # GID 997 is taken by nsncd on nixpkgs-unstable — use 986 instead.
+    homepage  = { gid = 986; };
     authentik = { gid = 998; };
     bitmagnet = { gid = 999; };
   };
@@ -87,7 +88,8 @@
     };
 
     homepage = {
-      uid = 997; group = "homepage"; isSystemUser = true;
+      # UID 997 is taken by nsncd on nixpkgs-unstable; use 986 to avoid conflict.
+      uid = 986; group = "homepage"; isSystemUser = true;
       linger = true;
       home = "/var/lib/containers/homepage"; createHome = true;
       subUidRanges = [{ startUid = 462144; count = 65536; }];

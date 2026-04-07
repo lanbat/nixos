@@ -19,8 +19,12 @@
 #
 # Services:
 #   systemd_units — active/failed state for all systemd services
-#   docker        — Podman container CPU/mem/network (via Docker compat socket)
 #   nfsclient     — NFS mount operation counters and latency
+#
+# Note: inputs.docker removed — rootless Podman containers each have their own
+# socket under /run/user/<uid>/podman; there is no single shared Docker-compat
+# socket for telegraf to query.  Container metrics can be added via cgroups or
+# per-container prometheus exporters if needed later.
 #
 # Secrets
 # -------
@@ -71,12 +75,6 @@
       inputs.processes  = [{}];
       inputs.temp       = [{}];
       inputs.systemd_units = [{}];
-      inputs.docker     = [{
-        endpoint        = "unix:///run/docker.sock";
-        gather_services = false;
-        timeout         = "5s";
-        # perdevice/total removed in telegraf 1.38 — dropped.
-      }];
       inputs.nfsclient  = [{ fullstat = false; }];
     };
   };
@@ -85,9 +83,6 @@
   systemd.services.telegraf.serviceConfig.EnvironmentFile = [
     config.age.secrets.telegraf-token.path
   ];
-
-  # Podman Docker compat socket access for container stats.
-  users.users.telegraf.extraGroups = [ "docker" ];
 
   # Agenix secret
   age.secrets.telegraf-token = {
