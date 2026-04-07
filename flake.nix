@@ -13,6 +13,12 @@
     # and features (rootless Podman support in oci-containers, latest packages).
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+    # Temporary: needed only for the Nextcloud 30→31→32 upgrade path.
+    # nixpkgs-unstable has removed NC31 (minimum is NC32), so we fetch NC31
+    # from the 25.11 stable channel.  Remove this input once the server DB
+    # has been migrated to NC31 and the package is switched to nextcloud32.
+    nixpkgs-2511.url = "github:NixOS/nixpkgs/nixos-25.11";
+
     # Raspberry Pi hardware quirks (including Pi 5).
     nixos-hardware.url = "github:NixOS/nixos-hardware";
 
@@ -27,7 +33,7 @@
   # ---------------------------------------------------------------------------
   # Outputs
   # ---------------------------------------------------------------------------
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixos-hardware, agenix, ... }@inputs:
+  outputs = { self, nixpkgs, nixpkgs-unstable, nixpkgs-2511, nixos-hardware, agenix, ... }@inputs:
   let
     # Expose stable packages as pkgs.stable in every module (for Pi compat).
     stableOverlay = final: prev: {
@@ -85,7 +91,20 @@
       server = nixpkgs-unstable.lib.nixosSystem {
         system = "x86_64-linux";
         pkgs   = mkServerPkgs "x86_64-linux";
-        specialArgs = { inherit inputs; };
+        specialArgs = {
+          inherit inputs;
+          # nextcloud31 from 25.11 stable for the NC30→31→32 upgrade hop.
+          # Remove once DB is migrated to NC31 and package is nextcloud32.
+          pkgs-2511 = import nixpkgs-2511 {
+            system = "x86_64-linux";
+            config = {
+              allowUnfree = true;
+              # NC31 is marked insecure in 25.11 (EOL).  Permitted temporarily
+              # for the NC30→31 upgrade step only.
+              permittedInsecurePackages = [ "nextcloud-31.0.14" ];
+            };
+          };
+        };
         modules = [
           agenix.nixosModules.default
           ./hosts/server

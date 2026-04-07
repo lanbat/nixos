@@ -24,7 +24,7 @@
 #   3. Store the client_id/secret in agenix (nextcloud-oidc-env.age).
 #   4. Rebuild — the setup service runs and configures OIDC.
 # Local admin account is always kept as break-glass.
-{ config, pkgs, lib, ... }:
+{ config, pkgs, pkgs-2511, lib, ... }:
 
 let domain = config.lanbat.domain; in
 
@@ -33,9 +33,11 @@ let domain = config.lanbat.domain; in
     enable   = true;
     hostName = "cloud.${domain}";
     # UPGRADE PATH: NC30 → NC31 → NC32 (Nextcloud forbids skipping majors).
-    # Step 1: NC31 (current) — rebuild, wait for nextcloud-setup.service to succeed.
-    # Step 2: Change to nextcloud32, rebuild again.
-    package  = pkgs.nextcloud31;
+    # Step 1 (current): NC31 from nixpkgs-25.11 — unstable has removed NC31.
+    #   Rebuild and wait for nextcloud-setup.service to succeed.
+    # Step 2: Change to pkgs.nextcloud32, remove pkgs-2511 arg, remove
+    #   nixpkgs-2511 flake input, rebuild again.
+    package  = pkgs-2511.nextcloud31;
 
     https = true;
 
