@@ -44,7 +44,8 @@ in
       DB_USERNAME      = "immich";
       DB_DATABASE_NAME = "immich";
       REDIS_HOSTNAME   = "127.0.0.1";
-      REDIS_PORT       = "6380";
+      REDIS_PORT       = "6379";
+      REDIS_DBINDEX    = "1";
       UPLOAD_LOCATION  = "/usr/src/app/upload";
       THUMBS_PATH      = "/usr/src/app/thumbs";
       ENCODED_VIDEO_PATH = "/usr/src/app/encoded-video";

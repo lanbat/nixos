@@ -235,20 +235,15 @@
     };
   };
 
-  # Redis — named instances per service.
-  services.redis.servers = {
-    authentik = {
-      enable  = true;
-      port    = 6379;
-      bind    = "127.0.0.1";
-      save    = [];  # Authentik Redis is ephemeral; disable persistence.
-    };
-    immich = {
-      enable  = true;
-      port    = 6380;
-      bind    = "127.0.0.1";
-      save    = [];
-    };
+  # Redis — single shared instance; services use separate DB numbers.
+  #   DB 0 — Authentik  (sessions, cache)
+  #   DB 1 — Immich     (job queues, cache)
+  # Both consumers set save=[] (ephemeral), so data is safe to lose on restart.
+  services.redis.servers.shared = {
+    enable = true;
+    port   = 6379;
+    bind   = "127.0.0.1";
+    save   = [];
   };
 
   # ---------------------------------------------------------------------------

@@ -156,8 +156,7 @@ Check for conflicts before assigning a port. Current allocations:
 | 3332 | Bitmagnet on-demand activator |
 | 5000 | Frigate |
 | 5432 | PostgreSQL (shared: Authentik, Nextcloud, Bitmagnet, Immich) |
-| 6379 | Redis (Authentik) |
-| 6380 | Redis (Immich) |
+| 6379 | Redis (shared: Authentik DB 0, Immich DB 1) |
 | 7500 | Tang |
 | 8080 | Nextcloud |
 | 8086 | InfluxDB (Pi Telegraf writes here; firewall-restricted to Pi IP) |

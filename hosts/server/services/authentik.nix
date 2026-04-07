@@ -54,6 +54,7 @@ let
   authentikEnv = {
     AUTHENTIK_REDIS__HOST         = "127.0.0.1";
     AUTHENTIK_REDIS__PORT         = "6379";
+    AUTHENTIK_REDIS__DB           = "0";
     AUTHENTIK_POSTGRESQL__HOST    = "127.0.0.1";
     AUTHENTIK_POSTGRESQL__USER    = "authentik";
     AUTHENTIK_POSTGRESQL__NAME    = "authentik";
@@ -146,11 +147,11 @@ in
 
   # Authentik waits for PostgreSQL and Redis before starting.
   systemd.services."podman-authentik-server" = {
-    after    = [ "postgresql.service" "redis-authentik.service" ];
-    requires = [ "postgresql.service" "redis-authentik.service" ];
+    after    = [ "postgresql.service" "redis-shared.service" ];
+    requires = [ "postgresql.service" "redis-shared.service" ];
   };
   systemd.services."podman-authentik-worker" = {
-    after    = [ "postgresql.service" "redis-authentik.service" ];
-    requires = [ "postgresql.service" "redis-authentik.service" ];
+    after    = [ "postgresql.service" "redis-shared.service" ];
+    requires = [ "postgresql.service" "redis-shared.service" ];
   };
 }
