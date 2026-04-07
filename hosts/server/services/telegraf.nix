@@ -75,8 +75,7 @@
         endpoint        = "unix:///run/docker.sock";
         gather_services = false;
         timeout         = "5s";
-        perdevice       = false;
-        total           = true;
+        # perdevice/total removed in telegraf 1.38 — dropped.
       }];
       inputs.nfsclient  = [{ fullstat = false; }];
     };

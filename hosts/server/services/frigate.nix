@@ -102,9 +102,11 @@ in
     extraOptions = [
       "--shm-size=256m"
       "--device=/dev/dri"
-      # Grant access to the GPU device nodes (required for OpenVINO inference).
-      "--group-add=render"
-      "--group-add=video"
+      # Pass the host frigate user's supplemental groups (render, video) into the
+      # container by GID.  --group-add=keep-groups is the rootless Podman way —
+      # using group names would look them up in the container's /etc/group, which
+      # doesn't have render/video.
+      "--group-add=keep-groups"
     ];
 
     podman.user = "frigate";
