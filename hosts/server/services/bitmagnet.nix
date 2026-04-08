@@ -53,7 +53,7 @@
     activatorPort = 3332;
     realPort      = 3333;
     targetService = "podman-bitmagnet.service";
-    idleMinutes   = 30;
+    idleMinutes   = 4320; # 3 days — DHT crawling needs sustained uptime to build index
   };
 
   # Ensure the DB is available before Bitmagnet starts.
