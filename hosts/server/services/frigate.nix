@@ -82,7 +82,7 @@ let
             - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_sub
               roles: [ detect ]
             - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_main
-              roles: [ record ]
+              roles: [ record, live ]
               # Override global preset for main stream: keep TCP transport and add extra
               # probe time so ffmpeg can read H.264 codec parameters before writing segments.
               input_args:
