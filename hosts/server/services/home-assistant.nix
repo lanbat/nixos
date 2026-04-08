@@ -47,7 +47,8 @@ in
     # Install extra Python components declaratively.
     # Add/remove from this list; nixos-rebuild will install them.
     customComponents = [
-      pkgs.unstable.home-assistant-custom-components.frigate
+      # 2 upstream test failures in nixpkgs 26.05 packaging; skip checks.
+      (pkgs.unstable.home-assistant-custom-components.frigate.overrideAttrs (_: { doCheck = false; }))
     ];
 
     extraComponents = [
