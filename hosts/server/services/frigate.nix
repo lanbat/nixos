@@ -60,8 +60,6 @@ let
       ov:
         type: openvino
         device: AUTO
-        model:
-          path: /openvino-model/ssdlite_mobilenet_v2.xml
 
     cameras:
       c1:
