@@ -134,7 +134,9 @@ in
         "+${pkgs.writeShellScript "frigate-write-env" ''
           set -euo pipefail
           {
-            cat ${config.age.secrets.frigate-rtsp-env.path}
+            # awk 1 ensures a trailing newline even if the secret file lacks one,
+            # preventing the next printf from being appended to the last line.
+            awk 1 ${config.age.secrets.frigate-rtsp-env.path}
             printf 'FRIGATE_MQTT_PASSWORD=%s\n' \
               "$(tr -d '\n' < ${config.age.secrets.mosquitto-frigate-pass.path})"
           } > /run/frigate-env
