@@ -324,7 +324,7 @@
 
     # ---- Bitmagnet ----
     # File format: POSTGRES_PASSWORD=<value>
-    bitmagnet-db-pass = { file = ../../secrets/bitmagnet-db-pass.age; owner = "bitmagnet"; };
+    bitmagnet-db-pass = { file = ../../secrets/bitmagnet-db-pass.age; owner = "bitmagnet"; group = "postgres"; mode = "0440"; };
 
     # ---- Frigate ----
     rclone-frigate-config = { file = ../../secrets/rclone-frigate-config.age; owner = "frigate"; };
