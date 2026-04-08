@@ -64,6 +64,8 @@ let
     ffmpeg:
       # Use TCP transport to avoid RTP packet reordering from cameras over WiFi/UDP.
       input_args: preset-rtsp-generic
+      # Disable auto-detected vaapi hwaccel — fails in rootless Podman without DRM access.
+      hwaccel_args: []
 
     cameras:
       c1:
