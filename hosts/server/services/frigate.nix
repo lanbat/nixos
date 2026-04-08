@@ -57,14 +57,11 @@ let
         default: 30
 
     detectors:
-      ov:
-        type: openvino
-        # GPU (AUTO) fails in rootless Podman — render GID not mappable via subGidRanges.
-        # CPU mode uses the OpenVINO runtime (faster than TFLite CPU detector).
-        # To restore GPU: add render/video GIDs to frigate subGidRanges in users.nix.
-        device: CPU
-        model:
-          path: /openvino-model/ssdlite_mobilenet_v2.xml
+      cpu1:
+        type: cpu
+        num_threads: 3
+        # OpenVINO detector broken in Frigate 0.17.1 — model.path key ignored;
+        # new model management API returns None. Revisit when Frigate documents it.
 
     ffmpeg:
       # Use TCP transport to avoid RTP packet reordering from cameras over WiFi/UDP.
