@@ -57,9 +57,9 @@ let
         default: 30
 
     detectors:
-      ov:
-        type: openvino
-        device: AUTO
+      cpu1:
+        type: cpu
+        num_threads: 3
 
     cameras:
       c1:
