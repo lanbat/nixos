@@ -32,7 +32,7 @@
       # POSTGRES_PASSWORD via env file
       REDIS_ADDR        = ""; # Bitmagnet doesn't require Redis
     };
-    # environmentFiles = [ ... ]; # add postgres password file here
+    environmentFiles = [ config.age.secrets.bitmagnet-db-pass.path ];
 
     volumes = [
       "/var/lib/bitmagnet:/root/.config/bitmagnet"

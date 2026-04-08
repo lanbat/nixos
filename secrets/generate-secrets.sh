@@ -98,6 +98,9 @@ encrypt frigate-rtsp-env.age \
   "FRIGATE_RTSP_USER=$(openssl rand -hex 8)
 FRIGATE_RTSP_PASSWORD=$(openssl rand -hex 16)"
 
+# ---- Bitmagnet ----
+encrypt bitmagnet-db-pass.age "POSTGRES_PASSWORD=$(rand 36)"
+
 # ---- Vaultwarden ----
 encrypt vaultwarden-env.age "ADMIN_TOKEN=$(rand 48)"
 
