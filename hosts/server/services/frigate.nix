@@ -69,6 +69,9 @@ let
         type: openvino
         device: AUTO
 
+    lpr:
+      enabled: true
+
     # go2rtc powers the live view (WebRTC/MSE in the UI).
     # Point it at the main stream so live view is full-res, not the 640x480 sub-stream.
     # {VAR} substitutions work here the same as in cameras.ffmpeg.
