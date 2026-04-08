@@ -193,8 +193,11 @@ in
         ExecStart = pkgs.writeShellScript "workload-fix-permissions" ''
           set -euo pipefail
           W=/mnt/workload
-          [ -d "$W/nextcloud" ]        && install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud"
-          [ -d "$W/nextcloud/config" ] && install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud/config"
+          # Restore ownership after systemd-tmpfiles-resetup resets bind-mount dirs.
+          [ -d "$W/nextcloud" ]        && install -d -m 0750 -o nextcloud  -g nextcloud  "$W/nextcloud"
+          [ -d "$W/nextcloud/config" ] && install -d -m 0750 -o nextcloud  -g nextcloud  "$W/nextcloud/config"
+          [ -d "$W/bitmagnet" ]        && install -d -m 0750 -o bitmagnet  -g bitmagnet  "$W/bitmagnet"
+          [ -d "$W/qbittorrent" ]      && install -d -m 0750 -o qbt        -g qbt        "$W/qbittorrent"
         '';
       };
     };
@@ -243,10 +246,20 @@ in
           install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud"
           install -d -m 0750 -o nextcloud -g nextcloud "$W/nextcloud/config"
 
+          # Bitmagnet: mounted into container as /root/.config/bitmagnet; the
+          # container's UID 0 maps to host bitmagnet (963) via user namespace.
+          install -d -m 0750 -o bitmagnet -g bitmagnet "$W/bitmagnet"
+
+          # qBittorrent: container UID 0 maps to host qbt (994).
+          install -d -m 0750 -o qbt -g qbt "$W/qbittorrent"
+
           # Immich: podman requires volume host paths to exist before container start.
+          # Container UID 0 maps to host immich (991).
           # (db is excluded — lives in the shared NixOS PostgreSQL, not workload)
-          mkdir -p "$W/immich/thumbs" "$W/immich/encoded-video" \
-                   "$W/immich/profile" "$W/immich/model-cache"
+          install -d -m 0750 -o immich -g immich "$W/immich"
+          for d in thumbs encoded-video profile model-cache; do
+            install -d -m 0750 -o immich -g immich "$W/immich/$d"
+          done
         '';
       };
     };

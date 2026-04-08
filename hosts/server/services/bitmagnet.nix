@@ -65,7 +65,7 @@
     };
   };
 
-  systemd.tmpfiles.rules = [
-    "d /var/lib/bitmagnet 0750 bitmagnet bitmagnet -"
-  ];
+  # /var/lib/bitmagnet is a workload-gated path: the mode-0000 stub is created
+  # by modules/server/secure-layers.nix; ownership is set by workload-init.
+  # Do NOT add a tmpfiles rule here — it would conflict with the secure stub.
 }
