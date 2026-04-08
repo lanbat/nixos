@@ -104,6 +104,8 @@ let
           width:  640
           height: 480
           fps:    5
+        lpr:
+          enabled: true
         objects:
           track:
             - person
