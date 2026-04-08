@@ -72,6 +72,8 @@ in
       "ffmpeg"
       # Wyoming voice assistant protocol
       "wyoming"
+      "music_assistant"
+      "qbittorrent"
     ];
 
     config = {
