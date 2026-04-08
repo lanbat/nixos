@@ -80,7 +80,7 @@ let
         detect:
           width:  640
           height: 480
-          fps:    5
+          fps:    2
         motion:
           mask: []
   '';
