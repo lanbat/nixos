@@ -54,7 +54,7 @@ let
     snapshots:
       enabled: true
       retain:
-        days: 30
+        default: 30
 
     detectors:
       ov:
