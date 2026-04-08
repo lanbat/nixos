@@ -69,6 +69,14 @@ let
         type: openvino
         device: AUTO
 
+    # go2rtc powers the live view (WebRTC/MSE in the UI).
+    # Point it at the main stream so live view is full-res, not the 640x480 sub-stream.
+    # {VAR} substitutions work here the same as in cameras.ffmpeg.
+    go2rtc:
+      streams:
+        c1:
+          - rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_main
+
     ffmpeg:
       # Use TCP transport to avoid RTP packet reordering from cameras over WiFi/UDP.
       input_args: preset-rtsp-generic
@@ -82,7 +90,7 @@ let
             - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_sub
               roles: [ detect ]
             - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_main
-              roles: [ record, live ]
+              roles: [ record ]
               # Override global preset for main stream: keep TCP transport and add extra
               # probe time so ffmpeg can read H.264 codec parameters before writing segments.
               input_args:
@@ -92,6 +100,8 @@ let
                 - "2000000"
                 - -probesize
                 - "10000000"
+        live:
+          stream_name: c1   # go2rtc stream defined above — serves main stream in the UI
         detect:
           width:  640
           height: 480
