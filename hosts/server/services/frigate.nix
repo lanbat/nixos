@@ -83,10 +83,25 @@ let
               roles: [ detect ]
             - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_main
               roles: [ record ]
+              # Override global preset for main stream: keep TCP transport and add extra
+              # probe time so ffmpeg can read H.264 codec parameters before writing segments.
+              input_args:
+                - -rtsp_transport
+                - tcp
+                - -analyzeduration
+                - "2000000"
+                - -probesize
+                - "10000000"
         detect:
           width:  640
           height: 480
-          fps:    2
+          fps:    5
+        objects:
+          track:
+            - person
+            - car
+            - dog
+            - cat
         motion:
           mask: []
   '';
