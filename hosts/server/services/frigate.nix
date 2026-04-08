@@ -56,12 +56,18 @@ let
       retain:
         default: 30
 
+    # Global model config — read by all detectors via detector_config.model
+    # (OvDetectorConfig inherits model from BaseDetectorConfig, not its own field)
+    model:
+      path: /openvino-model/ssdlite_mobilenet_v2.xml
+      model_type: ssd
+      width: 300
+      height: 300
+
     detectors:
-      cpu1:
-        type: cpu
-        num_threads: 3
-        # OpenVINO detector broken in Frigate 0.17.1 — model.path key ignored;
-        # new model management API returns None. Revisit when Frigate documents it.
+      ov:
+        type: openvino
+        device: AUTO
 
     ffmpeg:
       # Use TCP transport to avoid RTP packet reordering from cameras over WiFi/UDP.

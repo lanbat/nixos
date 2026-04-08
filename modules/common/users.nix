@@ -78,7 +78,11 @@
       linger = true;
       home = "/var/lib/containers/frigate"; createHome = true;
       subUidRanges = [{ startUid = 331072; count = 65536; }];
-      subGidRanges = [{ startGid = 331072; count = 65536; }];
+      subGidRanges = [
+        { startGid = 331072; count = 65536; }
+        { startGid = 26;  count = 1; }   # video — /dev/dri access
+        { startGid = 303; count = 1; }   # render — /dev/dri access
+      ];
     };
 
     searxng = {
