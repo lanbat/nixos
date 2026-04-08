@@ -57,9 +57,11 @@ let
         default: 30
 
     detectors:
-      cpu1:
-        type: cpu
-        num_threads: 3
+      ov:
+        type: openvino
+        device: AUTO
+        model:
+          path: /openvino-model/ssdlite_mobilenet_v2.xml
 
     ffmpeg:
       # Use TCP transport to avoid RTP packet reordering from cameras over WiFi/UDP.
