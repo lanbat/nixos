@@ -100,8 +100,6 @@ let
                 - "2000000"
                 - -probesize
                 - "10000000"
-        live:
-          stream_name: c1   # go2rtc stream defined above — serves main stream in the UI
         detect:
           width:  640
           height: 480
