@@ -59,7 +59,10 @@ let
     detectors:
       ov:
         type: openvino
-        device: AUTO
+        # GPU (AUTO) fails in rootless Podman — render GID not mappable via subGidRanges.
+        # CPU mode uses the OpenVINO runtime (faster than TFLite CPU detector).
+        # To restore GPU: add render/video GIDs to frigate subGidRanges in users.nix.
+        device: CPU
         model:
           path: /openvino-model/ssdlite_mobilenet_v2.xml
 
