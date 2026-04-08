@@ -93,9 +93,10 @@ encrypt mosquitto-z2m-pass.age     "$(rand 24)"
 
 # ---- Frigate ----
 # Random RTSP credentials — set the same values in the camera's web UI.
+# Use hex only (no base64) — passwords appear in RTSP URLs and slashes break parsing.
 encrypt frigate-rtsp-env.age \
   "FRIGATE_RTSP_USER=$(openssl rand -hex 8)
-FRIGATE_RTSP_PASSWORD=$(rand 24)"
+FRIGATE_RTSP_PASSWORD=$(openssl rand -hex 16)"
 
 # ---- Vaultwarden ----
 encrypt vaultwarden-env.age "ADMIN_TOKEN=$(rand 48)"
