@@ -46,6 +46,12 @@ in
 
     # Install extra Python components declaratively.
     # Add/remove from this list; nixos-rebuild will install them.
+    customComponents = [
+      # HACS — Home Assistant Community Store.
+      # Provides the UI to install third-party integrations (Frigate, etc.)
+      pkgs.unstable.home-assistant-custom-components.hacs
+    ];
+
     extraComponents = [
       "default_config"
       "met"             # weather
