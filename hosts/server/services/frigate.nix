@@ -44,18 +44,17 @@ let
 
     record:
       enabled: true
-      retain:
-        days: 7
-        mode: all
-      events:
+      detections:
         retain:
-          default: 30
-          mode: active_objects
+          days: 30
+      alerts:
+        retain:
+          days: 30
 
     snapshots:
       enabled: true
       retain:
-        default: 30
+        days: 30
 
     detectors:
       ov:
