@@ -22,6 +22,7 @@
   # ---------------------------------------------------------------------------
   virtualisation.oci-containers.containers."bitmagnet" = {
     image = "ghcr.io/bitmagnet-io/bitmagnet:latest";
+    cmd = [ "worker" "run" "--all" ];
 
     environment = {
       POSTGRES_HOST     = "127.0.0.1";
