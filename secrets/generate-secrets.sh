@@ -84,6 +84,13 @@ GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS}
 GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=FILL_IN_AFTER_AUTHENTIK_SETUP
 INFLUXDB_TOKEN=FILL_IN_SAME_AS_influxdb-admin-token.age"
 
+# ---- Mosquitto ----
+# Random passwords for each MQTT user.  The same value is used by both
+# Mosquitto (passwordFile) and the connecting service (env var).
+encrypt mosquitto-ha-pass.age      "$(rand 24)"
+encrypt mosquitto-frigate-pass.age "$(rand 24)"
+encrypt mosquitto-z2m-pass.age     "$(rand 24)"
+
 # ---- Frigate ----
 # Random RTSP credentials — set the same values in the camera's web UI.
 encrypt frigate-rtsp-env.age \
@@ -95,12 +102,6 @@ encrypt vaultwarden-env.age "ADMIN_TOKEN=$(rand 48)"
 
 echo
 echo "Done. Secrets that still need manual input:"
-echo
-echo "  secrets/mosquitto-ha-pass.age      — choose a password for the HA MQTT user:"
-echo "    agenix -e secrets/mosquitto-ha-pass.age"
-echo
-echo "  secrets/mosquitto-frigate-pass.age — choose a password for Frigate MQTT user:"
-echo "    agenix -e secrets/mosquitto-frigate-pass.age"
 echo
 echo "  secrets/rclone-frigate-config.age  — run 'rclone config' then paste the result:"
 echo "    agenix -e secrets/rclone-frigate-config.age"
