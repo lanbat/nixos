@@ -48,7 +48,7 @@ in
     # Add/remove from this list; nixos-rebuild will install them.
     customComponents = [
       # 2 upstream test failures in nixpkgs 26.05 packaging; skip checks.
-      (pkgs.unstable.home-assistant-custom-components.frigate.overrideAttrs (_: { doCheck = false; }))
+      (pkgs.unstable.home-assistant-custom-components.frigate.overridePythonAttrs (_: { doCheck = false; }))
     ];
 
     extraComponents = [
