@@ -104,6 +104,7 @@ let
                 - -probesize
                 - "10000000"
         detect:
+          enabled: true
           width:  640
           height: 480
           fps:    5
