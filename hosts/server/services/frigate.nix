@@ -61,6 +61,10 @@ let
         type: cpu
         num_threads: 3
 
+    ffmpeg:
+      # Use TCP transport to avoid RTP packet reordering from cameras over WiFi/UDP.
+      input_args: preset-rtsp-generic
+
     cameras:
       c1:
         ffmpeg:
