@@ -59,8 +59,9 @@ in
         ca local {
           name      "Lanbat Homelab CA"
           root_cn   "Lanbat Root CA"
-          # Increase root validity to reduce how often clients need to re-trust.
+          # Root cert valid for 100 years — internal CA only, no public trust.
           # Leaf certs still rotate every 7 days automatically.
+          root_lifetime 876000h
         }
       }
 
