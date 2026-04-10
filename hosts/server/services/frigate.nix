@@ -72,17 +72,16 @@ let
     lpr:
       enabled: true
 
-    # go2rtc powers the live view (WebRTC/MSE in the UI).
-    # Point it at the main stream so live view is full-res, not the 640x480 sub-stream.
-    # {VAR} substitutions work here the same as in cameras.ffmpeg.
+    # go2rtc ingests camera feeds and re-serves them as local RTSP.
+    # http-flv is the recommended transport for Reolink ≤5 MP cameras.
     go2rtc:
       streams:
         c1:
-          - rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_main
+          - "ffmpeg:http://c1.10ctr.vg.cd/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}#video=copy#audio=copy#audio=opus"
+        c1_sub:
+          - "ffmpeg:http://c1.10ctr.vg.cd/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}"
 
     ffmpeg:
-      # Use TCP transport to avoid RTP packet reordering from cameras over WiFi/UDP.
-      input_args: preset-rtsp-generic
       # Disable auto-detected vaapi hwaccel — fails in rootless Podman without DRM access.
       hwaccel_args: []
 
@@ -90,19 +89,12 @@ let
       c1:
         ffmpeg:
           inputs:
-            - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_sub
+            - path: rtsp://127.0.0.1:8554/c1_sub
+              input_args: preset-rtsp-restream
               roles: [ detect ]
-            - path: rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@c1.10ctr.vg.cd/h264Preview_01_main
+            - path: rtsp://127.0.0.1:8554/c1
+              input_args: preset-rtsp-restream
               roles: [ record ]
-              # Override global preset for main stream: keep TCP transport and add extra
-              # probe time so ffmpeg can read H.264 codec parameters before writing segments.
-              input_args:
-                - -rtsp_transport
-                - tcp
-                - -analyzeduration
-                - "2000000"
-                - -probesize
-                - "10000000"
         detect:
           enabled: true
           width:  640
