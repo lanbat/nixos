@@ -5,9 +5,10 @@
 # Storage
 # -------
 # All state is local (always-on tier):
-#   /var/lib/frigate/db/      — SQLite event metadata
+#   /var/lib/frigate/db/         — SQLite event metadata
+#   /var/lib/frigate/clips/      — review thumbnails + preview videos
 #   /var/lib/frigate/recordings/ — 24h rolling recordings
-#   /var/cache/frigate/       — clip buffer (safe to lose)
+#   /var/cache/frigate/          — clip buffer (safe to lose)
 #
 # rclone cloud sync will be added later.
 #
@@ -127,6 +128,7 @@ in
     volumes = [
       "${frigateConfig}:/config/config.yml:ro"
       "/var/lib/frigate/db:/media/frigate/db"
+      "/var/lib/frigate/clips:/media/frigate/clips"
       "/var/lib/frigate/recordings:/media/frigate/recordings"
       "/var/cache/frigate:/tmp/cache"
       "/etc/localtime:/etc/localtime:ro"
@@ -192,6 +194,7 @@ in
   # ---------------------------------------------------------------------------
   systemd.tmpfiles.rules = [
     "d /var/lib/frigate/db          0750 frigate frigate -"
+    "d /var/lib/frigate/clips       0750 frigate frigate -"
     "d /var/lib/frigate/recordings  0750 frigate frigate -"
   ];
 }
