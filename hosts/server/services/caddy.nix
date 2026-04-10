@@ -370,6 +370,55 @@ http.server.HTTPServer(('127.0.0.1', 9999), H).serve_forever()
     };
   };
 
+  # ---------------------------------------------------------------------------
+  # Server-side CA trust
+  # ---------------------------------------------------------------------------
+  # NixOS's security.pki.certificateFiles requires certs at build time;
+  # Caddy's root CA is generated at runtime.  Maintain a combined CA bundle
+  # at a fixed path so programs on the server trust internal TLS endpoints.
+
+  system.activationScripts.caddy-local-ca = lib.stringAfter [ "etc" ] ''
+    mkdir -p /var/lib/caddy-local-ca
+    cat ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt \
+      > /var/lib/caddy-local-ca/ca-certificates.crt
+    # Append the Caddy root CA if it already exists (every boot except the first).
+    _ca="/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
+    [ -f "$_ca" ] && cat "$_ca" >> /var/lib/caddy-local-ca/ca-certificates.crt
+  '';
+
+  # First-boot catch-up: the CA cert doesn't exist during activation on a
+  # fresh install, so rebuild the bundle after Caddy has generated it.
+  systemd.services.caddy-trust-local-ca = {
+    description = "Append Caddy internal root CA to system CA bundle";
+    after    = [ "caddy.service" ];
+    requires = [ "caddy.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      src=/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
+      for i in $(seq 1 30); do
+        [ -f "$src" ] && break
+        sleep 2
+      done
+      if [ ! -f "$src" ]; then
+        echo "Caddy root CA not found after 60s" >&2
+        exit 1
+      fi
+      cat ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt "$src" \
+        > /var/lib/caddy-local-ca/ca-certificates.crt
+    '';
+  };
+
+  # Point standard SSL env vars at the combined bundle.
+  # security.pki sets NIX_SSL_CERT_FILE with mkDefault, so normal priority wins.
+  environment.variables = {
+    NIX_SSL_CERT_FILE = "/var/lib/caddy-local-ca/ca-certificates.crt";
+    SSL_CERT_FILE     = "/var/lib/caddy-local-ca/ca-certificates.crt";
+  };
+
   # Open firewall for Caddy.
   networking.firewall.allowedTCPPorts = [ 80 443 ];
 }
