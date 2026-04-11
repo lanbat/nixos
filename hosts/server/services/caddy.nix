@@ -54,14 +54,11 @@ in
     globalConfig = ''
       # Internal CA root certificate is stored under Caddy's data dir.
       # Leaf certs rotate automatically (default 7-day lifetime).
-      # Root CA has a 10-year lifetime by default.
+      # Root CA uses Caddy's default lifetime (10 years).
       pki {
         ca local {
           name      "Lanbat Homelab CA"
           root_cn   "Lanbat Root CA"
-          # Root cert valid for 100 years — internal CA only, no public trust.
-          # Leaf certs still rotate every 7 days automatically.
-          root_lifetime 876000h
         }
       }
 

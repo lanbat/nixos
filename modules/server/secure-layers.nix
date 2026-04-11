@@ -98,21 +98,13 @@ in
     "d /var/lib/samba       0000 root root -"
   ];
 
-  # ── /etc/crypttab — LUKS volumes that stay locked at boot ────────────────
-  # The systemd-cryptsetup-generator reads this file.
-  # The "noauto" option means these entries are NOT pulled into cryptsetup.target
-  # and therefore do NOT auto-open at boot. They can be opened manually with:
-  #   systemctl start systemd-cryptsetup@control.service
-  # or directly with cryptsetup luksOpen (used by the admin scripts).
-  environment.etc."crypttab".text = ''
-    # control  — Tang key storage. Opened manually before starting Tang.
-    # luks     — LUKS2 format
-    # noauto   — do NOT open at boot; requires manual unlock
-    control  /dev/disk/by-uuid/${cfg.serverControlLuksUuid}  none  luks,noauto
-
-    # workload — all container data and service state. Opened manually.
-    workload /dev/disk/by-uuid/${cfg.serverWorkloadLuksUuid} none  luks,noauto
-  '';
+  # ── No /etc/crypttab ─────────────────────────────────────────────────────
+  # Intentionally absent.  The systemd-cryptsetup-generator reads crypttab
+  # and creates systemd-cryptsetup@*.service units; even with "noauto",
+  # implicit device dependencies (dev-mapper-*.device) from the filesystem
+  # entries can pull them into the boot transaction on some systemd versions.
+  # The admin scripts (unlock-control, unlock-workload) use cryptsetup
+  # luksOpen directly, so the generator is not needed.
 
   # ── /mnt/control filesystem ──────────────────────────────────────────────
   # noauto: unit is NOT included in local-fs.target; will not mount at boot.
