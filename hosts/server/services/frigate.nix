@@ -2,6 +2,24 @@
 #
 # Frigate NVR — camera recording and detection.
 #
+# Temporary UI tuning
+# -------------------
+# The config is mounted read-only so Frigate's web UI can't save changes.
+# To temporarily enable UI editing (zones, masks, filters), run on the server:
+#
+#   src=$(sudo -u frigate podman inspect frigate \
+#     --format '{{range .Mounts}}{{if eq .Destination "/config/config.yml"}}{{.Source}}{{end}}{{end}}')
+#   cp "$src" /var/lib/frigate/config.yml
+#   chown frigate:frigate /var/lib/frigate/config.yml
+#   systemctl stop podman-frigate
+#   mount --bind /var/lib/frigate/config.yml "$src"
+#   systemctl start podman-frigate
+#
+# The UI can now save changes. When done, retrieve the tuned config:
+#   cat /var/lib/frigate/config.yml
+# Then port the values back into this file and rebuild. A nixos-rebuild or
+# reboot undoes the bind mount automatically.
+#
 # Storage
 # -------
 # All state is local (always-on tier):
@@ -105,9 +123,14 @@ let
           enabled: true
         zones:
           driveway:
-            coordinates: 0,480,0,180,160,140,400,110,640,120,640,480
-          sidewalk:
-            coordinates: 0,80,160,65,400,50,640,55,640,0,0,0
+            coordinates: 0,0.928,0,0.298,0.328,0.124,0.586,0.044,0.712,0.014,0.793,0,1,0,1,1,0.435,1,0.438,0.922,0.012,0.92,0.012,0.978,0.441,0.978,0.433,1,0,1
+            inertia: 3
+            loitering_time: 0
+          pavement:
+            coordinates: 0.003,0.212,0.183,0.092,0.315,0.024,0.37,0,0,0
+            inertia: 3
+            loitering_time: 0
+            friendly_name: Pavement
         objects:
           track:
             - person
@@ -159,7 +182,7 @@ let
               - bicycle
             required_zones:
               - driveway
-              - sidewalk
+              - pavement
           detections:
             labels:
               - dog
@@ -167,10 +190,29 @@ let
               - bird
             required_zones:
               - driveway
-              - sidewalk
+              - pavement
         motion:
           mask:
-            - 0,80,160,65,400,50,640,55,640,120,400,110,160,140,0,180
+            - 0,0.218,0.385,0,0.599,0,0.755,0,0.604,0.036,0.496,0.065,0.33,0.116,0.185,0.189,0,0.291
+        notifications:
+          enabled: true
+
+    notifications:
+      enabled: true
+
+    semantic_search:
+      enabled: true
+      model_size: small
+
+    face_recognition:
+      enabled: false
+      model_size: small
+
+    classification:
+      bird:
+        enabled: false
+
+    version: 0.17-0
   '';
 in
 {
