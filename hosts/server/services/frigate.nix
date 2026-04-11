@@ -106,9 +106,21 @@ let
         objects:
           track:
             - person
+            - bicycle
             - car
+            - motorcycle
+            - bus
             - dog
             - cat
+            - bird
+        review:
+          alerts:
+            labels:
+              - person
+              - car
+              - motorcycle
+              - bus
+              - bicycle
         motion:
           mask: []
   '';
