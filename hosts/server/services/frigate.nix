@@ -103,6 +103,11 @@ let
           fps:    5
         lpr:
           enabled: true
+        zones:
+          driveway:
+            coordinates: 0,480,0,180,160,140,400,110,640,120,640,480
+          sidewalk:
+            coordinates: 0,80,160,65,400,50,640,55,640,0,0,0
         objects:
           track:
             - person
@@ -110,9 +115,39 @@ let
             - car
             - motorcycle
             - bus
+            - truck
             - dog
             - cat
             - bird
+          filters:
+            person:
+              min_score: 0.6
+              threshold: 0.7
+            car:
+              min_score: 0.6
+              threshold: 0.7
+            truck:
+              min_score: 0.6
+              threshold: 0.7
+            motorcycle:
+              min_score: 0.65
+              threshold: 0.75
+              max_area: 15000
+            bus:
+              min_score: 0.6
+              threshold: 0.75
+            bicycle:
+              min_score: 0.6
+              threshold: 0.7
+            dog:
+              min_score: 0.6
+              threshold: 0.7
+            cat:
+              min_score: 0.6
+              threshold: 0.7
+            bird:
+              min_score: 0.7
+              threshold: 0.8
         review:
           alerts:
             labels:
@@ -120,9 +155,22 @@ let
               - car
               - motorcycle
               - bus
+              - truck
               - bicycle
+            required_zones:
+              - driveway
+              - sidewalk
+          detections:
+            labels:
+              - dog
+              - cat
+              - bird
+            required_zones:
+              - driveway
+              - sidewalk
         motion:
-          mask: []
+          mask:
+            - 0,80,160,65,400,50,640,55,640,120,400,110,160,140,0,180
   '';
 in
 {
