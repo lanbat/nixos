@@ -236,9 +236,8 @@ in
       "/etc/localtime:/etc/localtime:ro"
     ];
 
-    ports = [ "127.0.0.1:5000:5000" "127.0.0.1:8554:8554" ];
-
     extraOptions = [
+      "--network=host"
       "--shm-size=256m"
       "--device=/dev/dri"
       # Pass the host frigate user's supplemental groups (render, video) into the
