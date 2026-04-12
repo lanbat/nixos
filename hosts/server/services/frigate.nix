@@ -153,15 +153,15 @@ let
               min_score: 0.6
               threshold: 0.7
             motorcycle:
-              min_score: 0.65
-              threshold: 0.75
-              max_area: 15000
+              min_score: 0.85
+              threshold: 0.9
+              max_area: 40000
             bus:
-              min_score: 0.6
-              threshold: 0.75
+              min_score: 0.85
+              threshold: 0.9
             bicycle:
-              min_score: 0.6
-              threshold: 0.7
+              min_score: 0.85
+              threshold: 0.9
             dog:
               min_score: 0.6
               threshold: 0.7
