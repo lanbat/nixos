@@ -11,9 +11,8 @@
 #
 # Networking
 # ----------
-# Homepage runs with bridge networking (default). Widget requests are made
-# server-side (Node.js backend) using the HTTPS Caddy URLs, so the container
-# reaches services the same way a browser on the LAN would.
+# Homepage runs with host networking so widget requests can reach Caddy
+# on 127.0.0.1:443.  Pasta networking blocks connections to the host.
 #
 # Caddy uses an internal CA. Its root cert is mounted into the container and
 # trusted via NODE_EXTRA_CA_CERTS so widget TLS verification succeeds.
@@ -183,7 +182,7 @@ in
       "/var/lib/caddy/.local/share/caddy/pki/authorities/local:/caddy-ca:ro"
     ];
 
-    ports = [ "127.0.0.1:3000:3000" ];
+    extraOptions = [ "--network=host" ];
 
     environment = {
       HOMEPAGE_ALLOWED_HOSTS = "home.${domain},localhost";
