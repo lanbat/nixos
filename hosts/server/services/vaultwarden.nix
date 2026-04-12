@@ -56,8 +56,18 @@
       # Log level: warn is quiet enough for daily use.
       LOG_LEVEL = "warn";
 
-      # Send admin-panel token from the agenix secret (see environmentFile).
-      # ADMIN_TOKEN is set via environmentFile below.
+      # ADMIN_TOKEN and SSO_CLIENT_SECRET are set via environmentFile below.
+
+      # SSO via Authentik OIDC — adds a login button in the web vault without
+      # breaking mobile/desktop client API access (they still use email+password).
+      SSO_ENABLED = true;
+      # Allow both SSO and email+password login.
+      SSO_ONLY = false;
+      SSO_CLIENT_ID = "vaultwarden";
+      # Discovery URL for the Authentik application slug "vaultwarden".
+      SSO_AUTHORITY = "https://auth.${config.lanbat.domain}/application/o/vaultwarden/";
+      # Allow SSO to create/link accounts even though SIGNUPS_ALLOWED = false.
+      SSO_SIGNUPS_MATCH_EMAIL = true;
     };
 
     # Inject the admin token from an agenix-managed secret file.
