@@ -185,6 +185,12 @@ let
               - pavement
           detections:
             labels:
+              - person
+              - car
+              - motorcycle
+              - bus
+              - truck
+              - bicycle
               - dog
               - cat
               - bird
