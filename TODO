@@ -1,0 +1,9 @@
+#finish postgres sharing
+start redis sharing and remove redundant redis instances
+#homeassistant USB dongle fix
+hostname fix for the server in config.lanbat
+certificates for different browsers and adding instructions and/or automation for all of the operating systems to ca.10ctr.vg.cd
+Homepage fixes
+systemd files consistent
+#systemd everything should be in containers or at least most of the things
+

@@ -2,14 +2,6 @@
 #
 # SearXNG — privacy-respecting metasearch engine.
 #
-# Why SearXNG instead of 4get?
-#   4get is an excellent frontend but has no maintained Docker image and
-#   requires PHP deployment.  SearXNG is:
-#     - Actively maintained with official container images
-#     - More feature-complete (more search engines, image/file search)
-#     - Well-suited to homelab self-hosting
-#     - Available at docker.io/searxng/searxng
-#
 # Auth: intentionally NONE.
 #   This service is accessible to anyone on the LAN without authentication.
 #   It is excluded from Authentik forward auth by design.
@@ -25,10 +17,9 @@ let domain = config.lanbat.domain; in
   virtualisation.oci-containers.containers."searxng" = {
     image = "docker.io/searxng/searxng:latest";
 
-    environment = {
-      INSTANCE_NAME = "Homelab Search";
-      BASE_URL      = "https://search.${domain}/";
-    };
+    # --pull=newer: on each start, check the registry and pull if a newer
+    # image is available — ensures upgrades happen automatically.
+    extraOptions = [ "--pull=newer" ];
 
     volumes = [
       "/var/lib/searxng:/etc/searxng"
@@ -41,7 +32,8 @@ let domain = config.lanbat.domain; in
     autoStart = true;
   };
 
-  # Write a default SearXNG settings.yml if one does not exist.
+  # Write the SearXNG settings.yml on every boot so Nix is the source of truth.
+  # The file is always overwritten — no manual edits inside /var/lib/searxng.
   systemd.services."searxng-init-config" = {
     description = "Initialize SearXNG config";
     before      = [ "podman-searxng.service" ];
@@ -50,20 +42,23 @@ let domain = config.lanbat.domain; in
       Type      = "oneshot";
       ExecStart = pkgs.writeShellScript "searxng-init" ''
         mkdir -p /var/lib/searxng
-        if [ ! -f /var/lib/searxng/settings.yml ]; then
-          cat > /var/lib/searxng/settings.yml << 'YAML'
+        cat > /var/lib/searxng/settings.yml << 'YAML'
+# Merge with SearXNG upstream defaults so schema-required fields are always
+# present even when we don't set them explicitly.
+use_default_settings: true
+
 general:
   instance_name: "Homelab Search"
-  privacypolicy_url: false
-  donation_url: false
-  contact_url: false
   enable_metrics: false
 
 server:
   secret_key: "CHANGE_ME_SEARXNG_SECRET"
+  # base_url must match the public URL so that image-proxy thumbnail links
+  # embedded in results point to the right host.
+  base_url: "https://search.${domain}/"
   limiter: false
   image_proxy: true
-  http_protocol_version: "1.1"
+  public_instance: false
 
 ui:
   static_use_hash: true
@@ -81,8 +76,7 @@ outgoing:
   pool_connections: 100
   pool_maxsize: 10
 YAML
-          echo "SearXNG config initialized."
-        fi
+        chown -R searxng:searxng /var/lib/searxng
       '';
       RemainAfterExit = true;
     };
