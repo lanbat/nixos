@@ -79,7 +79,7 @@ let
     # (OvDetectorConfig inherits model from BaseDetectorConfig, not its own field)
     model:
       path: /models/yolov8n_openvino_model/yolov8n.xml
-      model_type: yolov8
+      model_type: yolo-generic
       width: 320
       height: 320
       input_tensor: nchw
