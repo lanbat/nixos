@@ -78,10 +78,12 @@ let
     # Global model config — read by all detectors via detector_config.model
     # (OvDetectorConfig inherits model from BaseDetectorConfig, not its own field)
     model:
-      path: /openvino-model/ssdlite_mobilenet_v2.xml
-      model_type: ssd
-      width: 300
-      height: 300
+      path: /models/yolov8n_openvino_model/yolov8n.xml
+      model_type: yolov8
+      width: 320
+      height: 320
+      input_tensor: nchw
+      input_pixel_format: rgb
 
     detectors:
       ov:
@@ -240,6 +242,7 @@ in
       "/var/lib/frigate/recordings:/media/frigate/recordings"
       "/var/cache/frigate:/tmp/cache"
       "/etc/localtime:/etc/localtime:ro"
+      "/var/lib/frigate/models:/models:ro"
     ];
 
     extraOptions = [
