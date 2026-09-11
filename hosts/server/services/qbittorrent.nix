@@ -24,7 +24,12 @@
 #
 # One shared instance is enough.  Per-user directories are pre-created so
 # users can select their folder in the web UI.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # Run qBittorrent as an OCI container to simplify volume mounts and
@@ -35,10 +40,10 @@
     environment = {
       # PUID/PGID=0: linuxserver entrypoint stays as root inside the container.
       # In rootless mode, container root maps to the host "qbt" user (UID 994).
-      PUID          = "0";
-      PGID          = "0";
-      TZ            = config.lanbat.timezone;
-      WEBUI_PORT    = "8090";
+      PUID = "0";
+      PGID = "0";
+      TZ = config.lanbat.timezone;
+      WEBUI_PORT = "8090";
     };
 
     volumes = [
@@ -62,11 +67,11 @@
   # Also mark autoStart — since we set autoStart=false above, we need to
   # actually start it via the dependency.  Override wantedBy here.
   systemd.services."podman-qbittorrent" = {
-    wantedBy   = [ "multi-user.target" ];
-    after      = [ "srv-storage-a.mount" ];
-    bindsTo    = [ "srv-storage-a.mount" ];
+    wantedBy = [ "multi-user.target" ];
+    after = [ "srv-storage-a.mount" ];
+    bindsTo = [ "srv-storage-a.mount" ];
     serviceConfig = {
-      Restart    = lib.mkForce "on-failure";
+      Restart = lib.mkForce "on-failure";
       RestartSec = "15s";
     };
   };

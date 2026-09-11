@@ -43,7 +43,12 @@
 # See docs/deployment-checklist.md § Wyoming Voice Assistant.
 #
 # Always-on: yes — no NFS dependency.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # ---------------------------------------------------------------------------
@@ -51,7 +56,7 @@
   # ---------------------------------------------------------------------------
   services.wyoming.openwakeword = {
     enable = true;
-    uri    = "tcp://127.0.0.1:10300";
+    uri = "tcp://127.0.0.1:10300";
     # preloadModels was removed in wyoming-openwakeword 2.0 — models are now
     # loaded on demand when a wake-word detection request arrives.
   };
@@ -60,11 +65,11 @@
   # Speech-to-text
   # ---------------------------------------------------------------------------
   services.wyoming.faster-whisper.servers."main" = {
-    enable   = true;
-    uri      = "tcp://127.0.0.1:10301";
-    model    = "small-int8";  # ~100 MB; good CPU accuracy/speed balance
+    enable = true;
+    uri = "tcp://127.0.0.1:10301";
+    model = "small-int8"; # ~100 MB; good CPU accuracy/speed balance
     language = "en";
-    device   = "cpu";
+    device = "cpu";
   };
 
   # ---------------------------------------------------------------------------
@@ -72,7 +77,7 @@
   # ---------------------------------------------------------------------------
   services.wyoming.piper.servers."main" = {
     enable = true;
-    uri    = "tcp://127.0.0.1:10302";
-    voice  = "en_GB-alba-medium";  # see https://rhasspy.github.io/piper-samples/
+    uri = "tcp://127.0.0.1:10302";
+    voice = "en_GB-alba-medium"; # see https://rhasspy.github.io/piper-samples/
   };
 }

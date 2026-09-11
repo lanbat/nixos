@@ -10,7 +10,13 @@
 #
 # This config is intentionally minimal.  Heavy compute, databases,
 # indexing, and container orchestration all live on the server.
-{ config, pkgs, lib, inputs, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  inputs,
+  ...
+}:
 
 {
   imports = [
@@ -51,15 +57,15 @@
   # unlock-control on the server.  The Pi OS itself continues to run.
   # The reboot window keeps reboots in the early hours to minimise disruption.
   system.autoUpgrade = {
-    enable      = true;
-    flake       = "/etc/nixos#pi";
-    flags       = [ "--impure" ];
+    enable = true;
+    flake = "/etc/nixos#pi";
+    flags = [ "--impure" ];
     allowReboot = true;
     rebootWindow = {
       lower = "04:00";
       upper = "06:00";
     };
-    dates       = "04:30";
+    dates = "04:30";
     randomizedDelaySec = "30min";
   };
 
@@ -76,20 +82,30 @@
     # Static IP recommended — server Tang client needs a stable target.
     interfaces.eth0 = {
       useDHCP = false;
-      ipv4.addresses = [{
-        address      = config.lanbat.piIp;
-        prefixLength = 24;
-      }];
+      ipv4.addresses = [
+        {
+          address = config.lanbat.piIp;
+          prefixLength = 24;
+        }
+      ];
     };
-    defaultGateway = { address = config.lanbat.gatewayIp; interface = "eth0"; };
-    nameservers    = [ config.lanbat.gatewayIp ];
+    defaultGateway = {
+      address = config.lanbat.gatewayIp;
+      interface = "eth0";
+    };
+    nameservers = [ config.lanbat.gatewayIp ];
   };
 
   # Firewall — Pi only needs SSH + NFS from server + Wyoming satellite from server.
   networking.firewall = {
-    enable          = true;
-    allowedTCPPorts = [ 22 2049 111 10700 ];
-    allowedUDPPorts = [ 5353 ];  # mDNS — Wyoming satellite auto-discovery by HA
+    enable = true;
+    allowedTCPPorts = [
+      22
+      2049
+      111
+      10700
+    ];
+    allowedUDPPorts = [ 5353 ]; # mDNS — Wyoming satellite auto-discovery by HA
     # Restrict NFS to the server's IP.
     # Wyoming satellite (10700) is also restricted to the server.
     extraCommands = ''
@@ -115,8 +131,8 @@
   # ---------------------------------------------------------------------------
   users.users.admin = {
     isNormalUser = true;
-    uid          = 1001;
-    extraGroups  = [ "wheel" ];
+    uid = 1001;
+    extraGroups = [ "wheel" ];
     openssh.authorizedKeys.keys = [ config.lanbat.adminSshKey ];
   };
 

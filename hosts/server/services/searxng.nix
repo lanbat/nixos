@@ -9,9 +9,16 @@
 #
 # Always-on: yes.
 #   No NFS dependency.  Lives entirely in a container with no persistent state.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
-let domain = config.lanbat.domain; in
+let
+  domain = config.lanbat.domain;
+in
 
 {
   virtualisation.oci-containers.containers."searxng" = {
@@ -36,47 +43,47 @@ let domain = config.lanbat.domain; in
   # The file is always overwritten — no manual edits inside /var/lib/searxng.
   systemd.services."searxng-init-config" = {
     description = "Initialize SearXNG config";
-    before      = [ "podman-searxng.service" ];
-    wantedBy    = [ "podman-searxng.service" ];
+    before = [ "podman-searxng.service" ];
+    wantedBy = [ "podman-searxng.service" ];
     serviceConfig = {
-      Type      = "oneshot";
+      Type = "oneshot";
       ExecStart = pkgs.writeShellScript "searxng-init" ''
-        mkdir -p /var/lib/searxng
-        cat > /var/lib/searxng/settings.yml << 'YAML'
-# Merge with SearXNG upstream defaults so schema-required fields are always
-# present even when we don't set them explicitly.
-use_default_settings: true
+                mkdir -p /var/lib/searxng
+                cat > /var/lib/searxng/settings.yml << 'YAML'
+        # Merge with SearXNG upstream defaults so schema-required fields are always
+        # present even when we don't set them explicitly.
+        use_default_settings: true
 
-general:
-  instance_name: "Homelab Search"
-  enable_metrics: false
+        general:
+          instance_name: "Homelab Search"
+          enable_metrics: false
 
-server:
-  secret_key: "CHANGE_ME_SEARXNG_SECRET"
-  # base_url must match the public URL so that image-proxy thumbnail links
-  # embedded in results point to the right host.
-  base_url: "https://search.${domain}/"
-  limiter: false
-  image_proxy: true
-  public_instance: false
+        server:
+          secret_key: "CHANGE_ME_SEARXNG_SECRET"
+          # base_url must match the public URL so that image-proxy thumbnail links
+          # embedded in results point to the right host.
+          base_url: "https://search.${domain}/"
+          limiter: false
+          image_proxy: true
+          public_instance: false
 
-ui:
-  static_use_hash: true
-  default_locale: "en"
-  default_theme: "simple"
+        ui:
+          static_use_hash: true
+          default_locale: "en"
+          default_theme: "simple"
 
-search:
-  safe_search: 0
-  autocomplete: ""
-  default_lang: "auto"
+        search:
+          safe_search: 0
+          autocomplete: ""
+          default_lang: "auto"
 
-outgoing:
-  request_timeout: 6.0
-  max_request_timeout: 15.0
-  pool_connections: 100
-  pool_maxsize: 10
-YAML
-        chown -R searxng:searxng /var/lib/searxng
+        outgoing:
+          request_timeout: 6.0
+          max_request_timeout: 15.0
+          pool_connections: 100
+          pool_maxsize: 10
+        YAML
+                chown -R searxng:searxng /var/lib/searxng
       '';
       RemainAfterExit = true;
     };

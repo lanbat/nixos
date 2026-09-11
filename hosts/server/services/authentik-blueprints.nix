@@ -37,7 +37,12 @@
 #            (or use HACS: https://github.com/jchonig/ha-authentik)
 #   Jellyfin: install the "SSO Authentication" plugin from the plugin catalogue,
 #            then configure it with client_id="jellyfin" and the token/userinfo URLs.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   domain = config.lanbat.domain;
@@ -405,7 +410,7 @@ let
           policy_engine_mode: any
   '';
 
-  blueprintsDir = pkgs.runCommand "authentik-blueprints" {} ''
+  blueprintsDir = pkgs.runCommand "authentik-blueprints" { } ''
     mkdir -p $out
     cp ${proxyBlueprint} $out/10-proxy-providers.yaml
     cp ${oidcBlueprint}  $out/20-oidc-providers.yaml
@@ -432,7 +437,7 @@ in
   ];
 
   age.secrets.authentik-oidc-secrets = {
-    file  = ../../../secrets/authentik-oidc-secrets.age;
+    file = ../../../secrets/authentik-oidc-secrets.age;
     owner = "authentik";
   };
 }

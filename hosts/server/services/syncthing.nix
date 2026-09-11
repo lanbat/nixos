@@ -39,7 +39,9 @@
 # Always-on: no — depends on Pi NFS (Drive B).
 { config, ... }:
 
-let domain = config.lanbat.domain; in
+let
+  domain = config.lanbat.domain;
+in
 
 {
   services.syncthing = {
@@ -56,8 +58,8 @@ let domain = config.lanbat.domain; in
         # CHANGE_ME: adjust id, label, and path to match your use case.
         # Additional folders can be added here or via the web UI.
         "syncthing" = {
-          label   = "Syncthing";
-          path    = "/srv/storage/b/syncthing";
+          label = "Syncthing";
+          path = "/srv/storage/b/syncthing";
           # Disable inotify — it does not work over NFS.
           # Syncthing will poll for local changes every 60 seconds instead.
           fsWatcherEnabled = false;
@@ -76,6 +78,9 @@ let domain = config.lanbat.domain; in
   # Open port 22000 on your router as well if you need external device sync.
   networking.firewall = {
     allowedTCPPorts = [ 22000 ];
-    allowedUDPPorts = [ 22000 21027 ];
+    allowedUDPPorts = [
+      22000
+      21027
+    ];
   };
 }

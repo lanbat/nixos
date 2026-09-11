@@ -14,7 +14,12 @@
 #
 # Security note: restrict exports to the server's IP only.
 # The Pi firewall (hosts/pi/default.nix) also drops NFS from other sources.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   serverIp = config.lanbat.serverIp;
@@ -37,9 +42,16 @@ in
   # The NFS server must wait for the storage drives to be mounted and
   # initialized.  Otherwise it exports empty paths.
   systemd.services."nfs-server" = {
-    after    = [ "mnt-storage-a.mount" "mnt-storage-b.mount"
-                 "storage-a-init.service" "storage-b-init.service" ];
-    requires = [ "mnt-storage-a.mount" "mnt-storage-b.mount" ];
+    after = [
+      "mnt-storage-a.mount"
+      "mnt-storage-b.mount"
+      "storage-a-init.service"
+      "storage-b-init.service"
+    ];
+    requires = [
+      "mnt-storage-a.mount"
+      "mnt-storage-b.mount"
+    ];
   };
 
   # rpcbind is needed for NFSv3 clients; not required for v4-only.

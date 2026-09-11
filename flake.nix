@@ -27,90 +27,104 @@
   # ---------------------------------------------------------------------------
   # Outputs
   # ---------------------------------------------------------------------------
-  outputs = { self, nixpkgs, nixpkgs-unstable, nixos-hardware, agenix, ... }@inputs:
-  let
-    # Expose stable packages as pkgs.stable in every module (for Pi compat).
-    stableOverlay = final: prev: {
-      stable = import nixpkgs {
-        system = prev.system;
-        config.allowUnfree = true;
-      };
-    };
-
-    # Legacy alias: pkgs.unstable still works, now points to unstable itself
-    # (a no-op overlay on the unstable base, kept for backwards compat).
-    unstableOverlay = final: prev: {
-      unstable = prev;
-    };
-
-    # Server pkgs: based on unstable for security-forward package set.
-    mkServerPkgs = system: import nixpkgs-unstable {
-      inherit system;
-      config.allowUnfree = true;
-      overlays = [
-        stableOverlay
-        unstableOverlay
-        (import ./overlays)
-      ];
-    };
-
-    # Pi pkgs: based on stable for maximum reliability on embedded hardware.
-    # allowBroken: wyoming-satellite depends on pysilero-vad which is marked
-    # broken in 24.11; allow it until the Pi is upgraded to a newer channel.
-    mkPiPkgs = system: import nixpkgs {
-      inherit system;
-      config.allowUnfree = true;
-      config.allowBroken = true;
-      overlays = [
-        (final: prev: {
-          unstable = import nixpkgs-unstable {
-            system = prev.system;
-            config.allowUnfree = true;
-          };
-        })
-        (import ./overlays)
-      ];
-    };
-
-    # Per-deployment local settings (gitignored, see local.nix.example).
-    # Only visible when deploying with --impure; absent in CI (pure eval).
-    # In CI the placeholder defaults from modules/common/settings.nix are used.
-    localModules = nixpkgs.lib.optional (builtins.pathExists ./local.nix) ./local.nix;
-  in
-  {
-    nixosConfigurations = {
-      # -----------------------------------------------------------------
-      # Main server (x86_64)
-      # -----------------------------------------------------------------
-      server = nixpkgs-unstable.lib.nixosSystem {
-        system = "x86_64-linux";
-        pkgs   = mkServerPkgs "x86_64-linux";
-        specialArgs = {
-          inherit inputs;
+  outputs =
+    {
+      self,
+      nixpkgs,
+      nixpkgs-unstable,
+      nixos-hardware,
+      agenix,
+      ...
+    }@inputs:
+    let
+      # Expose stable packages as pkgs.stable in every module (for Pi compat).
+      stableOverlay = final: prev: {
+        stable = import nixpkgs {
+          system = prev.system;
+          config.allowUnfree = true;
         };
-        modules = [
-          agenix.nixosModules.default
-          ./hosts/server
-        ] ++ localModules;
       };
 
-      # -----------------------------------------------------------------
-      # Raspberry Pi 5 (aarch64)
-      # -----------------------------------------------------------------
-      pi = nixpkgs.lib.nixosSystem {
-        system = "aarch64-linux";
-        pkgs   = mkPiPkgs "aarch64-linux";
-        specialArgs = { inherit inputs; };
-        modules = [
-          agenix.nixosModules.default
-          nixos-hardware.nixosModules.raspberry-pi-5
-          ./hosts/pi
-        ] ++ localModules;
+      # Legacy alias: pkgs.unstable still works, now points to unstable itself
+      # (a no-op overlay on the unstable base, kept for backwards compat).
+      unstableOverlay = final: prev: {
+        unstable = prev;
       };
+
+      # Server pkgs: based on unstable for security-forward package set.
+      mkServerPkgs =
+        system:
+        import nixpkgs-unstable {
+          inherit system;
+          config.allowUnfree = true;
+          overlays = [
+            stableOverlay
+            unstableOverlay
+            (import ./overlays)
+          ];
+        };
+
+      # Pi pkgs: based on stable for maximum reliability on embedded hardware.
+      # allowBroken: wyoming-satellite depends on pysilero-vad which is marked
+      # broken in 24.11; allow it until the Pi is upgraded to a newer channel.
+      mkPiPkgs =
+        system:
+        import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+          config.allowBroken = true;
+          overlays = [
+            (final: prev: {
+              unstable = import nixpkgs-unstable {
+                system = prev.system;
+                config.allowUnfree = true;
+              };
+            })
+            (import ./overlays)
+          ];
+        };
+
+      # Per-deployment local settings (gitignored, see local.nix.example).
+      # Only visible when deploying with --impure; absent in CI (pure eval).
+      # In CI the placeholder defaults from modules/common/settings.nix are used.
+      localModules = nixpkgs.lib.optional (builtins.pathExists ./local.nix) ./local.nix;
+    in
+    {
+      nixosConfigurations = {
+        # -----------------------------------------------------------------
+        # Main server (x86_64)
+        # -----------------------------------------------------------------
+        server = nixpkgs-unstable.lib.nixosSystem {
+          system = "x86_64-linux";
+          pkgs = mkServerPkgs "x86_64-linux";
+          specialArgs = {
+            inherit inputs;
+          };
+          modules = [
+            agenix.nixosModules.default
+            ./hosts/server
+          ]
+          ++ localModules;
+        };
+
+        # -----------------------------------------------------------------
+        # Raspberry Pi 5 (aarch64)
+        # -----------------------------------------------------------------
+        pi = nixpkgs.lib.nixosSystem {
+          system = "aarch64-linux";
+          pkgs = mkPiPkgs "aarch64-linux";
+          specialArgs = { inherit inputs; };
+          modules = [
+            agenix.nixosModules.default
+            nixos-hardware.nixosModules.raspberry-pi-5
+            ./hosts/pi
+          ]
+          ++ localModules;
+        };
+      };
+
+      # `nix fmt` formats every tracked .nix file; CI runs `nix fmt -- --ci`.
+      formatter.x86_64-linux = nixpkgs-unstable.legacyPackages.x86_64-linux.nixfmt-tree;
+      formatter.aarch64-linux = nixpkgs-unstable.legacyPackages.aarch64-linux.nixfmt-tree;
     };
-
-    # `nix fmt` formats every tracked .nix file; CI runs `nix fmt -- --ci`.
-    formatter.x86_64-linux  = nixpkgs-unstable.legacyPackages.x86_64-linux.nixfmt-tree;
-    formatter.aarch64-linux = nixpkgs-unstable.legacyPackages.aarch64-linux.nixfmt-tree;
-  };
 }

@@ -38,7 +38,12 @@
 #    See docs/deployment-checklist.md § "Clone config repo on each machine".
 # 3. Each host configures system.autoUpgrade in its own default.nix.
 #
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # Pull the latest config from git before each upgrade attempt.
@@ -46,17 +51,20 @@
     description = "Pull latest NixOS configuration from git";
 
     # Run before the upgrade, as part of the same activation.
-    before   = [ "nixos-upgrade.service" ];
+    before = [ "nixos-upgrade.service" ];
     wantedBy = [ "nixos-upgrade.service" ];
 
     # Skip silently if /etc/nixos is not a git repo.
     unitConfig.ConditionPathExists = "/etc/nixos/.git";
 
-    path = [ pkgs.git pkgs.openssh ];
+    path = [
+      pkgs.git
+      pkgs.openssh
+    ];
 
     serviceConfig = {
-      Type            = "oneshot";
-      User            = "root";
+      Type = "oneshot";
+      User = "root";
       WorkingDirectory = "/etc/nixos";
       ExecStart = pkgs.writeShellScript "nixos-upgrade-pull" ''
         set -euo pipefail

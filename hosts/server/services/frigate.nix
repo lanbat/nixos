@@ -47,7 +47,12 @@
 # Home Assistant integration
 # --------------------------
 # Frigate publishes events via MQTT → Home Assistant listens.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   frigateConfig = pkgs.writeText "frigate.yml" ''
@@ -268,7 +273,7 @@ in
   # ---------------------------------------------------------------------------
   systemd.services."podman-frigate" = {
     serviceConfig = {
-      Restart    = lib.mkForce "on-failure";
+      Restart = lib.mkForce "on-failure";
       RestartSec = "15s";
       ExecStartPre = [
         # Runs as root (+ prefix) even though the service User=frigate.
@@ -295,7 +300,7 @@ in
   # Secrets
   # ---------------------------------------------------------------------------
   age.secrets.frigate-rtsp-env = {
-    file  = ../../../secrets/frigate-rtsp-env.age;
+    file = ../../../secrets/frigate-rtsp-env.age;
     owner = "root";
   };
 

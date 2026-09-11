@@ -48,7 +48,12 @@
 #    # ... then run quota setup script
 #  See docs/storage-layout.md for the full quota plan.
 #
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # ── Storage A initialisation ───────────────────────────────────────────────
@@ -59,13 +64,13 @@
     description = "Initialise storage-a directory tree after unlock";
     # Require successful unlock (which implies the filesystem is mounted).
     requires = [ "storage-a-unlock.service" ];
-    after    = [ "storage-a-unlock.service" ];
+    after = [ "storage-a-unlock.service" ];
     # nfs-server.service wants this init, ensuring exports are ready before NFS starts.
-    before   = [ "nfs-server.service" ];
+    before = [ "nfs-server.service" ];
     wantedBy = [ "nfs-server.service" ];
 
     serviceConfig = {
-      Type            = "oneshot";
+      Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "init-storage-a" ''
         set -e
@@ -88,12 +93,12 @@
   systemd.services."storage-b-init" = {
     description = "Initialise storage-b directory tree after unlock";
     requires = [ "storage-b-unlock.service" ];
-    after    = [ "storage-b-unlock.service" ];
-    before   = [ "nfs-server.service" ];
+    after = [ "storage-b-unlock.service" ];
+    before = [ "nfs-server.service" ];
     wantedBy = [ "nfs-server.service" ];
 
     serviceConfig = {
-      Type            = "oneshot";
+      Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "init-storage-b" ''
         set -e
@@ -109,7 +114,7 @@
 
   # ── Packages for storage management ───────────────────────────────────────
   environment.systemPackages = with pkgs; [
-    xfsprogs      # xfs_quota, xfs_admin
+    xfsprogs # xfs_quota, xfs_admin
     cryptsetup
     clevis
   ];

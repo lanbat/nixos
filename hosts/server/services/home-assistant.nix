@@ -33,7 +33,12 @@
 # of which option you choose.
 #
 # Always-on: yes — HA should survive Pi NFS loss.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   domain = config.lanbat.domain;
@@ -48,15 +53,17 @@ in
     # Add/remove from this list; nixos-rebuild will install them.
     customComponents = [
       # 2 upstream test failures in nixpkgs 26.05 packaging; skip checks.
-      (pkgs.unstable.home-assistant-custom-components.frigate.overridePythonAttrs (_: { doCheck = false; }))
+      (pkgs.unstable.home-assistant-custom-components.frigate.overridePythonAttrs (_: {
+        doCheck = false;
+      }))
     ];
 
     extraComponents = [
       "default_config"
-      "met"             # weather
+      "met" # weather
       "radio_browser"
       "google_translate" # TTS — gtts dependency
-      "mqtt"            # Zigbee devices arrive via Zigbee2MQTT → MQTT discovery
+      "mqtt" # Zigbee devices arrive via Zigbee2MQTT → MQTT discovery
       "mobile_app"
       "person"
       "history"
@@ -79,18 +86,21 @@ in
       # Trust Caddy as reverse proxy.
       http = {
         use_x_forwarded_for = true;
-        trusted_proxies      = [ "127.0.0.1" "::1" ];
-        ip_ban_enabled       = true;
+        trusted_proxies = [
+          "127.0.0.1"
+          "::1"
+        ];
+        ip_ban_enabled = true;
         login_attempts_threshold = 5;
       };
 
       homeassistant = {
-        name         = "Home";
-        latitude     = config.lanbat.haLatitude;
-        longitude    = config.lanbat.haLongitude;
-        elevation    = config.lanbat.haElevation;
-        unit_system  = "metric";
-        time_zone    = config.lanbat.timezone;
+        name = "Home";
+        latitude = config.lanbat.haLatitude;
+        longitude = config.lanbat.haLongitude;
+        elevation = config.lanbat.haElevation;
+        unit_system = "metric";
+        time_zone = config.lanbat.timezone;
       };
 
       # Recorder — keep 30 days in SQLite.

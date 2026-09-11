@@ -32,36 +32,44 @@
 #       idleMinutes   = 30;
 #     };
 #   };
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 with lib;
 
 let
   cfg = config.lanbat.onDemand;
 
-  activatorScript = pkgs.writeText "activator.py" (builtins.readFile ../../pkgs/on-demand-activator/activator.py);
+  activatorScript = pkgs.writeText "activator.py" (
+    builtins.readFile ../../pkgs/on-demand-activator/activator.py
+  );
 
   mkActivatorService = name: svcCfg: {
     description = "On-demand activator for ${name}";
-    after    = [ "network.target" ];
+    after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
-      Type            = "simple";
-      User            = "root"; # needs systemctl
-      ExecStart       = "${pkgs.python3}/bin/python3 ${activatorScript} "
-                        + "--listen-port ${toString svcCfg.activatorPort} "
-                        + "--real-port   ${toString svcCfg.realPort} "
-                        + "--target-svc  ${svcCfg.targetService} "
-                        + "--stamp-file  /run/ondemand-${name}.stamp";
-      Restart         = "on-failure";
-      RestartSec      = "5s";
+      Type = "simple";
+      User = "root"; # needs systemctl
+      ExecStart =
+        "${pkgs.python3}/bin/python3 ${activatorScript} "
+        + "--listen-port ${toString svcCfg.activatorPort} "
+        + "--real-port   ${toString svcCfg.realPort} "
+        + "--target-svc  ${svcCfg.targetService} "
+        + "--stamp-file  /run/ondemand-${name}.stamp";
+      Restart = "on-failure";
+      RestartSec = "5s";
     };
   };
 
   mkIdleTimer = name: svcCfg: {
     description = "Idle-shutdown timer for ${name}";
     timerConfig = {
-      OnBootSec   = "5min";
+      OnBootSec = "5min";
       OnUnitActiveSec = "${toString svcCfg.idleMinutes}min";
     };
     wantedBy = [ "timers.target" ];
@@ -70,7 +78,7 @@ let
   mkIdleService = name: svcCfg: {
     description = "Stop ${name} if idle";
     serviceConfig = {
-      Type    = "oneshot";
+      Type = "oneshot";
       ExecStart = pkgs.writeShellScript "idle-stop-${name}" ''
         stamp=/run/ondemand-${name}.stamp
         if [ ! -f "$stamp" ]; then exit 0; fi
@@ -90,25 +98,30 @@ in
 {
   options.lanbat.onDemand = {
     services = mkOption {
-      type = types.attrsOf (types.submodule {
-        options = {
-          activatorPort = mkOption { type = types.port; };
-          realPort      = mkOption { type = types.port; };
-          targetService = mkOption { type = types.str; };
-          idleMinutes   = mkOption { type = types.int; default = 30; };
-        };
-      });
-      default = {};
+      type = types.attrsOf (
+        types.submodule {
+          options = {
+            activatorPort = mkOption { type = types.port; };
+            realPort = mkOption { type = types.port; };
+            targetService = mkOption { type = types.str; };
+            idleMinutes = mkOption {
+              type = types.int;
+              default = 30;
+            };
+          };
+        }
+      );
+      default = { };
     };
   };
 
-  config = mkIf (cfg.services != {}) {
+  config = mkIf (cfg.services != { }) {
     systemd.services =
       (mapAttrs' (n: s: nameValuePair "ondemand-activator-${n}" (mkActivatorService n s)) cfg.services)
-      //
-      (mapAttrs' (n: s: nameValuePair "ondemand-idle-stop-${n}" (mkIdleService n s)) cfg.services);
+      // (mapAttrs' (n: s: nameValuePair "ondemand-idle-stop-${n}" (mkIdleService n s)) cfg.services);
 
-    systemd.timers =
-      mapAttrs' (n: s: nameValuePair "ondemand-idle-stop-${n}" (mkIdleTimer n s)) cfg.services;
+    systemd.timers = mapAttrs' (
+      n: s: nameValuePair "ondemand-idle-stop-${n}" (mkIdleTimer n s)
+    ) cfg.services;
   };
 }

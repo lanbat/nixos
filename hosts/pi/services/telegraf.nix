@@ -22,7 +22,12 @@
 # Shares telegraf-token.age with the server — same write token, separate
 # agenix declaration in hosts/pi/default.nix.
 #
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   services.telegraf = {
@@ -30,41 +35,60 @@
 
     extraConfig = lib.mkForce {
       agent = {
-        interval            = "30s";
-        flush_interval      = "30s";
-        round_interval      = true;
-        metric_batch_size   = 1000;
+        interval = "30s";
+        flush_interval = "30s";
+        round_interval = true;
+        metric_batch_size = 1000;
         metric_buffer_limit = 10000;
-        collection_jitter   = "5s";
-        flush_jitter        = "5s";
-        precision           = "0s";
+        collection_jitter = "5s";
+        flush_jitter = "5s";
+        precision = "0s";
       };
 
-      outputs.influxdb_v2 = [{
-        urls         = [ "http://${config.lanbat.serverIp}:8086" ];
-        token        = "$TELEGRAF_INFLUXDB_TOKEN";
-        organization = "homelab";
-        bucket       = "metrics";
-      }];
+      outputs.influxdb_v2 = [
+        {
+          urls = [ "http://${config.lanbat.serverIp}:8086" ];
+          token = "$TELEGRAF_INFLUXDB_TOKEN";
+          organization = "homelab";
+          bucket = "metrics";
+        }
+      ];
 
-      inputs.cpu = [{
-        percpu           = true;
-        totalcpu         = true;
-        collect_cpu_time = false;
-        report_active    = false;
-      }];
-      inputs.mem     = [{}];
-      inputs.disk    = [{
-        # Include the LUKS-mounted drives to track fill levels.
-        mount_points = [ "/" "/mnt/storage-a" "/mnt/storage-b" ];
-        ignore_fs    = [ "tmpfs" "devtmpfs" "devfs" "iso9660" "overlay" "aufs" "squashfs" "nsfs" ];
-      }];
-      inputs.diskio    = [{}];
-      inputs.net       = [{ ignore_protocol_stats = true; }];
-      inputs.system    = [{}];
-      inputs.processes = [{}];
+      inputs.cpu = [
+        {
+          percpu = true;
+          totalcpu = true;
+          collect_cpu_time = false;
+          report_active = false;
+        }
+      ];
+      inputs.mem = [ { } ];
+      inputs.disk = [
+        {
+          # Include the LUKS-mounted drives to track fill levels.
+          mount_points = [
+            "/"
+            "/mnt/storage-a"
+            "/mnt/storage-b"
+          ];
+          ignore_fs = [
+            "tmpfs"
+            "devtmpfs"
+            "devfs"
+            "iso9660"
+            "overlay"
+            "aufs"
+            "squashfs"
+            "nsfs"
+          ];
+        }
+      ];
+      inputs.diskio = [ { } ];
+      inputs.net = [ { ignore_protocol_stats = true; } ];
+      inputs.system = [ { } ];
+      inputs.processes = [ { } ];
       # Raspberry Pi CPU temperature via kernel thermal zone.
-      inputs.temp      = [{}];
+      inputs.temp = [ { } ];
     };
   };
 
@@ -75,7 +99,7 @@
 
   # Agenix secret
   age.secrets.telegraf-token = {
-    file  = ../../../secrets/telegraf-token.age;
+    file = ../../../secrets/telegraf-token.age;
     owner = "telegraf";
   };
 }

@@ -17,7 +17,12 @@
 # The firewall restricts access to the LAN subnet only.
 #
 # Always-on: yes.  No NFS dependency.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   services.mosquitto = {
@@ -25,7 +30,7 @@
 
     listeners = [
       {
-        port    = 1883;
+        port = 1883;
         address = "0.0.0.0";
 
         settings = {
@@ -49,13 +54,19 @@
           # Frigate user.
           frigate = {
             passwordFile = config.age.secrets.mosquitto-frigate-pass.path;
-            acl = [ "readwrite frigate/#" "readwrite homeassistant/#" ];
+            acl = [
+              "readwrite frigate/#"
+              "readwrite homeassistant/#"
+            ];
           };
 
           # Zigbee2MQTT user.
           zigbee2mqtt = {
             passwordFile = config.age.secrets.mosquitto-z2m-pass.path;
-            acl = [ "readwrite zigbee2mqtt/#" "readwrite homeassistant/#" ];
+            acl = [
+              "readwrite zigbee2mqtt/#"
+              "readwrite homeassistant/#"
+            ];
           };
         };
       }

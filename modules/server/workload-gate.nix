@@ -72,7 +72,12 @@
 #    /var/lib/frigate     — Frigate event database and clips
 #    /var/lib/containers  — Podman container image storage
 #
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   # ── Bind mount helper ───────────────────────────────────────────────────────
@@ -83,8 +88,8 @@ let
   #               should fail so workload-online.target also fails, which
   #               prevents services from starting against unmounted stubs).
   mkWorkloadBind = subdir: {
-    device  = "/mnt/workload/${subdir}";
-    fsType  = "none";
+    device = "/mnt/workload/${subdir}";
+    fsType = "none";
     options = [
       "bind"
       "noauto"
@@ -95,20 +100,19 @@ let
 
   # ── Mount unit name helper ──────────────────────────────────────────────────
   # /var/lib/postgresql → var-lib-postgresql.mount
-  mountUnit = path:
-    "${lib.replaceStrings ["/"] ["-"] (lib.removePrefix "/" path)}.mount";
+  mountUnit = path: "${lib.replaceStrings [ "/" ] [ "-" ] (lib.removePrefix "/" path)}.mount";
 
   # ── List of (mountPath, workloadSubdir) pairs ───────────────────────────────
   bindMounts = {
     # Workload-gated services: state lives on LUKS-encrypted /mnt/workload.
-    "/var/lib/nextcloud"   = "nextcloud";
-    "/var/lib/immich"      = "immich";
-    "/var/lib/jellyfin"    = "jellyfin";
+    "/var/lib/nextcloud" = "nextcloud";
+    "/var/lib/immich" = "immich";
+    "/var/lib/jellyfin" = "jellyfin";
     "/var/lib/vaultwarden" = "vaultwarden";
-    "/var/lib/syncthing"   = "syncthing";
+    "/var/lib/syncthing" = "syncthing";
     "/var/lib/qbittorrent" = "qbittorrent";
-    "/var/lib/bitmagnet"   = "bitmagnet";
-    "/var/lib/samba"       = "samba";
+    "/var/lib/bitmagnet" = "bitmagnet";
+    "/var/lib/samba" = "samba";
     # NOT included (always-on tier, host root):
     #   caddy, postgresql, authentik, grafana, influxdb2, hass, mosquitto, frigate, containers
   };
@@ -126,9 +130,12 @@ let
     # workload-fix-permissions restores bind-mount dir ownership/modes after
     # systemd-tmpfiles-resetup resets them (it has no RemainAfterExit so
     # systemd re-runs it each time a gated service needs to start).
-    after  = lib.mkAfter [ "workload-online.target" "workload-init.service"
-                            "workload-fix-permissions.service" ];
-    wants  = [ "workload-fix-permissions.service" ];
+    after = lib.mkAfter [
+      "workload-online.target"
+      "workload-init.service"
+      "workload-fix-permissions.service"
+    ];
+    wants = [ "workload-fix-permissions.service" ];
     bindsTo = [ "workload-online.target" ];
   };
 
@@ -148,7 +155,7 @@ let
     "nextcloud"
     "samba-smbd"
     "samba-nmbd"
-    "avahi-daemon"          # mDNS — depends on samba being up
+    "avahi-daemon" # mDNS — depends on samba being up
 
     # ── OCI containers (podman-<name>) ──
     "podman-immich-server"
@@ -170,7 +177,7 @@ in
     description = "Workload LUKS layer mounted and all service data available";
     # Require every bind mount to succeed before this target activates.
     requires = [ "mnt-workload.mount" ] ++ bindMountUnits;
-    after    = [ "mnt-workload.mount" ] ++ bindMountUnits;
+    after = [ "mnt-workload.mount" ] ++ bindMountUnits;
     # wantedBy intentionally omitted — not started at boot.
   };
 
@@ -185,7 +192,7 @@ in
     # services start it simultaneously.
     "workload-fix-permissions" = {
       description = "Restore workload bind-mount directory permissions";
-      after    = bindMountUnits ++ [ "mnt-workload.mount" ];
+      after = bindMountUnits ++ [ "mnt-workload.mount" ];
       requires = [ "mnt-workload.mount" ];
       unitConfig.StartLimitIntervalSec = 0;
       serviceConfig = {
@@ -207,26 +214,34 @@ in
     # after the workload is unlocked (same as all other workload-gated services).
     "nextcloud-setup" = {
       wantedBy = lib.mkForce [ "workload-online.target" ];
-      bindsTo  = [ "workload-online.target" ];
-      after    = lib.mkAfter [ "workload-online.target" "workload-fix-permissions.service" "workload-init.service" ];
-      wants    = [ "workload-fix-permissions.service" ];
+      bindsTo = [ "workload-online.target" ];
+      after = lib.mkAfter [
+        "workload-online.target"
+        "workload-fix-permissions.service"
+        "workload-init.service"
+      ];
+      wants = [ "workload-fix-permissions.service" ];
     };
     "nextcloud-update-db" = {
       wantedBy = lib.mkForce [ "workload-online.target" ];
-      bindsTo  = [ "workload-online.target" ];
-      after    = lib.mkAfter [ "workload-online.target" "workload-fix-permissions.service" "workload-init.service" ];
-      wants    = [ "workload-fix-permissions.service" ];
+      bindsTo = [ "workload-online.target" ];
+      after = lib.mkAfter [
+        "workload-online.target"
+        "workload-fix-permissions.service"
+        "workload-init.service"
+      ];
+      wants = [ "workload-fix-permissions.service" ];
     };
 
     "workload-init" = {
       description = "Initialize workload directory structure";
-      after    = [ "mnt-workload.mount" ];
+      after = [ "mnt-workload.mount" ];
       requires = [ "mnt-workload.mount" ];
-      before   = bindMountUnits;
+      before = bindMountUnits;
       wantedBy = [ "workload-online.target" ];
-      partOf   = [ "workload-online.target" ];
+      partOf = [ "workload-online.target" ];
       serviceConfig = {
-        Type            = "oneshot";
+        Type = "oneshot";
         RemainAfterExit = true;
         ExecStart = pkgs.writeShellScript "workload-init" ''
           set -euo pipefail
@@ -266,129 +281,133 @@ in
   };
 
   # ── Admin scripts ─────────────────────────────────────────────────────────
-  environment.systemPackages = let
-    adminScript = name: body: pkgs.writeShellScriptBin name ''
-      set -euo pipefail
-      ${body}
-    '';
-  in [
+  environment.systemPackages =
+    let
+      adminScript =
+        name: body:
+        pkgs.writeShellScriptBin name ''
+          set -euo pipefail
+          ${body}
+        '';
+    in
+    [
 
-    # unlock-workload: open workload LUKS, activate bind mounts, start services.
-    (adminScript "unlock-workload" ''
-      WORKLOAD_UUID="${config.lanbat.serverWorkloadLuksUuid}"
-      echo "=== unlock-workload: opening workload LUKS layer ==="
-      echo
-      if [ -e /dev/mapper/workload ]; then
-        echo "INFO: /dev/mapper/workload already exists, skipping luksOpen."
-      else
-        cryptsetup luksOpen /dev/disk/by-uuid/"$WORKLOAD_UUID" workload
-      fi
-      echo "Mounting /mnt/workload and activating workload-online.target..."
-      systemctl start workload-online.target
-      echo
-      echo "Workload service status (brief):"
-      systemctl list-units --state=active --type=service \
-        --no-pager --no-legend 2>/dev/null | grep -E '(postgres|redis|caddy|grafana)' \
-        | head -20 || true
-      echo
-      echo "Workload is online."
-    '')
-
-    # lock-workload: gracefully stop all services, unmount, close LUKS.
-    (adminScript "lock-workload" ''
-      echo "=== lock-workload: stopping workload services and locking layer ==="
-      echo
-      echo "This will stop ALL application services (containers, databases, etc.)."
-      echo "Ensure users are warned and no critical jobs are running."
-      read -r -p "Continue? [y/N] " confirm
-      [[ "$confirm" == [yY] ]] || { echo "Aborted."; exit 1; }
-      echo "Stopping workload-online.target (propagates to all bound services)..."
-      systemctl stop workload-online.target 2>/dev/null || true
-      # Allow up to 30 seconds for services to stop cleanly.
-      echo "Waiting for services to stop..."
-      sleep 5
-      # Unmount bind mounts (in reverse dependency order).
-      for mount in ${lib.concatStringsSep " " (map mountUnit (lib.attrNames bindMounts))}; do
-        if mountpoint -q "$(systemctl show -p Where --value "$mount" 2>/dev/null)" 2>/dev/null; then
-          systemctl stop "$mount" 2>/dev/null || umount "$(systemctl show -p Where --value "$mount")" 2>/dev/null || true
+      # unlock-workload: open workload LUKS, activate bind mounts, start services.
+      (adminScript "unlock-workload" ''
+        WORKLOAD_UUID="${config.lanbat.serverWorkloadLuksUuid}"
+        echo "=== unlock-workload: opening workload LUKS layer ==="
+        echo
+        if [ -e /dev/mapper/workload ]; then
+          echo "INFO: /dev/mapper/workload already exists, skipping luksOpen."
+        else
+          cryptsetup luksOpen /dev/disk/by-uuid/"$WORKLOAD_UUID" workload
         fi
-      done
-      if mountpoint -q /mnt/workload; then
-        umount /mnt/workload
-      fi
-      if [ -e /dev/mapper/workload ]; then
-        cryptsetup luksClose workload
-        echo "Workload LUKS closed."
-      else
-        echo "INFO: /dev/mapper/workload not found, already closed."
-      fi
-    '')
+        echo "Mounting /mnt/workload and activating workload-online.target..."
+        systemctl start workload-online.target
+        echo
+        echo "Workload service status (brief):"
+        systemctl list-units --state=active --type=service \
+          --no-pager --no-legend 2>/dev/null | grep -E '(postgres|redis|caddy|grafana)' \
+          | head -20 || true
+        echo
+        echo "Workload is online."
+      '')
 
-    # unlock-all: convenience wrapper — unlock control then workload.
-    (adminScript "unlock-all" ''
-      echo "=== unlock-all: unlocking both LUKS layers ==="
-      echo
-      unlock-control
-      echo
-      unlock-workload
-    '')
+      # lock-workload: gracefully stop all services, unmount, close LUKS.
+      (adminScript "lock-workload" ''
+        echo "=== lock-workload: stopping workload services and locking layer ==="
+        echo
+        echo "This will stop ALL application services (containers, databases, etc.)."
+        echo "Ensure users are warned and no critical jobs are running."
+        read -r -p "Continue? [y/N] " confirm
+        [[ "$confirm" == [yY] ]] || { echo "Aborted."; exit 1; }
+        echo "Stopping workload-online.target (propagates to all bound services)..."
+        systemctl stop workload-online.target 2>/dev/null || true
+        # Allow up to 30 seconds for services to stop cleanly.
+        echo "Waiting for services to stop..."
+        sleep 5
+        # Unmount bind mounts (in reverse dependency order).
+        for mount in ${lib.concatStringsSep " " (map mountUnit (lib.attrNames bindMounts))}; do
+          if mountpoint -q "$(systemctl show -p Where --value "$mount" 2>/dev/null)" 2>/dev/null; then
+            systemctl stop "$mount" 2>/dev/null || umount "$(systemctl show -p Where --value "$mount")" 2>/dev/null || true
+          fi
+        done
+        if mountpoint -q /mnt/workload; then
+          umount /mnt/workload
+        fi
+        if [ -e /dev/mapper/workload ]; then
+          cryptsetup luksClose workload
+          echo "Workload LUKS closed."
+        else
+          echo "INFO: /dev/mapper/workload not found, already closed."
+        fi
+      '')
 
-    # lock-all: convenience wrapper — lock workload then control.
-    # Workload must be locked first so Tang stays available during shutdown.
-    (adminScript "lock-all" ''
-      echo "=== lock-all: locking both LUKS layers ==="
-      echo
-      lock-workload
-      echo
-      lock-control
-    '')
+      # unlock-all: convenience wrapper — unlock control then workload.
+      (adminScript "unlock-all" ''
+        echo "=== unlock-all: unlocking both LUKS layers ==="
+        echo
+        unlock-control
+        echo
+        unlock-workload
+      '')
 
-    # server-health: show current state of both layers and key services.
-    (adminScript "server-health" ''
-      echo "=== server health check ==="
-      echo
-      echo "── Control layer ──────────────────────────────────────"
-      if [ -e /dev/mapper/control ]; then
-        echo "  LUKS mapper:  OPEN  (/dev/mapper/control)"
-      else
-        echo "  LUKS mapper:  LOCKED"
-      fi
-      if mountpoint -q /mnt/control 2>/dev/null; then
-        echo "  /mnt/control: MOUNTED"
-      else
-        echo "  /mnt/control: NOT MOUNTED"
-      fi
-      if mountpoint -q /var/lib/tang 2>/dev/null; then
-        echo "  /var/lib/tang: MOUNTED (bind)"
-      else
-        echo "  /var/lib/tang: NOT MOUNTED"
-      fi
-      tang_ok=$(curl -sf --max-time 2 http://127.0.0.1:7500/adv >/dev/null 2>&1 && echo OK || echo UNREACHABLE)
-      echo "  Tang:         $tang_ok"
-      echo
-      echo "── Workload layer ─────────────────────────────────────"
-      if [ -e /dev/mapper/workload ]; then
-        echo "  LUKS mapper:  OPEN  (/dev/mapper/workload)"
-      else
-        echo "  LUKS mapper:  LOCKED"
-      fi
-      if mountpoint -q /mnt/workload 2>/dev/null; then
-        df -h /mnt/workload | tail -1 | awk '{print "  /mnt/workload: MOUNTED  used=" $3 " avail=" $4}'
-      else
-        echo "  /mnt/workload: NOT MOUNTED"
-      fi
-      if systemctl is-active workload-online.target >/dev/null 2>&1; then
-        echo "  workload-online.target: ACTIVE"
-      else
-        echo "  workload-online.target: INACTIVE"
-      fi
-      echo
-      echo "── Key services ───────────────────────────────────────"
-      for svc in postgresql caddy home-assistant influxdb2 grafana; do
-        state=$(systemctl is-active "$svc" 2>/dev/null || echo "unknown")
-        printf "  %-28s %s\n" "$svc" "$state"
-      done
-    '')
+      # lock-all: convenience wrapper — lock workload then control.
+      # Workload must be locked first so Tang stays available during shutdown.
+      (adminScript "lock-all" ''
+        echo "=== lock-all: locking both LUKS layers ==="
+        echo
+        lock-workload
+        echo
+        lock-control
+      '')
 
-  ];
+      # server-health: show current state of both layers and key services.
+      (adminScript "server-health" ''
+        echo "=== server health check ==="
+        echo
+        echo "── Control layer ──────────────────────────────────────"
+        if [ -e /dev/mapper/control ]; then
+          echo "  LUKS mapper:  OPEN  (/dev/mapper/control)"
+        else
+          echo "  LUKS mapper:  LOCKED"
+        fi
+        if mountpoint -q /mnt/control 2>/dev/null; then
+          echo "  /mnt/control: MOUNTED"
+        else
+          echo "  /mnt/control: NOT MOUNTED"
+        fi
+        if mountpoint -q /var/lib/tang 2>/dev/null; then
+          echo "  /var/lib/tang: MOUNTED (bind)"
+        else
+          echo "  /var/lib/tang: NOT MOUNTED"
+        fi
+        tang_ok=$(curl -sf --max-time 2 http://127.0.0.1:7500/adv >/dev/null 2>&1 && echo OK || echo UNREACHABLE)
+        echo "  Tang:         $tang_ok"
+        echo
+        echo "── Workload layer ─────────────────────────────────────"
+        if [ -e /dev/mapper/workload ]; then
+          echo "  LUKS mapper:  OPEN  (/dev/mapper/workload)"
+        else
+          echo "  LUKS mapper:  LOCKED"
+        fi
+        if mountpoint -q /mnt/workload 2>/dev/null; then
+          df -h /mnt/workload | tail -1 | awk '{print "  /mnt/workload: MOUNTED  used=" $3 " avail=" $4}'
+        else
+          echo "  /mnt/workload: NOT MOUNTED"
+        fi
+        if systemctl is-active workload-online.target >/dev/null 2>&1; then
+          echo "  workload-online.target: ACTIVE"
+        else
+          echo "  workload-online.target: INACTIVE"
+        fi
+        echo
+        echo "── Key services ───────────────────────────────────────"
+        for svc in postgresql caddy home-assistant influxdb2 grafana; do
+          state=$(systemctl is-active "$svc" 2>/dev/null || echo "unknown")
+          printf "  %-28s %s\n" "$svc" "$state"
+        done
+      '')
+
+    ];
 }

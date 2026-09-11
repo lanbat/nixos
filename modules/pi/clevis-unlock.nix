@@ -74,7 +74,12 @@
 #
 #  The default binding uses Tang alone (simpler, sufficient for this design).
 #
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   cfg = config.lanbat;
@@ -137,8 +142,8 @@ in
   # ── Required packages ──────────────────────────────────────────────────────
   environment.systemPackages = with pkgs; [
     clevis
-    tang        # provides jose, needed by clevis
-    tpm2-tools  # for optional TPM2 hardening variant
+    tang # provides jose, needed by clevis
+    tpm2-tools # for optional TPM2 hardening variant
     cryptsetup
   ];
 
@@ -155,26 +160,29 @@ in
     description = "Clevis/Tang unlock and mount of NVMe storage drive A";
 
     # Run after network is online — Clevis needs to reach Tang.
-    after   = [ "network-online.target" "systemd-udevd.service" ];
-    wants   = [ "network-online.target" ];
+    after = [
+      "network-online.target"
+      "systemd-udevd.service"
+    ];
+    wants = [ "network-online.target" ];
     # Attempt at boot; place in multi-user so NFS can depend on it.
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
-      Type            = "oneshot";
+      Type = "oneshot";
       RemainAfterExit = true;
 
       # Retry every 5 minutes on failure (Tang unreachable).
       # systemd.unit man page: Restart=on-failure works for oneshot services.
-      Restart    = "on-failure";
+      Restart = "on-failure";
       RestartSec = "5min";
       # Limit restart storm (e.g. Tang is permanently gone):
       # After StartLimitBurst failures in StartLimitIntervalSec, stop retrying.
-      StartLimitBurst        = 288; # 288 × 5min = 24 hours of retries
-      StartLimitIntervalSec  = "25h";
+      StartLimitBurst = 288; # 288 × 5min = 24 hours of retries
+      StartLimitIntervalSec = "25h";
 
       ExecStart = "${unlockScript} ${cfg.piStorageDriveA} storage-a /mnt/storage-a";
-      ExecStop  = "${stopScript} storage-a /mnt/storage-a";
+      ExecStop = "${stopScript} storage-a /mnt/storage-a";
     };
   };
 
@@ -182,20 +190,23 @@ in
   systemd.services."storage-b-unlock" = {
     description = "Clevis/Tang unlock and mount of NVMe storage drive B";
 
-    after    = [ "network-online.target" "systemd-udevd.service" ];
-    wants    = [ "network-online.target" ];
+    after = [
+      "network-online.target"
+      "systemd-udevd.service"
+    ];
+    wants = [ "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
 
     serviceConfig = {
-      Type            = "oneshot";
+      Type = "oneshot";
       RemainAfterExit = true;
-      Restart    = "on-failure";
+      Restart = "on-failure";
       RestartSec = "5min";
-      StartLimitBurst        = 288;
-      StartLimitIntervalSec  = "25h";
+      StartLimitBurst = 288;
+      StartLimitIntervalSec = "25h";
 
       ExecStart = "${unlockScript} ${cfg.piStorageDriveB} storage-b /mnt/storage-b";
-      ExecStop  = "${stopScript} storage-b /mnt/storage-b";
+      ExecStop = "${stopScript} storage-b /mnt/storage-b";
     };
   };
 

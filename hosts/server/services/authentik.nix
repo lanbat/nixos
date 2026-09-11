@@ -40,7 +40,12 @@
 #   2. An "Application" linked to each provider.
 #   3. Edit the embedded-outpost and add all proxy applications to it.
 # See docs/deployment-checklist.md step 3b for the full walkthrough.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   domain = config.lanbat.domain;
@@ -52,15 +57,15 @@ let
   # Secrets (PostgreSQL password + secret key) are injected via environmentFiles
   # from the agenix-decrypted file at /run/agenix/authentik-env.
   authentikEnv = {
-    AUTHENTIK_REDIS__HOST         = "127.0.0.1";
-    AUTHENTIK_REDIS__PORT         = "6379";
-    AUTHENTIK_REDIS__DB           = "0";
-    AUTHENTIK_POSTGRESQL__HOST    = "127.0.0.1";
-    AUTHENTIK_POSTGRESQL__USER    = "authentik";
-    AUTHENTIK_POSTGRESQL__NAME    = "authentik";
+    AUTHENTIK_REDIS__HOST = "127.0.0.1";
+    AUTHENTIK_REDIS__PORT = "6379";
+    AUTHENTIK_REDIS__DB = "0";
+    AUTHENTIK_POSTGRESQL__HOST = "127.0.0.1";
+    AUTHENTIK_POSTGRESQL__USER = "authentik";
+    AUTHENTIK_POSTGRESQL__NAME = "authentik";
     AUTHENTIK_ERROR_REPORTING__ENABLED = "false";
-    AUTHENTIK_DISABLE_UPDATE_CHECK     = "true";
-    AUTHENTIK_COOKIE_DOMAIN       = domain;
+    AUTHENTIK_DISABLE_UPDATE_CHECK = "true";
+    AUTHENTIK_COOKIE_DOMAIN = domain;
   };
 
   # Path to the agenix-decrypted env file.
@@ -74,8 +79,8 @@ in
   # Authentik server container
   # ---------------------------------------------------------------------------
   virtualisation.oci-containers.containers."authentik-server" = {
-    image   = "ghcr.io/goauthentik/server:${authentikVersion}";
-    cmd     = [ "server" ];
+    image = "ghcr.io/goauthentik/server:${authentikVersion}";
+    cmd = [ "server" ];
     extraOptions = [
       "--network=host"
       # Remap container UID/GID 1000 (authentik's internal user) to the host
@@ -89,7 +94,7 @@ in
       "--gidmap=1001:1001:64535"
     ];
 
-    environment    = authentikEnv;
+    environment = authentikEnv;
     environmentFiles = [ authentikEnvFile ];
 
     volumes = [
@@ -106,8 +111,8 @@ in
   # Authentik worker container
   # ---------------------------------------------------------------------------
   virtualisation.oci-containers.containers."authentik-worker" = {
-    image       = "ghcr.io/goauthentik/server:${authentikVersion}";
-    cmd         = [ "worker" ];
+    image = "ghcr.io/goauthentik/server:${authentikVersion}";
+    cmd = [ "worker" ];
     extraOptions = [
       "--network=host"
       "--uidmap=0:1:1000"
@@ -118,7 +123,7 @@ in
       "--gidmap=1001:1001:64535"
     ];
 
-    environment    = authentikEnv;
+    environment = authentikEnv;
     environmentFiles = [ authentikEnvFile ];
 
     volumes = [
@@ -127,8 +132,8 @@ in
     ];
 
     podman.user = "authentik";
-    autoStart  = true;
-    dependsOn  = [ "authentik-server" ];
+    autoStart = true;
+    dependsOn = [ "authentik-server" ];
   };
 
   # ---------------------------------------------------------------------------
@@ -147,11 +152,23 @@ in
 
   # Authentik waits for PostgreSQL and Redis before starting.
   systemd.services."podman-authentik-server" = {
-    after    = [ "postgresql.service" "redis-shared.service" ];
-    requires = [ "postgresql.service" "redis-shared.service" ];
+    after = [
+      "postgresql.service"
+      "redis-shared.service"
+    ];
+    requires = [
+      "postgresql.service"
+      "redis-shared.service"
+    ];
   };
   systemd.services."podman-authentik-worker" = {
-    after    = [ "postgresql.service" "redis-shared.service" ];
-    requires = [ "postgresql.service" "redis-shared.service" ];
+    after = [
+      "postgresql.service"
+      "redis-shared.service"
+    ];
+    requires = [
+      "postgresql.service"
+      "redis-shared.service"
+    ];
   };
 }

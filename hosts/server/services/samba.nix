@@ -33,33 +33,38 @@
 #
 # NFS dependency: strong.
 #   Shares are backed by /srv/storage/b.  Stop Samba when Pi is gone.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   services.samba = {
-    enable       = true;
-    openFirewall = true;  # opens 137,138,139,445
+    enable = true;
+    openFirewall = true; # opens 137,138,139,445
 
     settings = {
       global = {
-        workgroup            = "WORKGROUP";
-        "server string"      = "Homelab Server";
-        "netbios name"       = "server";
-        security             = "user";
-        "map to guest"       = "bad user";
-        "log level"          = "1";
-        "max log size"       = "10000";
+        workgroup = "WORKGROUP";
+        "server string" = "Homelab Server";
+        "netbios name" = "server";
+        security = "user";
+        "map to guest" = "bad user";
+        "log level" = "1";
+        "max log size" = "10000";
 
         # Performance.
-        "use sendfile"       = "yes";
-        "aio read size"      = "16384";
-        "aio write size"     = "16384";
-        "socket options"     = "TCP_NODELAY IPTOS_THROUGHPUT SO_RCVBUF=131072 SO_SNDBUF=131072";
+        "use sendfile" = "yes";
+        "aio read size" = "16384";
+        "aio write size" = "16384";
+        "socket options" = "TCP_NODELAY IPTOS_THROUGHPUT SO_RCVBUF=131072 SO_SNDBUF=131072";
 
         # macOS compatibility.
-        "vfs objects"        = "catia fruit streams_xattr";
-        "fruit:metadata"     = "stream";
-        "fruit:model"        = "MacSamba";
+        "vfs objects" = "catia fruit streams_xattr";
+        "fruit:metadata" = "stream";
+        "fruit:model" = "MacSamba";
         "fruit:posix_rename" = "yes";
         "fruit:veto_appledouble" = "no";
         "fruit:wipe_intentionally_left_blank_rfork" = "yes";
@@ -74,38 +79,38 @@
 
       # ---- User home share ----
       homes = {
-        comment           = "Home Directories";
-        browseable        = "no";
-        "read only"       = "no";
-        "create mask"     = "0700";
-        "directory mask"  = "0700";
-        "valid users"     = "%S";
-        path              = "/srv/storage/b/users/%S";
+        comment = "Home Directories";
+        browseable = "no";
+        "read only" = "no";
+        "create mask" = "0700";
+        "directory mask" = "0700";
+        "valid users" = "%S";
+        path = "/srv/storage/b/users/%S";
       };
 
       # ---- Shared media share (read-only for all users) ----
       media = {
-        comment           = "Media";
-        path              = "/srv/storage/a/media";
-        browseable        = "yes";
-        "read only"       = "yes";
-        "guest ok"        = "no";
-        "valid users"     = "@media";
-        "create mask"     = "0664";
-        "directory mask"  = "0775";
+        comment = "Media";
+        path = "/srv/storage/a/media";
+        browseable = "yes";
+        "read only" = "yes";
+        "guest ok" = "no";
+        "valid users" = "@media";
+        "create mask" = "0664";
+        "directory mask" = "0775";
       };
 
       # ---- Downloads share ----
       downloads = {
-        comment           = "Downloads";
-        path              = "/srv/storage/a/downloads";
-        browseable        = "yes";
-        "read only"       = "no";
-        "guest ok"        = "no";
-        "valid users"     = "@media";
-        "create mask"     = "0664";
-        "directory mask"  = "0775";
-        "force group"     = "media";
+        comment = "Downloads";
+        path = "/srv/storage/a/downloads";
+        browseable = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "valid users" = "@media";
+        "create mask" = "0664";
+        "directory mask" = "0775";
+        "force group" = "media";
       };
 
       # ---- Private downloads (restricted to "private" group) ----
@@ -113,50 +118,53 @@
       # Only users explicitly added to the "private" group can access it.
       # Add users: usermod -aG private <username> && smbpasswd -a <username>
       private-downloads = {
-        comment          = "Private";
-        path             = "/srv/storage/a/downloads/private";
-        browseable       = "no";   # hidden from share listings
-        "read only"      = "no";
-        "guest ok"       = "no";
-        "valid users"    = "@private";
-        "create mask"    = "0600";
+        comment = "Private";
+        path = "/srv/storage/a/downloads/private";
+        browseable = "no"; # hidden from share listings
+        "read only" = "no";
+        "guest ok" = "no";
+        "valid users" = "@private";
+        "create mask" = "0600";
         "directory mask" = "0700";
-        "force group"    = "private";
+        "force group" = "private";
       };
 
       # ---- Shared space ----
       shared = {
-        comment           = "Shared";
-        path              = "/srv/storage/b/shared";
-        browseable        = "yes";
-        "read only"       = "no";
-        "guest ok"        = "no";
-        "valid users"     = "@media";
-        "create mask"     = "0664";
-        "directory mask"  = "0775";
-        "force group"     = "media";
+        comment = "Shared";
+        path = "/srv/storage/b/shared";
+        browseable = "yes";
+        "read only" = "no";
+        "guest ok" = "no";
+        "valid users" = "@media";
+        "create mask" = "0664";
+        "directory mask" = "0775";
+        "force group" = "media";
       };
     };
   };
 
   # Samba avahi announcement for macOS autodiscovery.
   services.avahi = {
-    enable    = true;
-    nssmdns4  = true;
-    publish   = {
-      enable         = true;
-      userServices   = true;
+    enable = true;
+    nssmdns4 = true;
+    publish = {
+      enable = true;
+      userServices = true;
     };
   };
 
   # ---------------------------------------------------------------------------
   # NFS dependency — stop Samba if Pi storage disappears.
   # ---------------------------------------------------------------------------
-  lanbat.nfsDependentServices."samba-smbd" = [ "a" "b" ];
+  lanbat.nfsDependentServices."samba-smbd" = [
+    "a"
+    "b"
+  ];
 
   systemd.services.samba-smbd = {
     serviceConfig = {
-      Restart    = "on-failure";
+      Restart = "on-failure";
       RestartSec = "15s";
     };
   };

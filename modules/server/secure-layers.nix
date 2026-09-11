@@ -52,22 +52,28 @@
 #  after reboot without physical presence. Disk-level confidentiality of the
 #  host root (OS, config) is not provided by this design.
 #
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.lanbat;
 
   # ── Helper: admin script ────────────────────────────────────────────────────
-  adminScript = name: body: pkgs.writeShellScriptBin name ''
-    set -euo pipefail
-    ${body}
-  '';
+  adminScript =
+    name: body:
+    pkgs.writeShellScriptBin name ''
+      set -euo pipefail
+      ${body}
+    '';
 
   # ── Systemd mount unit name from filesystem path ────────────────────────────
   # /mnt/control → mnt-control.mount
   # /var/lib/tang → var-lib-tang.mount
-  mountUnit = path:
-    "${lib.replaceStrings ["/"] ["-"] (lib.removePrefix "/" path)}.mount";
+  mountUnit = path: "${lib.replaceStrings [ "/" ] [ "-" ] (lib.removePrefix "/" path)}.mount";
 
 in
 {
@@ -110,16 +116,24 @@ in
   # noauto: unit is NOT included in local-fs.target; will not mount at boot.
   # Requires /dev/mapper/control to exist (created by cryptsetup luksOpen).
   fileSystems."/mnt/control" = {
-    device  = "/dev/mapper/control";
-    fsType  = "ext4";
-    options = [ "noauto" "noatime" "x-systemd.idle-timeout=0" ];
+    device = "/dev/mapper/control";
+    fsType = "ext4";
+    options = [
+      "noauto"
+      "noatime"
+      "x-systemd.idle-timeout=0"
+    ];
   };
 
   # ── /mnt/workload filesystem ──────────────────────────────────────────────
   fileSystems."/mnt/workload" = {
-    device  = "/dev/mapper/workload";
-    fsType  = "ext4";
-    options = [ "noauto" "noatime" "x-systemd.idle-timeout=0" ];
+    device = "/dev/mapper/workload";
+    fsType = "ext4";
+    options = [
+      "noauto"
+      "noatime"
+      "x-systemd.idle-timeout=0"
+    ];
   };
 
   # ── /var/lib/tang bind mount (control → standard Tang path) ───────────────
@@ -130,8 +144,8 @@ in
   # This mount unit (var-lib-tang.mount) requires mnt-control.mount.
   # If control is not mounted, this bind mount fails, and Tang cannot start.
   fileSystems."/var/lib/tang" = {
-    device  = "/mnt/control/tang";
-    fsType  = "none";
+    device = "/mnt/control/tang";
+    fsType = "none";
     options = [
       "bind"
       "noauto"
@@ -169,8 +183,8 @@ in
     # Tang only starts as part of control-online.target.
     wantedBy = lib.mkForce [ "control-online.target" ];
     # Ensure correct ordering and stop propagation.
-    after    = [ "control-online.target" ];
-    partOf   = [ "control-online.target" ];
+    after = [ "control-online.target" ];
+    partOf = [ "control-online.target" ];
     # Safety: refuse to activate if /var/lib/tang is not an active mount point.
     unitConfig.ConditionPathIsMountPoint = "/var/lib/tang";
   };
@@ -178,7 +192,7 @@ in
   # Tang per-connection service inherits ordering from socket activation.
   # Add the bind mount condition as a hard requirement.
   systemd.services."tangd@" = {
-    after   = [ (mountUnit "/var/lib/tang") ];
+    after = [ (mountUnit "/var/lib/tang") ];
     requires = [ (mountUnit "/var/lib/tang") ];
     unitConfig.ConditionPathIsMountPoint = "/var/lib/tang";
   };

@@ -20,11 +20,16 @@
 #   write error states into its database and display a broken library.
 #   We declare a hard BindsTo dependency so systemd stops Jellyfin when
 #   the mount disappears and restarts it when the mount returns.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   services.jellyfin = {
-    enable     = true;
+    enable = true;
     openFirewall = false; # Caddy handles exposure.
 
     # User/group — jellyfin user is created by the module; we added
@@ -49,7 +54,7 @@
   # Restart on failure so it comes back when NFS is restored.
   systemd.services.jellyfin = {
     serviceConfig = {
-      Restart    = "on-failure";
+      Restart = "on-failure";
       RestartSec = "15s";
     };
   };

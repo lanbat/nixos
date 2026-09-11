@@ -51,22 +51,22 @@
     settings = {
       # Streaming port — snapclient connects here from the LAN.
       tcp-streaming = {
-        enabled         = true;
-        port            = 1704;
+        enabled = true;
+        port = 1704;
         bind_to_address = "0.0.0.0";
       };
 
       # Control/JSON-RPC port — snapclient + web UI use this.
       tcp-control = {
-        enabled         = true;
-        port            = 1705;
+        enabled = true;
+        port = 1705;
         bind_to_address = "0.0.0.0"; # snapclient needs to reach this from the LAN
       };
 
       # HTTP JSON-RPC + web UI — Caddy proxies this; localhost-only.
       http = {
-        enabled         = true;
-        port            = 1780;
+        enabled = true;
+        port = 1780;
         bind_to_address = "127.0.0.1";
       };
 
@@ -84,5 +84,8 @@
   ];
 
   # Open streaming and control ports to the LAN.
-  networking.firewall.allowedTCPPorts = [ 1704 1705 ];
+  networking.firewall.allowedTCPPorts = [
+    1704
+    1705
+  ];
 }

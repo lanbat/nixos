@@ -57,14 +57,14 @@ in
   ];
 
   fileSystems."/srv/storage/a" = {
-    device  = "${piHost}:/mnt/storage-a";
-    fsType  = "nfs4";
+    device = "${piHost}:/mnt/storage-a";
+    fsType = "nfs4";
     options = nfsOpts;
   };
 
   fileSystems."/srv/storage/b" = {
-    device  = "${piHost}:/mnt/storage-b";
-    fsType  = "nfs4";
+    device = "${piHost}:/mnt/storage-b";
+    fsType = "nfs4";
     options = nfsOpts;
   };
 
@@ -81,11 +81,11 @@ in
   # Make sure the network is up before attempting mounts.
   # The automount units already carry _netdev, but belt-and-suspenders:
   systemd.services."srv-storage-a.automount" = {
-    after    = [ "network-online.target" ];
+    after = [ "network-online.target" ];
     requires = [ "network-online.target" ];
   };
   systemd.services."srv-storage-b.automount" = {
-    after    = [ "network-online.target" ];
+    after = [ "network-online.target" ];
     requires = [ "network-online.target" ];
   };
 }

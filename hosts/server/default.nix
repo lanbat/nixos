@@ -2,7 +2,13 @@
 #
 # Main server NixOS configuration.
 # Imports all shared modules and service sub-modules.
-{ config, pkgs, lib, inputs, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  inputs,
+  ...
+}:
 
 {
   imports = [
@@ -17,9 +23,9 @@
     ../../modules/common/auto-upgrade.nix
 
     # Server-specific modules
-    ../../modules/server/secure-layers.nix        # three-layer LUKS design
-    ../../modules/server/workload-gate.nix         # service gating on workload
-    ../../modules/server/backups.nix               # restic backup framework
+    ../../modules/server/secure-layers.nix # three-layer LUKS design
+    ../../modules/server/workload-gate.nix # service gating on workload
+    ../../modules/server/backups.nix # restic backup framework
     ../../modules/server/nfs-mounts.nix
     ../../modules/server/nfs-dependent-service.nix
     ../../modules/server/on-demand.nix
@@ -63,11 +69,11 @@
   # an admin manually runs unlock-control and unlock-workload.  An unattended
   # reboot would leave the server in host-only mode with no services running.
   system.autoUpgrade = {
-    enable      = true;
-    flake       = "/etc/nixos#server";
-    flags       = [ "--impure" ];
+    enable = true;
+    flake = "/etc/nixos#server";
+    flags = [ "--impure" ];
     allowReboot = false;
-    dates       = "04:00";
+    dates = "04:00";
     randomizedDelaySec = "30min";
   };
 
@@ -80,7 +86,7 @@
   # See modules/server/secure-layers.nix for the full design.
   # See docs/runbook.md for the unlock procedure.
   boot.loader = {
-    systemd-boot.enable      = true;
+    systemd-boot.enable = true;
     efi.canTouchEfiVariables = true;
   };
   # No boot.initrd.luks entries — neither LUKS volume opens at boot.
@@ -94,13 +100,21 @@
     # Static address recommended for a server.
     interfaces.eno1 = {
       useDHCP = false;
-      ipv4.addresses = [{
-        address      = config.lanbat.serverIp;
-        prefixLength = 24;
-      }];
+      ipv4.addresses = [
+        {
+          address = config.lanbat.serverIp;
+          prefixLength = 24;
+        }
+      ];
     };
-    defaultGateway = { address = config.lanbat.gatewayIp; interface = "eno1"; };
-    nameservers    = [ config.lanbat.gatewayIp "1.1.1.1" ];
+    defaultGateway = {
+      address = config.lanbat.gatewayIp;
+      interface = "eno1";
+    };
+    nameservers = [
+      config.lanbat.gatewayIp
+      "1.1.1.1"
+    ];
 
     # IPv6 — accept RA from router; do not expose services by default.
     # Caddy will also bind on IPv6 for frontend access; everything else stays v4.
@@ -115,13 +129,13 @@
     enable = true;
     # TCP ports open to the LAN.
     allowedTCPPorts = [
-      22    # SSH
-      80    # Caddy HTTP (redirects to HTTPS)
-      443   # Caddy HTTPS
-      7500  # Tang key server (Pi Clevis unlock)
-      2049  # NFS (restricted to Pi via extraCommands below)
-      111   # NFSv4 — optional, may remove
-      8086  # InfluxDB (restricted to Pi via extraCommands below)
+      22 # SSH
+      80 # Caddy HTTP (redirects to HTTPS)
+      443 # Caddy HTTPS
+      7500 # Tang key server (Pi Clevis unlock)
+      2049 # NFS (restricted to Pi via extraCommands below)
+      111 # NFSv4 — optional, may remove
+      8086 # InfluxDB (restricted to Pi via extraCommands below)
     ];
     # Restrict NFS and InfluxDB to the Pi's IP only.
     extraCommands = ''
@@ -130,7 +144,7 @@
       iptables -I INPUT -p tcp --dport 8086 ! -s ${config.lanbat.piIp} -j DROP
     '';
     allowedUDPPorts = [
-      5353  # mDNS (Home Assistant discovery)
+      5353 # mDNS (Home Assistant discovery)
     ];
   };
 
@@ -138,11 +152,11 @@
   # Container runtime (Podman)
   # ---------------------------------------------------------------------------
   virtualisation.podman = {
-    enable             = true;
-    dockerCompat       = true;    # provide a "docker" shim
+    enable = true;
+    dockerCompat = true; # provide a "docker" shim
     defaultNetwork.settings.dns_enabled = true;
-    autoPrune.enable   = true;
-    autoPrune.dates    = "weekly";
+    autoPrune.enable = true;
+    autoPrune.dates = "weekly";
   };
 
   virtualisation.oci-containers.backend = "podman";
@@ -156,12 +170,16 @@
   # Immich previously used its own containerized PostgreSQL (pgvecto.rs), but
   # vectorchord (pgvecto.rs successor) is now available in nixpkgs for pg16.
   services.postgresql = {
-    enable  = true;
+    enable = true;
     # Use unstable postgresql_16 — 24.11 stable doesn't include vectorchord
     # (required by Immich for vector/ML search). Minor version upgrades are
     # backward-compatible so no data migration is needed.
-    package     = pkgs.unstable.postgresql_16;
-    extensions  = _: with pkgs.unstable.postgresql16Packages; [ pgvector vectorchord ];
+    package = pkgs.unstable.postgresql_16;
+    extensions =
+      _: with pkgs.unstable.postgresql16Packages; [
+        pgvector
+        vectorchord
+      ];
 
     # Listen on localhost only; containers access via --network host.
     settings = {
@@ -187,10 +205,22 @@
     ];
 
     ensureUsers = [
-      { name = "authentik";  ensureDBOwnership = true; }
-      { name = "nextcloud";  ensureDBOwnership = true; }
-      { name = "bitmagnet";  ensureDBOwnership = true; }
-      { name = "immich";     ensureDBOwnership = true; }
+      {
+        name = "authentik";
+        ensureDBOwnership = true;
+      }
+      {
+        name = "nextcloud";
+        ensureDBOwnership = true;
+      }
+      {
+        name = "bitmagnet";
+        ensureDBOwnership = true;
+      }
+      {
+        name = "immich";
+        ensureDBOwnership = true;
+      }
     ];
   };
 
@@ -198,13 +228,13 @@
   # Runs after postgresql.service each boot; idempotent.
   systemd.services."postgresql-authentik-init" = {
     description = "Initialize Authentik PostgreSQL user password";
-    after    = [ "postgresql.service" ];
+    after = [ "postgresql.service" ];
     wantedBy = [ "postgresql.service" ];
     unitConfig.ConditionPathExists = config.age.secrets.authentik-env.path;
     serviceConfig = {
-      Type            = "oneshot";
+      Type = "oneshot";
       RemainAfterExit = true;
-      User            = "postgres";
+      User = "postgres";
       ExecStart = pkgs.writeShellScript "postgresql-authentik-init" ''
         set -euo pipefail
         AUTHENTIK_POSTGRESQL__PASSWORD=""
@@ -218,13 +248,13 @@
   # Runs after postgresql.service each boot; idempotent.
   systemd.services."postgresql-immich-init" = {
     description = "Initialize Immich PostgreSQL user password and extension";
-    after    = [ "postgresql.service" ];
+    after = [ "postgresql.service" ];
     wantedBy = [ "postgresql.service" ];
     unitConfig.ConditionPathExists = config.age.secrets.immich-db-password.path;
     serviceConfig = {
-      Type            = "oneshot";
+      Type = "oneshot";
       RemainAfterExit = true;
-      User            = "postgres";
+      User = "postgres";
       ExecStart = pkgs.writeShellScript "postgresql-immich-init" ''
         set -euo pipefail
         POSTGRES_PASSWORD=""
@@ -238,13 +268,13 @@
   # Set the bitmagnet PostgreSQL password (needed for TCP auth from the container).
   systemd.services."postgresql-bitmagnet-init" = {
     description = "Initialize Bitmagnet PostgreSQL user password";
-    after    = [ "postgresql.service" ];
+    after = [ "postgresql.service" ];
     wantedBy = [ "postgresql.service" ];
     unitConfig.ConditionPathExists = config.age.secrets.bitmagnet-db-pass.path;
     serviceConfig = {
-      Type            = "oneshot";
+      Type = "oneshot";
       RemainAfterExit = true;
-      User            = "postgres";
+      User = "postgres";
       ExecStart = pkgs.writeShellScript "postgresql-bitmagnet-init" ''
         set -euo pipefail
         POSTGRES_PASSWORD=""
@@ -266,9 +296,9 @@
   # Both consumers set save=[] (ephemeral), so data is safe to lose on restart.
   services.redis.servers.shared = {
     enable = true;
-    port   = 6379;
-    bind   = "127.0.0.1";
-    save   = [];
+    port = 6379;
+    bind = "127.0.0.1";
+    save = [ ];
   };
 
   # ---------------------------------------------------------------------------
@@ -301,39 +331,75 @@
     #   AUTHENTIK_SECRET_KEY=<50+ random chars>
     # group = "postgres" + mode 0440: both authentik (owner) and postgres (group)
     # can read — needed for postgresql-authentik-init which runs as postgres.
-    authentik-env = { file = ../../secrets/authentik-env.age; owner = "authentik"; group = "postgres"; mode = "0440"; };
+    authentik-env = {
+      file = ../../secrets/authentik-env.age;
+      owner = "authentik";
+      group = "postgres";
+      mode = "0440";
+    };
 
     # ---- Nextcloud ----
     # nextcloud-db-pass removed — using createLocally = true (Unix socket, no password)
-    nextcloud-admin-pass = { file = ../../secrets/nextcloud-admin-pass.age; owner = "nextcloud"; };
+    nextcloud-admin-pass = {
+      file = ../../secrets/nextcloud-admin-pass.age;
+      owner = "nextcloud";
+    };
     # File format:
     #   NEXTCLOUD_OIDC_CLIENT_ID=<value>
     #   NEXTCLOUD_OIDC_CLIENT_SECRET=<value>
-    nextcloud-oidc-env   = { file = ../../secrets/nextcloud-oidc-env.age;   owner = "nextcloud"; };
+    nextcloud-oidc-env = {
+      file = ../../secrets/nextcloud-oidc-env.age;
+      owner = "nextcloud";
+    };
 
     # ---- Immich ----
     # File format:
     #   POSTGRES_PASSWORD=<value>
     # group = "postgres" + mode 0440: both immich (owner) and postgres (group)
     # can read — needed for postgresql-immich-init which runs as postgres.
-    immich-db-password   = { file = ../../secrets/immich-db-password.age;   owner = "immich"; group = "postgres"; mode = "0440"; };
+    immich-db-password = {
+      file = ../../secrets/immich-db-password.age;
+      owner = "immich";
+      group = "postgres";
+      mode = "0440";
+    };
     # File format:
     #   IMMICH_OAUTH_CLIENT_ID=<value>
     #   IMMICH_OAUTH_CLIENT_SECRET=<value>
-    immich-oidc-env      = { file = ../../secrets/immich-oidc-env.age;      owner = "immich"; };
+    immich-oidc-env = {
+      file = ../../secrets/immich-oidc-env.age;
+      owner = "immich";
+    };
 
     # ---- Bitmagnet ----
     # File format: POSTGRES_PASSWORD=<value>
-    bitmagnet-db-pass = { file = ../../secrets/bitmagnet-db-pass.age; owner = "bitmagnet"; group = "postgres"; mode = "0440"; };
+    bitmagnet-db-pass = {
+      file = ../../secrets/bitmagnet-db-pass.age;
+      owner = "bitmagnet";
+      group = "postgres";
+      mode = "0440";
+    };
 
     # ---- Frigate ----
-    rclone-frigate-config = { file = ../../secrets/rclone-frigate-config.age; owner = "frigate"; };
+    rclone-frigate-config = {
+      file = ../../secrets/rclone-frigate-config.age;
+      owner = "frigate";
+    };
 
     # ---- MQTT / Mosquitto ----
     # Each file contains a single-line plaintext password.
-    mosquitto-ha-pass      = { file = ../../secrets/mosquitto-ha-pass.age;     owner = "mosquitto"; };
-    mosquitto-frigate-pass = { file = ../../secrets/mosquitto-frigate-pass.age; owner = "mosquitto"; };
-    mosquitto-z2m-pass     = { file = ../../secrets/mosquitto-z2m-pass.age;    owner = "mosquitto"; };
+    mosquitto-ha-pass = {
+      file = ../../secrets/mosquitto-ha-pass.age;
+      owner = "mosquitto";
+    };
+    mosquitto-frigate-pass = {
+      file = ../../secrets/mosquitto-frigate-pass.age;
+      owner = "mosquitto";
+    };
+    mosquitto-z2m-pass = {
+      file = ../../secrets/mosquitto-z2m-pass.age;
+      owner = "mosquitto";
+    };
 
   };
 
@@ -342,8 +408,12 @@
   # ---------------------------------------------------------------------------
   users.users.admin = {
     isNormalUser = true;
-    uid          = 1001;
-    extraGroups  = [ "wheel" "media" "private" ];
+    uid = 1001;
+    extraGroups = [
+      "wheel"
+      "media"
+      "private"
+    ];
     # Set your SSH public key here.
     openssh.authorizedKeys.keys = [ config.lanbat.adminSshKey ];
   };

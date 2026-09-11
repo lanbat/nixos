@@ -38,16 +38,16 @@
 
     config = {
       # Bind to localhost only; Caddy is the public-facing entry point.
-      ROCKET_ADDRESS   = "127.0.0.1";
-      ROCKET_PORT      = 8222;
+      ROCKET_ADDRESS = "127.0.0.1";
+      ROCKET_PORT = 8222;
 
       # WebSocket notifications (used by browser extensions for live sync).
       WEBSOCKET_ENABLED = true;
       WEBSOCKET_ADDRESS = "127.0.0.1";
-      WEBSOCKET_PORT    = 3012;
+      WEBSOCKET_PORT = 3012;
 
       # Disable open signup — invite users from the admin panel.
-      SIGNUPS_ALLOWED  = false;
+      SIGNUPS_ALLOWED = false;
       INVITATIONS_ALLOWED = true;
 
       # Public URL — must match what Caddy exposes.
@@ -80,7 +80,7 @@
   # Agenix secret
   # ---------------------------------------------------------------------------
   age.secrets.vaultwarden-env = {
-    file  = ../../../secrets/vaultwarden-env.age;
+    file = ../../../secrets/vaultwarden-env.age;
     owner = "vaultwarden";
   };
 }
