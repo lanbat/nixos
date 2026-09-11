@@ -329,7 +329,7 @@ Then run a LUKS header backup again to capture the new Clevis metadata.
 ## Full server restore order
 
 1. Boot NixOS installer, partition disk (sda1/sda2/sda3/sda4)
-2. Deploy NixOS to sda2 (`nixos-install --flake /mnt/etc/nixos/repo#server --impure`)
+2. Deploy NixOS to sda2 (`nixos-install --flake path:/mnt/etc/nixos/repo#server`)
 3. If control LUKS header was lost: restore from header backup, then format fresh
    (`cryptsetup luksFormat --type luks2 /dev/sda3`) and rebind Tang later
 4. `cryptsetup luksOpen /dev/sda3 control && mount /dev/mapper/control /mnt/control`

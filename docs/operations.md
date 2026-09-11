@@ -2,19 +2,20 @@
 
 ## Deploying changes
 
-`--impure` is required so Nix reads `local.nix` from disk (it is gitignored and
-therefore outside the pure flake source). See `local.nix.example` for setup.
+Always use a `path:` flake reference so Nix includes the gitignored `local.nix`;
+git-based references only see tracked files and would build with placeholder
+settings, which the pre-switch check refuses. See `local.nix.example` for setup.
 
 ```bash
 # Deploy to server
-nixos-rebuild switch --flake .#server --target-host admin@server --impure
+nixos-rebuild switch --flake path:.#server --target-host admin@server
 
 # Deploy to Pi
-nixos-rebuild switch --flake .#pi --target-host admin@pi5 --impure
+nixos-rebuild switch --flake path:.#pi --target-host admin@pi5
 
 # Build locally first to check for errors
-nix build .#nixosConfigurations.server.config.system.build.toplevel --impure
-nix build .#nixosConfigurations.pi.config.system.build.toplevel --impure
+nix build path:.#nixosConfigurations.server.config.system.build.toplevel
+nix build path:.#nixosConfigurations.pi.config.system.build.toplevel
 ```
 
 ## Unattended upgrades
@@ -95,7 +96,7 @@ podman pull ghcr.io/goauthentik/server:2024.12.2
 podman pull ghcr.io/immich-app/immich-server:release
 
 # Rebuild to apply new images
-nixos-rebuild switch --flake .#server
+nixos-rebuild switch --flake path:.#server
 
 # Or pull and restart manually:
 podman pull IMAGE:TAG
@@ -286,7 +287,7 @@ Authentik is pinned to a specific version in `hosts/server/services/authentik.ni
 1. Check the [Authentik release notes](https://docs.goauthentik.io/docs/releases) —
    Authentik requires sequential upgrades (do not skip major versions).
 2. Update `authentikVersion` in `authentik.nix`.
-3. Rebuild: `nixos-rebuild switch --flake .#server --target-host admin@server --impure`
+3. Rebuild: `nixos-rebuild switch --flake path:.#server --target-host admin@server`
 
 ### Adding a user
 

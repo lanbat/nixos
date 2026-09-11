@@ -137,17 +137,20 @@ Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) fo
 
 ```bash
 # Server (first time — from installer)
-nixos-install --flake .#server --impure
+nixos-install --flake path:.#server
 
 # Server (updates)
-nixos-rebuild switch --flake .#server --target-host admin@server --impure
+nixos-rebuild switch --flake path:.#server --target-host admin@server
 
 # Pi
-nixos-rebuild switch --flake .#pi --target-host admin@pi5 --impure
+nixos-rebuild switch --flake path:.#pi --target-host admin@pi5
 ```
 
-`--impure` is required so Nix reads your gitignored `local.nix` (copy from
-`local.nix.example` and fill in your values before deploying).
+Always deploy with a `path:` flake reference. `local.nix` (copied from
+`local.nix.example`) is gitignored, and git-based references only include tracked
+files, so they would build with placeholder settings. A pre-switch check refuses to
+switch while any setting is still a placeholder; list what is missing with
+`nix eval path:.#nixosConfigurations.server.config.lanbat.placeholderSettings`.
 
 See [docs/deployment-checklist.md](docs/deployment-checklist.md) for the full step-by-step guide.
 

@@ -116,7 +116,7 @@ Add this as a weekly systemd timer.
    # etc.
    ```
 4. The Pi drives are intact and still encrypted to the same Tang key (which you restored).
-5. Rebuild: `nixos-rebuild switch --flake .#server`
+5. Rebuild: `nixos-rebuild switch --flake path:.#server`
 
 ### Tang key loss
 

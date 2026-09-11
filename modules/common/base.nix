@@ -27,7 +27,7 @@
       ];
       # Deduplicate store paths on builds.
       auto-optimise-store = true;
-      # Trusted users who can submit substitutions or use --impure.
+      # Users the Nix daemon trusts, e.g. to accept store paths copied by nixos-rebuild --target-host.
       trusted-users = [
         "root"
         "@wheel"
