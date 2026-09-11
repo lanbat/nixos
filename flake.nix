@@ -85,8 +85,8 @@
         };
 
       # Per-deployment local settings (gitignored, see local.nix.example).
-      # Only visible when deploying with --impure; absent in CI (pure eval).
-      # In CI the placeholder defaults from modules/common/settings.nix are used.
+      # Only present when evaluating through a path: flake ref (e.g. path:.#server);
+      # git-based refs and CI see the placeholder defaults from modules/common/settings.nix.
       localModules = nixpkgs.lib.optional (builtins.pathExists ./local.nix) ./local.nix;
     in
     {

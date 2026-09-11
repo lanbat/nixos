@@ -5,13 +5,14 @@
 # Design
 # ------
 # NixOS's built-in `system.autoUpgrade` runs `nixos-rebuild switch` on a
-# schedule.  We configure it to use the local clone of this repo at
-# /etc/nixos rather than a remote flake URL, for two reasons:
+# schedule.  We point it at the local clone of this repo with a path: flake
+# reference ("path:/etc/nixos#<host>") rather than a remote flake URL, for
+# two reasons:
 #
-#   1. `--impure` is required to read local.nix from disk.  A remote flake
-#      (github:user/repo) is fetched into the Nix store, so ./local.nix
-#      would be looked up inside the store (where it doesn't exist).
-#      A local path (/etc/nixos) allows --impure to find local.nix correctly.
+#   1. local.nix is gitignored.  Remote flakes and git-based references
+#      (including a plain /etc/nixos inside a git clone) only include tracked
+#      files, so they would build with placeholder settings.  A path:
+#      reference copies the directory as it is, including local.nix.
 #
 #   2. We can control exactly which commit is built by pulling git first.
 #
@@ -32,8 +33,9 @@
 #
 # Setup
 # -----
-# 1. Clone the repo on each machine:
+# 1. Clone the repo on each machine and add its local.nix:
 #      git clone <your-repo-url> /etc/nixos
+#      cp local.nix /etc/nixos/local.nix
 # 2. Configure a git remote so pull works (HTTPS token or SSH deploy key).
 #    See docs/deployment-checklist.md § "Clone config repo on each machine".
 # 3. Each host configures system.autoUpgrade in its own default.nix.
@@ -76,9 +78,9 @@
           exit 0
         fi
 
-        # Fast-forward only — never auto-merge diverged histories.
-        if ! git merge --ff-only origin/main; then
-          echo "WARNING: git merge failed (not fast-forward?). Upgrading from current local checkout."
+        # Fast-forward the checked-out branch to its upstream; never auto-merge diverged histories.
+        if ! git merge --ff-only '@{u}'; then
+          echo "WARNING: git merge failed (not fast-forward, or no upstream branch). Upgrading from current local checkout."
           exit 0
         fi
 

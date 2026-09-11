@@ -70,8 +70,7 @@
   # reboot would leave the server in host-only mode with no services running.
   system.autoUpgrade = {
     enable = true;
-    flake = "/etc/nixos#server";
-    flags = [ "--impure" ];
+    flake = "path:/etc/nixos#server";
     allowReboot = false;
     dates = "04:00";
     randomizedDelaySec = "30min";

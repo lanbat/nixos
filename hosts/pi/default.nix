@@ -58,8 +58,7 @@
   # The reboot window keeps reboots in the early hours to minimise disruption.
   system.autoUpgrade = {
     enable = true;
-    flake = "/etc/nixos#pi";
-    flags = [ "--impure" ];
+    flake = "path:/etc/nixos#pi";
     allowReboot = true;
     rebootWindow = {
       lower = "04:00";
