@@ -5,8 +5,26 @@
 #
 # All deployment-specific values live here and are set via local.nix
 # (gitignored). See local.nix.example for the template.
-{ lib, ... }:
+{ config, lib, ... }:
 
+let
+  cfg = config.lanbat;
+
+  # A deploy that silently dropped local.nix must not replace a working system.
+  placeholderSettings =
+    lib.mapAttrsToList (name: _: "lanbat.${name}") (
+      lib.filterAttrs (
+        name: value: name != "placeholderSettings" && lib.isString value && lib.hasInfix "CHANGE_ME" value
+      ) cfg
+    )
+    ++ lib.optional (cfg.domain == "home.example.com") "lanbat.domain"
+    ++ lib.optional (cfg.rootDomain == "example.com") "lanbat.rootDomain"
+    ++ lib.mapAttrsToList (mount: _: ''fileSystems."${mount}".device'') (
+      lib.filterAttrs (
+        _: fs: lib.isString fs.device && lib.hasInfix "CHANGE_ME" fs.device
+      ) config.fileSystems
+    );
+in
 {
   options.lanbat = {
 
@@ -228,5 +246,31 @@
       '';
     };
 
+    placeholderSettings = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      internal = true;
+      readOnly = true;
+      description = ''
+        Settings that still hold template values. While this list is non-empty,
+        switching to the configuration is refused. Check before deploying with:
+        nix eval path:.#nixosConfigurations.<host>.config.lanbat.placeholderSettings
+      '';
+    };
+
+  };
+
+  config = {
+    lanbat.placeholderSettings = placeholderSettings;
+
+    system.preSwitchChecks = lib.mkIf (placeholderSettings != [ ]) {
+      lanbat-placeholders = ''
+        echo "Refusing to switch: these settings still have placeholder values:"
+        ${lib.concatMapStringsSep "\n" (s: "echo ${lib.escapeShellArg "  - ${s}"}") placeholderSettings}
+        echo "Either local.nix was not loaded (deploy with a path: flake ref, e.g. --flake path:.#<host>),"
+        echo "or local.nix still needs these values filled in."
+        echo "Emergency override: NIXOS_NO_CHECK=1"
+        exit 1
+      '';
+    };
   };
 }
