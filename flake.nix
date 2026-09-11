@@ -109,8 +109,8 @@
       };
     };
 
-    # Convenience: `nix fmt` formats all .nix files.
-    formatter.x86_64-linux  = nixpkgs.legacyPackages.x86_64-linux.nixfmt-rfc-style;
-    formatter.aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.nixfmt-rfc-style;
+    # `nix fmt` formats every tracked .nix file; CI runs `nix fmt -- --ci`.
+    formatter.x86_64-linux  = nixpkgs-unstable.legacyPackages.x86_64-linux.nixfmt-tree;
+    formatter.aarch64-linux = nixpkgs-unstable.legacyPackages.aarch64-linux.nixfmt-tree;
   };
 }
