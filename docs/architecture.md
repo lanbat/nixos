@@ -102,7 +102,7 @@
 | Homepage | none | LAN landing page |
 | Home Assistant | Caddy forward-auth (Authentik) + header auth + local break-glass | Companion apps use /auth/token; browser SSO via hass-auth-header |
 | Nextcloud | OIDC (user_oidc app) + local admin | Native OIDC support |
-| Immich | OIDC (native) + local admin | Native OIDC support |
+| Immich | Caddy forward-auth (Authentik) + native OIDC | Bootstrap admin links to Authentik email; mobile apps use /api/* |
 | Jellyfin | OIDC (plugin) or local | Native OIDC plugin available |
 | Frigate | Caddy forward-auth (Authentik) | No native OIDC |
 | qBittorrent | Caddy forward-auth + local app auth | No OIDC |

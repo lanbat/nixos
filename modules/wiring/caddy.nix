@@ -54,9 +54,8 @@ let
   errorPage = svc: if svc.nfs.drives != [ ] then "storage.html" else "offline.html";
 
   handleErrors = svc: ''
-    handle_errors {
-      @upstream `{http.error.status_code}` >= 502 && `{http.error.status_code}` <= 504
-      rewrite @upstream /${errorPage svc}
+    handle_errors 502 503 504 {
+      rewrite * /${errorPage svc}
       file_server {
         root /var/lib/caddy-error-pages
       }

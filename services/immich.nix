@@ -21,8 +21,16 @@
 #   - The immich-server container binds /srv/storage/a/photos.
 #     We declare that dependency so Immich stops if the mount disappears.
 #
-# Auth: Immich has native OIDC support (v1.91+). Configure Authentik as
-# the OIDC provider pointing to https://photos.<domain>/auth/login.
+# Auth with Authentik
+# -------------------
+# Browser access is gated by Caddy forward-auth (Authentik session), like Home
+# Assistant.  Immich v3 reads OAuth settings from IMMICH_CONFIG_FILE (not env
+# vars); a preStart hook writes that file from immich-oidc-env.age.
+# Mobile apps keep using /api/* with Immich credentials (apiClients bypass).
+#
+# Immich requires a local admin record before OAuth auto-launch works; the
+# immich-bootstrap oneshot creates that admin (email must match Authentik) and
+# password login is disabled so the browser only uses OIDC.
 {
   config,
   pkgs,
@@ -33,21 +41,40 @@
 let
   immichVersion = "release"; # CHANGE_ME: pin to a specific tag, e.g. "v1.118.2"
   domain = config.lanbat.domain;
+  bootstrap = pkgs.callPackage ../pkgs/immich-bootstrap { };
   # immich-db-password.age exports POSTGRES_PASSWORD for postgres init; Immich v3
   # reads DB_PASSWORD at runtime.
   immichServerEnv = "/run/immich/server.env";
+  immichConfigPath = "/run/immich/config.json";
+  immichConfigMount = "/config/immich-config.json";
 in
 {
+  options.lanbat.immich = {
+    adminEmail = lib.mkOption {
+      type = lib.types.str;
+      description = ''
+        Email for the bootstrap Immich admin.  Must match the Authentik user's
+        email so the first OAuth login links to this account.
+      '';
+    };
+  };
+
+  config = {
+  lanbat.immich.adminEmail = lib.mkDefault
+    "${config.lanbat.homeAssistant.ssoUsers[0]}@${config.lanbat.rootDomain}";
+
   lanbat.services.immich = {
     subdomain = "photos";
     port = 2283;
     extraPorts = [ 3003 ]; # machine learning
-    apiClients = true; # mobile app
+    auth = "forward-auth";
+    apiClients = true; # mobile app — /api/* bypasses Authentik at Caddy
     tier = "workload";
     state = [ "immich" ];
     units = [
       "podman-immich-server"
       "podman-immich-machine-learning"
+      "immich-bootstrap"
     ];
     # Podman requires volume host paths to exist before the container starts.
     workloadDirs =
@@ -120,18 +147,7 @@ in
       THUMBS_PATH = "/usr/src/app/thumbs";
       ENCODED_VIDEO_PATH = "/usr/src/app/encoded-video";
       PROFILE_PATH = "/usr/src/app/profile";
-
-      # OIDC / OAuth2 — configure Authentik as the provider.
-      # These values are populated from the agenix secret below once the
-      # Authentik application is created (see docs/authentik-setup.md).
-      # immich-oidc-env must export IMMICH_OAUTH_CLIENT_ID and
-      # IMMICH_OAUTH_CLIENT_SECRET.  DB_PASSWORD is written at container start.
-      IMMICH_OAUTH_ENABLED = "true";
-      IMMICH_OAUTH_ISSUER_URL = "https://auth.${domain}/application/o/immich/";
-      IMMICH_OAUTH_SCOPE = "openid profile email";
-      IMMICH_OAUTH_SIGN_IN_BUTTON_TEXT = "Login with Authentik";
-      IMMICH_OAUTH_AUTO_REGISTER = "true";
-      # Immich binds on port 2283 by default.
+      IMMICH_CONFIG_FILE = immichConfigMount;
     };
     environmentFiles = [
       immichServerEnv
@@ -142,6 +158,7 @@ in
       "/var/lib/immich/thumbs:/usr/src/app/thumbs"
       "/var/lib/immich/encoded-video:/usr/src/app/encoded-video"
       "/var/lib/immich/profile:/usr/src/app/profile"
+      "${immichConfigPath}:${immichConfigMount}:ro"
       "/etc/localtime:/etc/localtime:ro"
     ];
     autoStart = true;
@@ -168,6 +185,7 @@ in
   };
 
   systemd.services.podman-immich-server = {
+    path = [ pkgs.jq ];
     preStart = ''
       set -euo pipefail
       install -d -m 0750 -o immich -g immich /run/immich
@@ -175,6 +193,61 @@ in
       . ${config.age.secrets.immich-db-password.path}
       printf 'DB_PASSWORD=%s\n' "$POSTGRES_PASSWORD" > ${immichServerEnv}
       chown immich:immich ${immichServerEnv}
+
+      set -a
+      . ${config.age.secrets.immich-oidc-env.path}
+      set +a
+      ${pkgs.jq}/bin/jq -n \
+        --arg issuer "https://auth.${domain}/application/o/immich/" \
+        --arg clientId "$IMMICH_OAUTH_CLIENT_ID" \
+        --arg clientSecret "$IMMICH_OAUTH_CLIENT_SECRET" \
+        --arg externalDomain "https://photos.${domain}" \
+        '{
+          oauth: {
+            enabled: true,
+            issuerUrl: $issuer,
+            clientId: $clientId,
+            clientSecret: $clientSecret,
+            scope: "openid email profile",
+            buttonText: "Login with Authentik",
+            autoRegister: true,
+            autoLaunch: true,
+            tokenEndpointAuthMethod: "client_secret_post"
+          },
+          passwordLogin: {
+            enabled: false
+          },
+          server: {
+            externalDomain: $externalDomain
+          }
+        }' > ${immichConfigPath}
+      chown immich:immich ${immichConfigPath}
+    '';
+  };
+
+  systemd.services.immich-bootstrap = {
+    description = "Create the first Immich admin for Authentik OAuth login";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "podman-immich-server.service" ];
+    wants = [ "podman-immich-server.service" ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "root";
+    };
+
+    path = [ bootstrap ];
+
+    script = ''
+      set -a
+      . ${config.age.secrets.hass-bootstrap-env.path}
+      set +a
+      export IMMICH_URL="http://127.0.0.1:2283"
+      export ADMIN_EMAIL="${config.lanbat.immich.adminEmail}"
+      export ADMIN_NAME="$OWNER_USERNAME"
+      export ADMIN_PASSWORD="$OWNER_PASSWORD"
+      exec immich-bootstrap
     '';
   };
 
@@ -183,4 +256,5 @@ in
     "d /srv/storage/a/photos 0750 immich immich -"
     "d /run/immich 0750 immich immich -"
   ];
+  };
 }

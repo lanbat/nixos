@@ -6,7 +6,7 @@
 # State is "present" (idempotent create/update) throughout.
 #
 # Proxy providers (forward auth via Caddy):
-#   Home Assistant, Frigate, qBittorrent, Bitmagnet, Syncthing, Snapcast, Zigbee2MQTT
+#   Home Assistant, Immich, Frigate, qBittorrent, Bitmagnet, Syncthing, Snapcast, Zigbee2MQTT
 #
 # OIDC providers (native SSO):
 #   Grafana, Nextcloud, Immich, Home Assistant, Jellyfin
@@ -81,6 +81,32 @@ let
           name: "Home Assistant"
           slug: home-assistant-proxy
           provider: !KeyOf provider-home-assistant-proxy
+          policy_engine_mode: any
+
+      # ── Immich ──────────────────────────────────────────────────────────────
+      # Browser UI is gated by Caddy forward-auth.  Immich login uses native OIDC
+      # (Authentik) via IMMICH_CONFIG_FILE after the session gate.
+      - model: authentik_providers_proxy.proxyprovider
+        id: provider-immich-proxy
+        state: present
+        identifiers:
+          name: "Immich (proxy)"
+        attrs:
+          name: "Immich (proxy)"
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: "https://photos.${domain}"
+          internal_host: "http://127.0.0.1:2283"
+
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: immich-proxy
+        attrs:
+          name: "Immich"
+          slug: immich-proxy
+          provider: !KeyOf provider-immich-proxy
           policy_engine_mode: any
 
       # ── Frigate ─────────────────────────────────────────────────────────────
@@ -258,6 +284,7 @@ let
             authentik_host: "https://auth.${domain}"
           providers:
             - !KeyOf provider-home-assistant-proxy
+            - !KeyOf provider-immich-proxy
             - !KeyOf provider-frigate
             - !KeyOf provider-qbittorrent
             - !KeyOf provider-bitmagnet
