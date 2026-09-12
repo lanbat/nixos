@@ -18,8 +18,8 @@
 #   - In a game, Select + Start quits back to ES-DE, and holding Start opens
 #     the RetroArch menu.
 #
-# ROMs use ES-DE's layout, one directory per system (snes, psx, mame, ...), in
-# the qBittorrent download share: /mnt/storage-a/downloads/roms/<system>.
+# ROMs use ES-DE's layout, one directory per system (snes, psx, mame, ...), with
+# the other media on drive B: /mnt/storage-b/media/roms/<system>.
 # Emulator BIOS files go in roms/bios.
 #
 # Controllers: wired Xbox pads use the kernel's xpad driver, Bluetooth Xbox
@@ -33,7 +33,7 @@
 }:
 
 let
-  romDirectory = "/mnt/storage-a/downloads/roms";
+  romDirectory = "/mnt/storage-b/media/roms";
   home = config.users.users.media.home;
 
   # Emulators that run well on a Raspberry Pi 5.

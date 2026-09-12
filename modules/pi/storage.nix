@@ -9,14 +9,15 @@
 #  Drive A (/dev/disk/by-id/<piStorageDriveA>):
 #    LUKS2 → XFS (pquota) → /mnt/storage-a
 #    Directories:
-#      /mnt/storage-a/media/         — Jellyfin (movies, TV, music)
-#      /mnt/storage-a/downloads/     — qBittorrent (per-user subdirs)
+#      /mnt/storage-a/media/         — movies, TV, music videos (qBittorrent, Jellyfin)
 #      /mnt/storage-a/photos/        — Immich originals
 #      /mnt/storage-a/surveillance/  — Frigate recordings
 #
 #  Drive B (/dev/disk/by-id/<piStorageDriveB>):
 #    LUKS2 → XFS (pquota) → /mnt/storage-b
 #    Directories:
+#      /mnt/storage-b/media/         — music, documentaries, ROMs, books and the rest
+#                                      (qBittorrent, Jellyfin, EmulationStation)
 #      /mnt/storage-b/nextcloud/     — Nextcloud external storage
 #      /mnt/storage-b/users/         — per-user SMB home dirs
 #      /mnt/storage-b/shared/        — shared SMB space
@@ -74,12 +75,11 @@
       ExecStart = pkgs.writeShellScript "init-storage-a" ''
         set -e
         base=/mnt/storage-a
-        install -d -m 0755 -o root   -g root    "$base/media"
-        install -d -m 0755 -o root   -g root    "$base/media/movies"
-        install -d -m 0755 -o root   -g root    "$base/media/tv"
-        install -d -m 0755 -o root   -g root    "$base/media/music"
-        # qBittorrent on the server writes here as qbt (UID 994), group media (GID 988).
-        install -d -m 2775 -o 994    -g 988     "$base/downloads"
+        # Media, split across both drives by folder. qBittorrent on the server
+        # saves here as qbt (UID 994), group media (GID 988); Jellyfin reads.
+        for dir in media media/movies media/tv media/music-videos; do
+          install -d -m 2775 -o 994 -g 988 "$base/$dir"
+        done
         install -d -m 0755 -o nobody -g nogroup "$base/photos"
         install -d -m 0755 -o nobody -g nogroup "$base/surveillance"
         install -d -m 0755 -o nobody -g nogroup "$base/surveillance/clips"
@@ -103,6 +103,11 @@
       ExecStart = pkgs.writeShellScript "init-storage-b" ''
         set -e
         base=/mnt/storage-b
+        # The rest of the media, as on storage-a.
+        for dir in media media/music media/documentaries media/adult media/roms \
+          media/audiobooks media/books media/gym media/games media/misc; do
+          install -d -m 2775 -o 994 -g 988 "$base/$dir"
+        done
         install -d -m 0755 -o root   -g root    "$base/nextcloud"
         install -d -m 0755 -o nobody -g nogroup "$base/users"
         install -d -m 0775 -o nobody -g nogroup "$base/shared"
