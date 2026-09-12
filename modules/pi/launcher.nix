@@ -27,102 +27,104 @@ let
   launcherPkg = pkgs.callPackage ../../pkgs/launcher { };
 in
 {
-  # ---------------------------------------------------------------------------
-  # X server
-  # ---------------------------------------------------------------------------
-  services.xserver = {
-    enable = true;
-
-    # No desktop environment — openbox only.
-    desktopManager.xterm.enable = false;
-    windowManager.openbox.enable = true;
-
-    displayManager.lightdm = {
+  config = lib.mkIf config.lanbat.piTvFrontend {
+    # ---------------------------------------------------------------------------
+    # X server
+    # ---------------------------------------------------------------------------
+    services.xserver = {
       enable = true;
-      extraConfig = ''
-        [LightDM]
-        minimum-vt=1
-      '';
+
+      # No desktop environment — openbox only.
+      desktopManager.xterm.enable = false;
+      windowManager.openbox.enable = true;
+
+      displayManager.lightdm = {
+        enable = true;
+        extraConfig = ''
+          [LightDM]
+          minimum-vt=1
+        '';
+      };
     };
-  };
 
-  # Autologin the media user into openbox.
-  # These options moved to services.displayManager in NixOS 24.11.
-  services.displayManager = {
-    autoLogin.enable = true;
-    autoLogin.user = "media";
-    defaultSession = "none+openbox";
-  };
+    # Autologin the media user into openbox.
+    # These options moved to services.displayManager in NixOS 24.11.
+    services.displayManager = {
+      autoLogin.enable = true;
+      autoLogin.user = "media";
+      defaultSession = "none+openbox";
+    };
 
-  # ---------------------------------------------------------------------------
-  # Openbox autostart — runs the launcher once X is up
-  # ---------------------------------------------------------------------------
-  # LightDM writes the session, which loads .config/openbox/autostart.
-  # We write it system-wide via environment.etc.
-  environment.etc."xdg/openbox/autostart".text = ''
-    # Disable screen blanking and power management on the TV.
-    xset s off
-    xset -dpms
-    xset s noblank
+    # ---------------------------------------------------------------------------
+    # Openbox autostart — runs the launcher once X is up
+    # ---------------------------------------------------------------------------
+    # LightDM writes the session, which loads .config/openbox/autostart.
+    # We write it system-wide via environment.etc.
+    environment.etc."xdg/openbox/autostart".text = ''
+      # Disable screen blanking and power management on the TV.
+      xset s off
+      xset -dpms
+      xset s noblank
 
-    # Launch the full-screen menu.
-    ${launcherPkg}/bin/homelab-launcher &
-  '';
+      # Launch the full-screen menu.
+      ${launcherPkg}/bin/homelab-launcher &
+    '';
 
-  # ---------------------------------------------------------------------------
-  # Packages available to the media user
-  # ---------------------------------------------------------------------------
-  environment.systemPackages = with pkgs; [
-    kodi
-    retroarch
-    xset
-    xrandr
-    openbox
-    launcherPkg
+    # ---------------------------------------------------------------------------
+    # Packages available to the media user
+    # ---------------------------------------------------------------------------
+    environment.systemPackages = with pkgs; [
+      kodi
+      retroarch
+      xset
+      xrandr
+      openbox
+      launcherPkg
 
-    # Controller support (joydev module loaded via boot.kernelModules)
-    jstest-gtk # joystick testing / calibration utility
-  ];
-
-  # Load the joystick input module against the running kernel.
-  boot.kernelModules = [ "joydev" ];
-
-  # Kodi's home directory.
-  systemd.tmpfiles.rules = [
-    "d /var/lib/kodi      0755 media media -"
-    "d /var/lib/retroarch 0755 media media -"
-  ];
-
-  # Allow the media user to call reboot/shutdown via polkit.
-  security.polkit.extraConfig = ''
-    polkit.addRule(function(action, subject) {
-      if ((action.id == "org.freedesktop.login1.power-off" ||
-           action.id == "org.freedesktop.login1.reboot") &&
-           subject.user == "media") {
-        return polkit.Result.YES;
-      }
-    });
-  '';
-
-  # The TV user: runs the launcher, Kodi and RetroArch. No sudo.
-  users.users.media = {
-    uid = 1000;
-    group = "media";
-    isNormalUser = true;
-    extraGroups = [
-      "audio"
-      "video"
-      "input"
+      # Controller support (joydev module loaded via boot.kernelModules)
+      jstest-gtk # joystick testing / calibration utility
     ];
-  };
 
-  # Audio — PipeWire with PulseAudio compat (PulseAudio itself conflicts with
-  # PipeWire). Kodi, RetroArch, and snapclient all use the PulseAudio
-  # compatibility socket.
-  services.pulseaudio.enable = false;
-  services.pipewire = {
-    enable = true;
-    alsa.enable = true;
-    pulse.enable = true;
+    # Load the joystick input module against the running kernel.
+    boot.kernelModules = [ "joydev" ];
+
+    # Kodi's home directory.
+    systemd.tmpfiles.rules = [
+      "d /var/lib/kodi      0755 media media -"
+      "d /var/lib/retroarch 0755 media media -"
+    ];
+
+    # Allow the media user to call reboot/shutdown via polkit.
+    security.polkit.extraConfig = ''
+      polkit.addRule(function(action, subject) {
+        if ((action.id == "org.freedesktop.login1.power-off" ||
+             action.id == "org.freedesktop.login1.reboot") &&
+             subject.user == "media") {
+          return polkit.Result.YES;
+        }
+      });
+    '';
+
+    # The TV user: runs the launcher, Kodi and RetroArch. No sudo.
+    users.users.media = {
+      uid = 1000;
+      group = "media";
+      isNormalUser = true;
+      extraGroups = [
+        "audio"
+        "video"
+        "input"
+      ];
+    };
+
+    # Audio — PipeWire with PulseAudio compat (PulseAudio itself conflicts with
+    # PipeWire). Kodi, RetroArch, and snapclient all use the PulseAudio
+    # compatibility socket.
+    services.pulseaudio.enable = false;
+    services.pipewire = {
+      enable = true;
+      alsa.enable = true;
+      pulse.enable = true;
+    };
   };
 }

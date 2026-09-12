@@ -156,6 +156,17 @@ in
       description = "/dev/disk/by-id/ filename (without the prefix) of the Pi's storage drive B.";
     };
 
+    # ── Raspberry Pi roles ────────────────────────────────────────────────────
+    piTvFrontend = mkOption {
+      type = types.bool;
+      example = false;
+      description = ''
+        Whether the Pi runs the TV frontend (X session, Kodi and the launcher)
+        on its HDMI output. Without it the Pi is a headless storage host, and
+        installing it doesn't compile the frontend's graphics stack on the Pi.
+      '';
+    };
+
     # ── Access ────────────────────────────────────────────────────────────────
     adminSshKey = mkOption {
       type = types.strMatching "(ssh-|ecdsa-|sk-).+";

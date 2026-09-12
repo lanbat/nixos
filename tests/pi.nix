@@ -41,6 +41,10 @@ pkgs.testers.runNixOSTest {
       lanbat.piInterface = lib.mkForce "eth1";
       lanbat.piIp = lib.mkForce "192.168.1.2";
 
+      # The frontend's graphics stack would compile for hours on the Pi, and
+      # the test has no HDMI output to check it on.
+      lanbat.piTvFrontend = lib.mkForce false;
+
       lanbat.testSecrets.telegraf-token = "TELEGRAF_INFLUXDB_TOKEN=test-influx-token\n";
     };
 

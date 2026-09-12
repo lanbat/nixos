@@ -12,8 +12,10 @@
 {
   imports = with nixos-raspberrypi.nixosModules; [
     raspberry-pi-5.base
-    # The Raspberry Pi kernel runs with 16k memory pages.
-    raspberry-pi-5.page-size-16k
+    # Not raspberry-pi-5.page-size-16k: that optional memory optimization
+    # rebuilds jemalloc for the kernel's 16k pages, and with it rustc and much
+    # of the system, which then compiles on the Pi instead of coming from
+    # cache.nixos.org. nixpkgs' jemalloc already works with 16k pages on aarch64.
     # HDMI output for the TV frontend.
     raspberry-pi-5.display-vc4
   ];

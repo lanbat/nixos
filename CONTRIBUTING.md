@@ -162,6 +162,7 @@ when `local.nix` does, and only a `path:` flake reference includes it
 | `config.lanbat.serverDisk` | Server system disk, partitioned by `hosts/server/disk.nix` |
 | `config.lanbat.piStorageDriveA` | Pi NVMe drive A by-id filename |
 | `config.lanbat.piStorageDriveB` | Pi NVMe drive B by-id filename |
+| `config.lanbat.piTvFrontend` | Whether the Pi runs the TV frontend (Kodi and the launcher) |
 | `config.lanbat.adminSshKey` | Admin SSH public key (both hosts) |
 | `config.lanbat.zigbeeVendorId` | Zigbee dongle USB vendor ID |
 | `config.lanbat.zigbeeProductId` | Zigbee dongle USB product ID |

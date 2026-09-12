@@ -53,6 +53,12 @@
     piStorageDriveA = "CHANGE_ME"; # e.g. "nvme-Samsung_SSD_970_EVO_1TB_ABC123"
     piStorageDriveB = "CHANGE_ME";
 
+    # ── Raspberry Pi ──────────────────────────────────────────────────────────
+    # The TV frontend (Kodi and the launcher) on the Pi's HDMI output. Its
+    # graphics stack compiles on the Pi for hours, so consider false for the
+    # first install and turning it on in a later deploy.
+    piTvFrontend = true;
+
     # ── Access ────────────────────────────────────────────────────────────────
     # Your SSH public key (cat ~/.ssh/id_ed25519.pub). deploy-rs logs in with it.
     adminSshKey = "CHANGE_ME";

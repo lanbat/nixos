@@ -28,6 +28,7 @@
     serverDisk = "/dev/disk/by-id/example-system-disk";
     piStorageDriveA = "example-storage-a";
     piStorageDriveB = "example-storage-b";
+    piTvFrontend = true;
     adminSshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExampleExample example";
   };
 }

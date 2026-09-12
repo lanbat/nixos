@@ -6,7 +6,8 @@
 #   1. Encrypted storage appliance: two LUKS drives unlocked automatically
 #      via Clevis/Tang on the server.
 #   2. NFS export of both drives to the server.
-#   3. TV frontend: Kodi and RetroArch via a simple launcher.
+#   3. TV frontend: Kodi and RetroArch via a simple launcher, when
+#      lanbat.piTvFrontend is set.
 #
 # Heavy compute, databases and containers all live on the server.
 #
