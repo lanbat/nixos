@@ -23,7 +23,12 @@
 #
 # Always-on: yes.  No NFS dependency.  Z2M pairing data lives in
 # /var/lib/zigbee2mqtt/ on host root.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   services.zigbee2mqtt = {
@@ -32,7 +37,7 @@
     settings = {
       # Zigbee dongle — created by udev rule below.
       serial = {
-        port    = "/dev/zigbee";
+        port = "/dev/zigbee";
         # Sonoff ZBDongle-P (CC2652P) — Z2M 2.x renamed "znp" → "zstack".
         adapter = "zstack";
       };
@@ -45,15 +50,15 @@
 
       mqtt = {
         server = "mqtt://localhost:1883";
-        user   = "zigbee2mqtt";
+        user = "zigbee2mqtt";
         # Password injected via secret.yaml written in ExecStartPre.
         password = "!secret mqtt_password";
       };
 
       frontend = {
         enabled = true;
-        port    = 8099;
-        host    = "127.0.0.1";
+        port = 8099;
+        host = "127.0.0.1";
       };
     };
   };
@@ -62,19 +67,24 @@
   # /nix/store.  Runs as root ('+' prefix) so it can write before the
   # service user's StateDirectory permissions are applied.
   systemd.services.zigbee2mqtt.serviceConfig.ExecStartPre =
-    let script = pkgs.writeShellScript "z2m-write-secret" ''
-      set -euo pipefail
-      password=$(cat ${config.age.secrets.mosquitto-z2m-pass.path})
-      printf 'mqtt_password: %s\n' "$password" \
-        > /var/lib/zigbee2mqtt/secret.yaml
-      chmod 0600 /var/lib/zigbee2mqtt/secret.yaml
-      chown zigbee2mqtt /var/lib/zigbee2mqtt/secret.yaml
-    '';
-    in [ "+${script}" ];
+    let
+      script = pkgs.writeShellScript "z2m-write-secret" ''
+        set -euo pipefail
+        password=$(cat ${config.age.secrets.mosquitto-z2m-pass.path})
+        printf 'mqtt_password: %s\n' "$password" \
+          > /var/lib/zigbee2mqtt/secret.yaml
+        chmod 0600 /var/lib/zigbee2mqtt/secret.yaml
+        chown zigbee2mqtt /var/lib/zigbee2mqtt/secret.yaml
+      '';
+    in
+    [ "+${script}" ];
 
   # Give Z2M access to the Zigbee USB dongle.
-  users.groups.ha = {};
-  users.users.zigbee2mqtt.extraGroups = [ "dialout" "ha" ];
+  users.groups.ha = { };
+  users.users.zigbee2mqtt.extraGroups = [
+    "dialout"
+    "ha"
+  ];
 
   # udev rule — creates /dev/zigbee symlink, group-owned by "ha".
   services.udev.extraRules = ''

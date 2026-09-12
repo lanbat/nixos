@@ -7,24 +7,26 @@
 #   environment.systemPackages = [
 #     (pkgs.callPackage ../../pkgs/scripts { inherit (config.lanbat) domain; })
 #   ];
-{ pkgs ? import <nixpkgs> {}
-, domain ? "home.example.com"
+{
+  pkgs ? import <nixpkgs> { },
+  domain ? "home.example.com",
 }:
 
 let
-  mkScript = name: src: pkgs.writeShellScriptBin name (
-    # Substitute @DOMAIN@ placeholder at build time.
-    builtins.replaceStrings [ "@DOMAIN@" ] [ domain ]
-      (builtins.readFile src)
-  );
+  mkScript =
+    name: src:
+    pkgs.writeShellScriptBin name (
+      # Substitute @DOMAIN@ placeholder at build time.
+      builtins.replaceStrings [ "@DOMAIN@" ] [ domain ] (builtins.readFile src)
+    );
 in
 pkgs.symlinkJoin {
-  name    = "homelab-scripts";
-  paths   = [
-    (mkScript "quota-setup"     ./quota-setup.sh)
-    (mkScript "quota-report"    ./quota-report.sh)
-    (mkScript "backup-server"   ./backup-server.sh)
-    (mkScript "trust-ca-linux"  ./trust-ca-linux.sh)
-    (mkScript "trust-ca-macos"  ./trust-ca-macos.sh)
+  name = "homelab-scripts";
+  paths = [
+    (mkScript "quota-setup" ./quota-setup.sh)
+    (mkScript "quota-report" ./quota-report.sh)
+    (mkScript "backup-server" ./backup-server.sh)
+    (mkScript "trust-ca-linux" ./trust-ca-linux.sh)
+    (mkScript "trust-ca-macos" ./trust-ca-macos.sh)
   ];
 }

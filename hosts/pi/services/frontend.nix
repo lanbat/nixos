@@ -17,7 +17,12 @@
 #
 # Kodi should access storage-a locally — no NFS hop needed since it's
 # sitting right next to the drives.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # ---------------------------------------------------------------------------
@@ -35,9 +40,9 @@
   # PipeWire with PulseAudio compatibility so Kodi, RetroArch, and snapclient
   # all share the same audio graph without fighting over ALSA.
   services.pipewire = {
-    enable       = true;
-    alsa.enable  = true;
-    pulse.enable = true;  # PulseAudio-compatible socket for snapclient
+    enable = true;
+    alsa.enable = true;
+    pulse.enable = true; # PulseAudio-compatible socket for snapclient
   };
   # sound.enable and hardware.pulseaudio.enable are deprecated — removed.
 
@@ -60,7 +65,13 @@
   # media library settings via the UI.
 
   # Allow the media user to use the video group for DRM access.
-  users.users.media.extraGroups = lib.mkForce [ "audio" "video" "input" "render" "media" ];
+  users.users.media.extraGroups = lib.mkForce [
+    "audio"
+    "video"
+    "input"
+    "render"
+    "media"
+  ];
 
   # Kodi data dir.
   systemd.tmpfiles.rules = [

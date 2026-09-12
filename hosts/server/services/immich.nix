@@ -23,33 +23,38 @@
 #
 # Auth: Immich has native OIDC support (v1.91+). Configure Authentik as
 # the OIDC provider pointing to https://photos.<domain>/auth/login.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   immichVersion = "release"; # CHANGE_ME: pin to a specific tag, e.g. "v1.118.2"
-  domain        = config.lanbat.domain;
+  domain = config.lanbat.domain;
 in
 {
   # ---------------------------------------------------------------------------
   # Immich server container
   # ---------------------------------------------------------------------------
   virtualisation.oci-containers.containers."immich-server" = {
-    image   = "ghcr.io/immich-app/immich-server:${immichVersion}";
+    image = "ghcr.io/immich-app/immich-server:${immichVersion}";
     extraOptions = [ "--network=host" ];
     podman.user = "immich";
     user = "0";
     environment = {
-      DB_HOSTNAME      = "127.0.0.1";
-      DB_PORT          = "5432";
-      DB_USERNAME      = "immich";
+      DB_HOSTNAME = "127.0.0.1";
+      DB_PORT = "5432";
+      DB_USERNAME = "immich";
       DB_DATABASE_NAME = "immich";
-      REDIS_HOSTNAME   = "127.0.0.1";
-      REDIS_PORT       = "6379";
-      REDIS_DBINDEX    = "1";
-      UPLOAD_LOCATION  = "/usr/src/app/upload";
-      THUMBS_PATH      = "/usr/src/app/thumbs";
+      REDIS_HOSTNAME = "127.0.0.1";
+      REDIS_PORT = "6379";
+      REDIS_DBINDEX = "1";
+      UPLOAD_LOCATION = "/usr/src/app/upload";
+      THUMBS_PATH = "/usr/src/app/thumbs";
       ENCODED_VIDEO_PATH = "/usr/src/app/encoded-video";
-      PROFILE_PATH     = "/usr/src/app/profile";
+      PROFILE_PATH = "/usr/src/app/profile";
 
       # OIDC / OAuth2 — configure Authentik as the provider.
       # These values are populated from the agenix secret below once the
@@ -58,11 +63,11 @@ in
       #   POSTGRES_PASSWORD=<value>
       #   IMMICH_OAUTH_CLIENT_ID=<value>
       #   IMMICH_OAUTH_CLIENT_SECRET=<value>
-      IMMICH_OAUTH_ENABLED          = "true";
-      IMMICH_OAUTH_ISSUER_URL       = "https://auth.${domain}/application/o/immich/";
-      IMMICH_OAUTH_SCOPE            = "openid profile email";
+      IMMICH_OAUTH_ENABLED = "true";
+      IMMICH_OAUTH_ISSUER_URL = "https://auth.${domain}/application/o/immich/";
+      IMMICH_OAUTH_SCOPE = "openid profile email";
       IMMICH_OAUTH_SIGN_IN_BUTTON_TEXT = "Login with Authentik";
-      IMMICH_OAUTH_AUTO_REGISTER    = "true";
+      IMMICH_OAUTH_AUTO_REGISTER = "true";
       # Immich binds on port 2283 by default.
     };
     environmentFiles = [
@@ -79,27 +84,27 @@ in
       "/var/lib/immich/profile:/usr/src/app/profile"
       "/etc/localtime:/etc/localtime:ro"
     ];
-    autoStart  = true;
+    autoStart = true;
   };
 
   # ---------------------------------------------------------------------------
   # Immich machine learning container
   # ---------------------------------------------------------------------------
   virtualisation.oci-containers.containers."immich-machine-learning" = {
-    image   = "ghcr.io/immich-app/immich-machine-learning:${immichVersion}";
+    image = "ghcr.io/immich-app/immich-machine-learning:${immichVersion}";
     extraOptions = [ "--network=host" ];
     podman.user = "immich";
     user = "0";
     environment = {
       # ML service binds on 3003 by default; server reaches it on localhost.
-      MACHINE_LEARNING_WORKERS       = "1";
+      MACHINE_LEARNING_WORKERS = "1";
       MACHINE_LEARNING_WORKER_TIMEOUT = "120";
     };
     volumes = [
       "/var/lib/immich/model-cache:/cache"
     ];
-    dependsOn  = [ "immich-server" ];
-    autoStart  = true;
+    dependsOn = [ "immich-server" ];
+    autoStart = true;
   };
 
   # ---------------------------------------------------------------------------

@@ -302,7 +302,7 @@ cp /tmp/local.nix /mnt/etc/nixos/repo/local.nix
 
 Then install:
 ```bash
-nixos-install --flake /mnt/etc/nixos/repo#server --impure
+nixos-install --flake path:/mnt/etc/nixos/repo#server
 ```
 
 ### 1e. First boot
@@ -463,9 +463,15 @@ nix-shell -p git --run "git clone <your-repo-url> /tmp/repo"
 cp -r /media/usb/nixos /tmp/repo
 ```
 
+Copy your `local.nix` into the repo from your workstation (Option B already includes
+it if your USB copy has it):
+```bash
+scp local.nix nixos@<pi-installer-ip>:/tmp/repo/local.nix
+```
+
 Then install:
 ```bash
-nixos-install --flake /tmp/repo#pi --impure
+nixos-install --flake path:/tmp/repo#pi
 ```
 
 ### 2g. First Pi boot
@@ -492,6 +498,10 @@ ssh admin@pi5
 sudo git clone <your-repo-url> /etc/nixos
 sudo cp /path/to/local.nix /etc/nixos/local.nix
 ```
+
+Auto-upgrades build from `path:/etc/nixos#<host>`, which includes the gitignored
+`/etc/nixos/local.nix`. Without it every setting is a placeholder and the upgrade
+refuses to switch.
 
 If your repo is **private**, configure git credentials before auto-upgrade
 will be able to pull:
@@ -528,8 +538,8 @@ cd secrets
 agenix -r
 
 # Rebuild both hosts so they pick up the re-keyed secrets:
-nixos-rebuild switch --flake .#server --target-host admin@server --impure
-nixos-rebuild switch --flake .#pi     --target-host admin@pi5    --impure
+nixos-rebuild switch --flake path:.#server --target-host admin@server
+nixos-rebuild switch --flake path:.#pi     --target-host admin@pi5
 ```
 
 ### 3b. Authentik initial setup
@@ -558,7 +568,7 @@ The script prints the client credentials needed for Home Assistant and Jellyfin
 Deploy to apply the new secrets:
 
 ```bash
-nixos-rebuild switch --flake .#server --target-host admin@server --impure
+nixos-rebuild switch --flake path:.#server --target-host admin@server
 ```
 
 After the deploy, Authentik restarts and the blueprints run automatically.
@@ -651,7 +661,7 @@ All secrets were created in Phase 0c. After setting the Authentik OIDC client se
 in `grafana-env.age` and the client ID in `grafana.nix` (covered in step 3b):
 
 ```bash
-nixos-rebuild switch --flake .#server --target-host admin@server --impure
+nixos-rebuild switch --flake path:.#server --target-host admin@server
 ```
 
 Visit `https://grafana.<domain>` — the InfluxDB datasource is provisioned
@@ -676,8 +686,8 @@ used by Grafana).
    ```
 5. Deploy:
    ```bash
-   nixos-rebuild switch --flake .#server --target-host admin@server --impure
-   nixos-rebuild switch --flake .#pi     --target-host admin@pi5    --impure
+   nixos-rebuild switch --flake path:.#server --target-host admin@server
+   nixos-rebuild switch --flake path:.#pi     --target-host admin@pi5
    ```
 6. Verify both agents are running and writing:
    ```bash
@@ -766,4 +776,4 @@ connect and wait. Verify the client is connected at `https://audio.<domain>`.
 - Backup the Tang key directory: `rsync -a /var/lib/tang/ BACKUP_LOCATION/`
 - Test Pi unlock after server reboot to verify Clevis/Tang works.
 - Pin container image versions when stability matters.
-- Run `nixos-rebuild switch --flake .#server --impure` / `.#pi --impure` to deploy changes.
+- Run `nixos-rebuild switch --flake path:.#server` / `path:.#pi` to deploy changes.

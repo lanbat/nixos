@@ -2,10 +2,12 @@
 #
 # Nix package for the homelab TV launcher.
 # Wraps the Python/GTK3 script with all dependencies.
-{ pkgs ? import <nixpkgs> {} }:
+{
+  pkgs ? import <nixpkgs> { },
+}:
 
 pkgs.stdenv.mkDerivation {
-  pname   = "homelab-launcher";
+  pname = "homelab-launcher";
   version = "1.0.0";
 
   src = ./.;
@@ -29,11 +31,13 @@ pkgs.stdenv.mkDerivation {
     wrapProgram $out/bin/homelab-launcher \
       --prefix GI_TYPELIB_PATH : "${pkgs.gtk3}/lib/girepository-1.0:${pkgs.pango}/lib/girepository-1.0" \
       --prefix LD_LIBRARY_PATH : "${pkgs.gtk3}/lib:${pkgs.glib}/lib" \
-      --set PYTHONPATH "${pkgs.python3.withPackages (ps: [ ps.pygobject3 ])}/${pkgs.python3.sitePackages}"
+      --set PYTHONPATH "${
+        pkgs.python3.withPackages (ps: [ ps.pygobject3 ])
+      }/${pkgs.python3.sitePackages}"
   '';
 
   meta = {
     description = "Full-screen TV launcher for Kodi and RetroArch";
-    platforms   = [ "aarch64-linux" ];
+    platforms = [ "aarch64-linux" ];
   };
 }

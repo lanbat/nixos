@@ -1,0 +1,38 @@
+name: Service request
+description: Suggest a service to add to the homelab
+labels: [enhancement]
+body:
+  - type: input
+    id: service
+    attributes:
+      label: Service
+      placeholder: Paperless-ngx
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it belongs here
+    validations:
+      required: true
+  - type: dropdown
+    id: native-module
+    attributes:
+      label: Is there a NixOS module for it?
+      options:
+        - "yes"
+        - "no"
+        - unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Suggested tier
+      description: See "Service tiers" in CONTRIBUTING.md.
+      options:
+        - always-on
+        - workload-gated
+        - unsure
+    validations:
+      required: true

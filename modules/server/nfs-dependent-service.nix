@@ -27,14 +27,21 @@ with lib;
 
 let
   mountUnitName = drive: "srv-storage-${drive}.mount";
-  mountPath     = drive: "/srv/storage/${drive}";
+  mountPath = drive: "/srv/storage/${drive}";
 in
 {
   options.lanbat = {
     # Each service module may register itself here.
     nfsDependentServices = mkOption {
-      type = types.attrsOf (types.listOf (types.enum [ "a" "b" ]));
-      default = {};
+      type = types.attrsOf (
+        types.listOf (
+          types.enum [
+            "a"
+            "b"
+          ]
+        )
+      );
+      default = { };
       description = ''
         Map of systemd service name → list of NFS drives it depends on.
         Example: { "podman-jellyfin" = [ "a" ]; }
@@ -44,9 +51,10 @@ in
 
   config = {
     # For each registered service, wire up the systemd dependencies.
-    systemd.services = lib.mapAttrs' (svcName: drives:
+    systemd.services = lib.mapAttrs' (
+      svcName: drives:
       lib.nameValuePair svcName {
-        after   = map mountUnitName drives;
+        after = map mountUnitName drives;
         bindsTo = map mountUnitName drives;
         # after + bindsTo already express the dependency; RequiresMountsFor
         # is redundant and conflicts with values set by NixOS service modules.

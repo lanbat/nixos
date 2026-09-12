@@ -42,14 +42,14 @@
 
       initialSetup = {
         organization = "homelab";
-        bucket       = "metrics";
-        username     = "admin";
+        bucket = "metrics";
+        username = "admin";
         # Plaintext password file (one line).
         passwordFile = config.age.secrets.influxdb-admin-password.path;
         # Operator token — used by Grafana as the datasource credential.
-        tokenFile    = config.age.secrets.influxdb-admin-token.path;
+        tokenFile = config.age.secrets.influxdb-admin-token.path;
         # Infinite retention — prune old data manually or per-bucket as needed.
-        retention    = 0;
+        retention = 0;
       };
     };
   };
@@ -58,12 +58,12 @@
   # Agenix secrets
   # ---------------------------------------------------------------------------
   age.secrets.influxdb-admin-password = {
-    file  = ../../../secrets/influxdb-admin-password.age;
+    file = ../../../secrets/influxdb-admin-password.age;
     owner = "influxdb2";
   };
 
   age.secrets.influxdb-admin-token = {
-    file  = ../../../secrets/influxdb-admin-token.age;
+    file = ../../../secrets/influxdb-admin-token.age;
     owner = "influxdb2";
   };
 }

@@ -16,7 +16,12 @@
 #   Kodi and RetroArch both work on X11 with zero quirks on the Pi 5.
 #   Wayland (via Cage/Sway) works too but adds surface-type negotiation
 #   complexity.  X11 is simpler and more battle-tested for this use case.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   launcherPkg = pkgs.callPackage ../../pkgs/launcher { };
@@ -45,8 +50,8 @@ in
   # These options moved to services.displayManager in NixOS 24.11.
   services.displayManager = {
     autoLogin.enable = true;
-    autoLogin.user   = "media";
-    defaultSession   = "none+openbox";
+    autoLogin.user = "media";
+    defaultSession = "none+openbox";
   };
 
   # ---------------------------------------------------------------------------
@@ -76,7 +81,7 @@ in
     launcherPkg
 
     # Controller support (joydev module loaded via boot.kernelModules)
-    jstest-gtk  # joystick testing / calibration utility
+    jstest-gtk # joystick testing / calibration utility
   ];
 
   # Load the joystick input module against the running kernel.
@@ -104,8 +109,8 @@ in
   # the PulseAudio compatibility socket.
   hardware.pulseaudio.enable = false;
   services.pipewire = {
-    enable       = true;
-    alsa.enable  = true;
+    enable = true;
+    alsa.enable = true;
     pulse.enable = true;
   };
 }

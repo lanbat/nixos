@@ -24,18 +24,25 @@
 #   3. Store the client_id/secret in agenix (nextcloud-oidc-env.age).
 #   4. Rebuild — the setup service runs and configures OIDC.
 # Local admin account is always kept as break-glass.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
-let domain = config.lanbat.domain; in
+let
+  domain = config.lanbat.domain;
+in
 
 {
   services.nextcloud = {
-    enable   = true;
+    enable = true;
     hostName = "cloud.${domain}";
     # UPGRADE PATH: NC30 → NC31 → NC32 → NC33 (Nextcloud forbids skipping majors).
     # NC31 migration complete. Now on NC32.
     # Next step: after NC32 migration succeeds, switch to pkgs.nextcloud33.
-    package  = pkgs.nextcloud32;
+    package = pkgs.nextcloud32;
 
     https = true;
 
@@ -44,20 +51,20 @@ let domain = config.lanbat.domain; in
     database.createLocally = true;
 
     config = {
-      dbtype    = "pgsql";
-      adminuser     = "admin";
+      dbtype = "pgsql";
+      adminuser = "admin";
       adminpassFile = config.age.secrets.nextcloud-admin-pass.path;
     };
 
     phpOptions = {
       "opcache.interned_strings_buffer" = "16";
-      "opcache.max_accelerated_files"   = "10000";
-      "opcache.memory_consumption"      = "128";
-      "opcache.save_comments"           = "1";
-      "opcache.revalidate_freq"         = "1";
+      "opcache.max_accelerated_files" = "10000";
+      "opcache.memory_consumption" = "128";
+      "opcache.save_comments" = "1";
+      "opcache.revalidate_freq" = "1";
       upload_max_filesize = lib.mkForce "16G";
-      post_max_size       = lib.mkForce "16G";
-      memory_limit        = "512M";
+      post_max_size = lib.mkForce "16G";
+      memory_limit = "512M";
     };
 
     extraApps = with config.services.nextcloud.package.packages.apps; {
@@ -69,7 +76,7 @@ let domain = config.lanbat.domain; in
     extraAppsEnable = true;
 
     settings = {
-      trusted_proxies   = [ "127.0.0.1" ];
+      trusted_proxies = [ "127.0.0.1" ];
       overwrite.cli.url = "https://cloud.${domain}";
       default_phone_region = config.lanbat.phoneRegion;
     };
@@ -83,13 +90,13 @@ let domain = config.lanbat.domain; in
   # It will fail (and be retried) until nextcloud-oidc-env.age is populated.
   systemd.services."nextcloud-oidc-setup" = {
     description = "Configure Nextcloud OIDC provider";
-    after       = [ "nextcloud-setup.service" ];
-    wantedBy    = [ "nextcloud-setup.service" ];
+    after = [ "nextcloud-setup.service" ];
+    wantedBy = [ "nextcloud-setup.service" ];
     # Only runs if the env file exists and is non-empty.
     unitConfig.ConditionPathExists = config.age.secrets.nextcloud-oidc-env.path;
     serviceConfig = {
-      Type    = "oneshot";
-      User    = "nextcloud";
+      Type = "oneshot";
+      User = "nextcloud";
       # Source the env file which exports:
       #   NEXTCLOUD_OIDC_CLIENT_ID=<value>
       #   NEXTCLOUD_OIDC_CLIENT_SECRET=<value>
@@ -123,7 +130,13 @@ let domain = config.lanbat.domain; in
 
   # Configure nginx to listen on the internal port so Caddy can own :80/:443.
   services.nginx.virtualHosts."cloud.${domain}" = {
-    listen = [{ addr = "127.0.0.1"; port = 8080; ssl = false; }];
+    listen = [
+      {
+        addr = "127.0.0.1";
+        port = 8080;
+        ssl = false;
+      }
+    ];
   };
 
   # External storage paths (created when NFS is mounted).

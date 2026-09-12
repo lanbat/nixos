@@ -2,7 +2,12 @@
 #
 # Settings that are identical across both machines: locale, timezone,
 # Nix daemon options, basic packages, and a few quality-of-life tweaks.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # ---------------------------------------------------------------------------
@@ -16,11 +21,17 @@
   # ---------------------------------------------------------------------------
   nix = {
     settings = {
-      experimental-features = [ "nix-command" "flakes" ];
+      experimental-features = [
+        "nix-command"
+        "flakes"
+      ];
       # Deduplicate store paths on builds.
       auto-optimise-store = true;
-      # Trusted users who can submit substitutions or use --impure.
-      trusted-users = [ "root" "@wheel" ];
+      # Users the Nix daemon trusts, e.g. to accept store paths copied by nixos-rebuild --target-host.
+      trusted-users = [
+        "root"
+        "@wheel"
+      ];
     };
 
     # Garbage-collect weekly.
@@ -31,7 +42,7 @@
     };
   };
 
-# ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
   # Base packages available on both machines
   # ---------------------------------------------------------------------------
   environment.systemPackages = with pkgs; [

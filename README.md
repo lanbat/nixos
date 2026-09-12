@@ -1,5 +1,7 @@
 # lanbat nixos
 
+[![check](https://github.com/lanbat/nixos/actions/workflows/check.yml/badge.svg)](https://github.com/lanbat/nixos/actions/workflows/check.yml)
+
 NixOS configuration for a two-machine homelab:
 
 - **server** — main compute host, all services, reverse proxy, identity/SSO
@@ -39,7 +41,7 @@ modules/
 hosts/
   server/
     default.nix              server host config — imports all services
-    hardware-configuration.nix  TEMPLATE — replace with nixos-generate-config output
+    hardware-configuration.nix  the maintainer's hardware — replace with your nixos-generate-config output
     services/
       tang.nix               Tang trust anchor (Pi LUKS unlock)
       caddy.nix              reverse proxy + internal CA
@@ -137,17 +139,20 @@ Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) fo
 
 ```bash
 # Server (first time — from installer)
-nixos-install --flake .#server --impure
+nixos-install --flake path:.#server
 
 # Server (updates)
-nixos-rebuild switch --flake .#server --target-host admin@server --impure
+nixos-rebuild switch --flake path:.#server --target-host admin@server
 
 # Pi
-nixos-rebuild switch --flake .#pi --target-host admin@pi5 --impure
+nixos-rebuild switch --flake path:.#pi --target-host admin@pi5
 ```
 
-`--impure` is required so Nix reads your gitignored `local.nix` (copy from
-`local.nix.example` and fill in your values before deploying).
+Always deploy with a `path:` flake reference. `local.nix` (copied from
+`local.nix.example`) is gitignored, and git-based references only include tracked
+files, so they would build with placeholder settings. A pre-switch check refuses to
+switch while any setting is still a placeholder; list what is missing with
+`nix eval path:.#nixosConfigurations.server.config.lanbat.placeholderSettings`.
 
 See [docs/deployment-checklist.md](docs/deployment-checklist.md) for the full step-by-step guide.
 
@@ -159,3 +164,13 @@ See [docs/deployment-checklist.md](docs/deployment-checklist.md) for the full st
 - **No Kubernetes** — systemd + Podman + NixOS modules are sufficient and far simpler.
 - **Minimal containers** — NixOS native services are preferred where modules exist (Nextcloud, Jellyfin, HA, Samba, etc.). Containers are used where native packaging is impractical (Authentik, Immich, Frigate, etc.).
 - **Explicit dependencies** — every service that needs NFS declares it in `lanbat.nfsDependentServices`.
+
+## Contributing
+
+Pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to check a
+change locally and the conventions this repo follows, and [SECURITY.md](SECURITY.md)
+for reporting vulnerabilities.
+
+## License
+
+[MIT](LICENSE)

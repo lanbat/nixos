@@ -52,22 +52,27 @@
 # Post-install
 # ------------
 # See docs/deployment-checklist.md § Wyoming Voice Assistant.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
-  users.groups.wyoming-satellite = {};
+  users.groups.wyoming-satellite = { };
   users.users.wyoming-satellite = {
     isSystemUser = true;
-    group        = "wyoming-satellite";
+    group = "wyoming-satellite";
     # audio group membership is handled via SupplementaryGroups in the systemd unit
   };
 
   services.wyoming.satellite = {
     enable = true;
-    name   = "Pi Satellite";
-    uri    = "tcp://0.0.0.0:10700";
-    user   = "wyoming-satellite";
-    group  = "wyoming-satellite";
+    name = "Pi Satellite";
+    uri = "tcp://0.0.0.0:10700";
+    user = "wyoming-satellite";
+    group = "wyoming-satellite";
 
     # Microphone: 16 kHz mono S16LE — required by the Wyoming STT pipeline.
     microphone.command = "${pkgs.alsa-utils}/bin/arecord -D default -r 16000 -c 1 -f S16_LE -t raw -q";

@@ -107,74 +107,92 @@
 #    ls /tmp/restore-test/mnt/workload/postgresql/
 #    rm -rf /tmp/restore-test
 #
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.lanbat;
 
   # Retention policy — applied to all repositories.
   pruneArgs = [
-    "--keep-daily"   "7"
-    "--keep-weekly"  "4"
-    "--keep-monthly" "6"
-    "--keep-yearly"  "2"
+    "--keep-daily"
+    "7"
+    "--keep-weekly"
+    "4"
+    "--keep-monthly"
+    "6"
+    "--keep-yearly"
+    "2"
   ];
 
-  mkResticService = { name, repoPath, passwordFile, paths, extraRequires ? [], extraAfter ? [] }: {
-    # systemd service that runs restic backup.
-    # Credentials (repo password) come from the agenix-decrypted file.
-    "${name}-backup" = {
-      description = "Restic ${name} backup";
-      requires    = [ "network-online.target" ] ++ extraRequires;
-      after       = [ "network-online.target" ] ++ extraAfter;
-      # Service does not start at boot — it is triggered by the timer.
-      serviceConfig = {
-        Type = "oneshot";
-        # Load the restic repo password from the agenix secret.
-        # File must contain a single line: the restic password.
-        EnvironmentFile = passwordFile;
-        ExecStart = pkgs.writeShellScript "${name}-backup-run" ''
-          set -euo pipefail
-          REPO="${repoPath}"
-          export RESTIC_PASSWORD="$RESTIC_PASSWORD"  # from EnvironmentFile
+  mkResticService =
+    {
+      name,
+      repoPath,
+      passwordFile,
+      paths,
+      extraRequires ? [ ],
+      extraAfter ? [ ],
+    }:
+    {
+      # systemd service that runs restic backup.
+      # Credentials (repo password) come from the agenix-decrypted file.
+      "${name}-backup" = {
+        description = "Restic ${name} backup";
+        requires = [ "network-online.target" ] ++ extraRequires;
+        after = [ "network-online.target" ] ++ extraAfter;
+        # Service does not start at boot — it is triggered by the timer.
+        serviceConfig = {
+          Type = "oneshot";
+          # Load the restic repo password from the agenix secret.
+          # File must contain a single line: the restic password.
+          EnvironmentFile = passwordFile;
+          ExecStart = pkgs.writeShellScript "${name}-backup-run" ''
+            set -euo pipefail
+            REPO="${repoPath}"
+            export RESTIC_PASSWORD="$RESTIC_PASSWORD"  # from EnvironmentFile
 
-          echo "=== restic ${name} backup: starting ==="
-          date
+            echo "=== restic ${name} backup: starting ==="
+            date
 
-          # Initialise repo if it doesn't exist yet.
-          if ! ${pkgs.restic}/bin/restic -r "$REPO" snapshots >/dev/null 2>&1; then
-            echo "Initialising restic repository at $REPO..."
-            ${pkgs.restic}/bin/restic -r "$REPO" init
-          fi
+            # Initialise repo if it doesn't exist yet.
+            if ! ${pkgs.restic}/bin/restic -r "$REPO" snapshots >/dev/null 2>&1; then
+              echo "Initialising restic repository at $REPO..."
+              ${pkgs.restic}/bin/restic -r "$REPO" init
+            fi
 
-          # Run backup.
-          ${pkgs.restic}/bin/restic -r "$REPO" backup \
-            --one-file-system \
-            --exclude-caches \
-            ${lib.concatStringsSep " " (map (p: "'${p}'") paths)}
+            # Run backup.
+            ${pkgs.restic}/bin/restic -r "$REPO" backup \
+              --one-file-system \
+              --exclude-caches \
+              ${lib.concatStringsSep " " (map (p: "'${p}'") paths)}
 
-          # Prune old snapshots.
-          ${pkgs.restic}/bin/restic -r "$REPO" forget \
-            --prune \
-            ${lib.concatStringsSep " " pruneArgs}
+            # Prune old snapshots.
+            ${pkgs.restic}/bin/restic -r "$REPO" forget \
+              --prune \
+              ${lib.concatStringsSep " " pruneArgs}
 
-          # Verify repository integrity.
-          ${pkgs.restic}/bin/restic -r "$REPO" check
+            # Verify repository integrity.
+            ${pkgs.restic}/bin/restic -r "$REPO" check
 
-          echo "=== restic ${name} backup: done ==="
-        '';
+            echo "=== restic ${name} backup: done ==="
+          '';
+        };
       };
     };
-  };
 
   mkResticTimer = name: schedule: {
     "${name}-backup" = {
       description = "Restic ${name} backup timer";
-      wantedBy    = [ "timers.target" ];
+      wantedBy = [ "timers.target" ];
       timerConfig = {
-        OnCalendar         = schedule;
+        OnCalendar = schedule;
         RandomizedDelaySec = "30min";
-        Persistent         = true;  # catch up if system was off
+        Persistent = true; # catch up if system was off
       };
     };
   };

@@ -14,7 +14,12 @@
 #   PostgreSQL database   — shared instance, "bitmagnet" db
 #
 # No NFS dependency.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   # ---------------------------------------------------------------------------
@@ -22,15 +27,19 @@
   # ---------------------------------------------------------------------------
   virtualisation.oci-containers.containers."bitmagnet" = {
     image = "ghcr.io/bitmagnet-io/bitmagnet:latest";
-    cmd = [ "worker" "run" "--all" ];
+    cmd = [
+      "worker"
+      "run"
+      "--all"
+    ];
 
     environment = {
-      POSTGRES_HOST     = "127.0.0.1";
-      POSTGRES_PORT     = "5432";
-      POSTGRES_NAME     = "bitmagnet";
-      POSTGRES_USER     = "bitmagnet";
+      POSTGRES_HOST = "127.0.0.1";
+      POSTGRES_PORT = "5432";
+      POSTGRES_NAME = "bitmagnet";
+      POSTGRES_USER = "bitmagnet";
       # POSTGRES_PASSWORD via env file
-      REDIS_ADDR        = ""; # Bitmagnet doesn't require Redis
+      REDIS_ADDR = ""; # Bitmagnet doesn't require Redis
     };
     environmentFiles = [ config.age.secrets.bitmagnet-db-pass.path ];
 
@@ -51,17 +60,17 @@
   # ---------------------------------------------------------------------------
   lanbat.onDemand.services.bitmagnet = {
     activatorPort = 3332;
-    realPort      = 3333;
+    realPort = 3333;
     targetService = "podman-bitmagnet.service";
-    idleMinutes   = 4320; # 3 days — DHT crawling needs sustained uptime to build index
+    idleMinutes = 4320; # 3 days — DHT crawling needs sustained uptime to build index
   };
 
   # Ensure the DB is available before Bitmagnet starts.
   systemd.services."podman-bitmagnet" = {
-    after   = [ "postgresql.service" ];
+    after = [ "postgresql.service" ];
     requires = [ "postgresql.service" ];
     serviceConfig = {
-      Restart    = lib.mkForce "on-failure";
+      Restart = lib.mkForce "on-failure";
       RestartSec = "10s";
     };
   };

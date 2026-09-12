@@ -5,9 +5,13 @@
 # 1. Copy this file to local.nix:
 #      cp local.nix.example local.nix
 # 2. Fill in all values below.
-# 3. Deploy with --impure so Nix reads local.nix from disk:
-#      nixos-rebuild switch --flake .#server --target-host admin@server --impure
-#      nixos-rebuild switch --flake .#pi     --target-host admin@pi5    --impure
+# 3. Deploy with a path: flake reference so Nix includes this untracked file:
+#      nixos-rebuild switch --flake path:.#server --target-host admin@server
+#      nixos-rebuild switch --flake path:.#pi     --target-host admin@pi5
+# 4. hosts/pi/hardware-configuration.nix is a template whose filesystem UUIDs are
+#    CHANGE_ME placeholders; replace it with your own nixos-generate-config
+#    output before deploying the Pi. Deploys refuse to switch while any
+#    placeholder setting or UUID remains.
 #
 # This file is gitignored. Never commit local.nix — it contains your real IPs
 # and SSH keys. The shared repo keeps only placeholder defaults in

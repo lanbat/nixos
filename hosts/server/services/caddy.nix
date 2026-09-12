@@ -15,14 +15,19 @@
 # CA cert location: /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
 # This is exported via a systemd service to /var/lib/ca-landing/root.crt
 # so the ca-landing vhost can serve it.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
-  domain = config.lanbat.domain;  # set in modules/common/settings.nix
+  domain = config.lanbat.domain; # set in modules/common/settings.nix
 
   # Escape dots for use inside Python/POSIX regex patterns.
   # "home.example.com" → "home\.example\.com"
-  domainRe = builtins.replaceStrings ["."] ["\\."] domain;
+  domainRe = builtins.replaceStrings [ "." ] [ "\\." ] domain;
 
   # All virtual hosts share this base TLS config.
   tls = ''
@@ -299,26 +304,26 @@ in
   # ---------------------------------------------------------------------------
   systemd.services."caddy-od-check" = {
     description = "Caddy on-demand TLS domain check";
-    after    = [ "network.target" ];
+    after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       ExecStart = pkgs.writeShellScript "od-check" ''
-        exec ${pkgs.python3}/bin/python3 -c "
-import http.server, re, sys
-ALLOWED = re.compile(r'^[a-z0-9-]+\.${domainRe}$')
-class H(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        from urllib.parse import urlparse, parse_qs
-        q = parse_qs(urlparse(self.path).query)
-        domain = q.get('domain', ['''])[0]
-        code = 200 if ALLOWED.match(domain) else 403
-        self.send_response(code)
-        self.end_headers()
-    def log_message(self, *a): pass
-http.server.HTTPServer(('127.0.0.1', 9999), H).serve_forever()
-"
+                exec ${pkgs.python3}/bin/python3 -c "
+        import http.server, re, sys
+        ALLOWED = re.compile(r'^[a-z0-9-]+\.${domainRe}$')
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                from urllib.parse import urlparse, parse_qs
+                q = parse_qs(urlparse(self.path).query)
+                domain = q.get('domain', ['''])[0]
+                code = 200 if ALLOWED.match(domain) else 403
+                self.send_response(code)
+                self.end_headers()
+            def log_message(self, *a): pass
+        http.server.HTTPServer(('127.0.0.1', 9999), H).serve_forever()
+        "
       '';
-      Restart    = "on-failure";
+      Restart = "on-failure";
       RestartSec = "5s";
     };
   };
@@ -328,13 +333,13 @@ http.server.HTTPServer(('127.0.0.1', 9999), H).serve_forever()
   # ---------------------------------------------------------------------------
   systemd.services."caddy-export-ca" = {
     description = "Export Caddy CA cert to landing page dir";
-    after    = [ "caddy.service" ];
+    after = [ "caddy.service" ];
     wantedBy = [ "caddy.service" ];
     # Wait until the cert actually exists.
     serviceConfig = {
-      Type       = "oneshot";
+      Type = "oneshot";
       RemainAfterExit = true;
-      ExecStart  = pkgs.writeShellScript "export-ca" ''
+      ExecStart = pkgs.writeShellScript "export-ca" ''
         for i in $(seq 1 30); do
           src="/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
           if [ -f "$src" ]; then
@@ -357,7 +362,7 @@ http.server.HTTPServer(('127.0.0.1', 9999), H).serve_forever()
     description = "Install CA landing page assets";
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
-      Type      = "oneshot";
+      Type = "oneshot";
       ExecStart = pkgs.writeShellScript "install-ca-landing" ''
         cp -r ${pkgs.callPackage ../../../pkgs/ca-landing-page { }}/. /var/lib/ca-landing/
         chmod -R 644 /var/lib/ca-landing/*
@@ -387,7 +392,7 @@ http.server.HTTPServer(('127.0.0.1', 9999), H).serve_forever()
   # fresh install, so rebuild the bundle after Caddy has generated it.
   systemd.services.caddy-trust-local-ca = {
     description = "Append Caddy internal root CA to system CA bundle";
-    after    = [ "caddy.service" ];
+    after = [ "caddy.service" ];
     requires = [ "caddy.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
@@ -413,9 +418,12 @@ http.server.HTTPServer(('127.0.0.1', 9999), H).serve_forever()
   # security.pki sets NIX_SSL_CERT_FILE with mkDefault, so normal priority wins.
   environment.variables = {
     NIX_SSL_CERT_FILE = "/var/lib/caddy-local-ca/ca-certificates.crt";
-    SSL_CERT_FILE     = "/var/lib/caddy-local-ca/ca-certificates.crt";
+    SSL_CERT_FILE = "/var/lib/caddy-local-ca/ca-certificates.crt";
   };
 
   # Open firewall for Caddy.
-  networking.firewall.allowedTCPPorts = [ 80 443 ];
+  networking.firewall.allowedTCPPorts = [
+    80
+    443
+  ];
 }

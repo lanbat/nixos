@@ -25,7 +25,12 @@
 # Services protected by Authentik forward auth (Frigate, qBittorrent,
 # Bitmagnet, Syncthing, Snapcast, Zigbee2MQTT) are shown as links only —
 # their APIs are not reachable without a valid session cookie.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   domain = config.lanbat.domain;
@@ -199,8 +204,8 @@ in
   # The ExecStartPre (root) makes the CA cert world-readable so the rootless
   # homepage user can pass it through as a bind-mount volume.
   systemd.services."podman-homepage" = {
-    after  = [ "caddy.service" ];
-    wants  = [ "caddy.service" ];
+    after = [ "caddy.service" ];
+    wants = [ "caddy.service" ];
     serviceConfig.ExecStartPre = [
       "+${pkgs.writeShellScript "homepage-fix-ca-perms" ''
         set -euo pipefail

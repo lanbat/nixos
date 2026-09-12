@@ -14,14 +14,23 @@
 # drives are SEPARATE devices — they are not the boot media.
 # Boot media: /dev/mmcblk0 (microSD) or /dev/sda (USB) — NOT the 4 TB drives.
 # Storage drives: /dev/sdb, /dev/sdc (or by-id — use by-id in production).
-{ config, lib, modulesPath, ... }:
+{
+  config,
+  lib,
+  modulesPath,
+  ...
+}:
 {
   imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
 
   boot.initrd.availableKernelModules = [
-    "xhci_pci" "usbhid" "usb_storage" "vc4" "pcie_brcmstb"
+    "xhci_pci"
+    "usbhid"
+    "usb_storage"
+    "vc4"
+    "pcie_brcmstb"
   ];
-  boot.kernelModules = [];
+  boot.kernelModules = [ ];
 
   # Boot filesystem (microSD).
   fileSystems."/" = {
@@ -35,7 +44,7 @@
     fsType = "vfat";
   };
 
-  swapDevices = [];
+  swapDevices = [ ];
 
   nixpkgs.hostPlatform.system = "aarch64-linux";
 }

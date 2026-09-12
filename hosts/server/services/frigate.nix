@@ -47,7 +47,12 @@
 # Home Assistant integration
 # --------------------------
 # Frigate publishes events via MQTT → Home Assistant listens.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   frigateConfig = pkgs.writeText "frigate.yml" ''
@@ -98,9 +103,9 @@ let
     go2rtc:
       streams:
         c1:
-          - "ffmpeg:http://c1.10ctr.vg.cd/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}#video=copy#audio=copy#audio=opus"
+          - "ffmpeg:http://c1.${config.lanbat.rootDomain}/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}#video=copy#audio=copy#audio=opus"
         c1_sub:
-          - "ffmpeg:http://c1.10ctr.vg.cd/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}"
+          - "ffmpeg:http://c1.${config.lanbat.rootDomain}/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}"
 
     ffmpeg:
       # Disable auto-detected vaapi hwaccel — fails in rootless Podman without DRM access.
@@ -268,7 +273,7 @@ in
   # ---------------------------------------------------------------------------
   systemd.services."podman-frigate" = {
     serviceConfig = {
-      Restart    = lib.mkForce "on-failure";
+      Restart = lib.mkForce "on-failure";
       RestartSec = "15s";
       ExecStartPre = [
         # Runs as root (+ prefix) even though the service User=frigate.
@@ -295,7 +300,7 @@ in
   # Secrets
   # ---------------------------------------------------------------------------
   age.secrets.frigate-rtsp-env = {
-    file  = ../../../secrets/frigate-rtsp-env.age;
+    file = ../../../secrets/frigate-rtsp-env.age;
     owner = "root";
   };
 

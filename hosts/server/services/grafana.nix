@@ -32,7 +32,9 @@
 # Always-on: yes.  No NFS dependency.
 { config, ... }:
 
-let domain = config.lanbat.domain; in
+let
+  domain = config.lanbat.domain;
+in
 
 {
   services.grafana = {
@@ -42,38 +44,38 @@ let domain = config.lanbat.domain; in
       server = {
         http_addr = "127.0.0.1";
         http_port = 3030;
-        domain    = "grafana.${domain}";
-        root_url  = "https://grafana.${domain}";
+        domain = "grafana.${domain}";
+        root_url = "https://grafana.${domain}";
       };
 
       security = {
         # Injected at runtime from grafana-env.age — never written to store.
-        secret_key      = "$__env{GF_SECURITY_SECRET_KEY}";
-        admin_password  = "$__env{GF_SECURITY_ADMIN_PASSWORD}";
-        admin_user      = "admin";
+        secret_key = "$__env{GF_SECURITY_SECRET_KEY}";
+        admin_password = "$__env{GF_SECURITY_ADMIN_PASSWORD}";
+        admin_user = "admin";
       };
 
       # ---------------------------------------------------------------------------
       # Authentik OIDC
       # ---------------------------------------------------------------------------
       "auth.generic_oauth" = {
-        enabled               = true;
-        name                  = "Authentik";
-        allow_sign_up         = true;
+        enabled = true;
+        name = "Authentik";
+        allow_sign_up = true;
         # Client ID is not a secret — set it here directly.
         # CHANGE_ME: replace with the client ID from the Authentik application.
-        client_id             = "grafana";
-        client_secret         = "$__env{GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}";
-        scopes                = "openid email profile";
-        auth_url              = "https://auth.${domain}/application/o/authorize/";
-        token_url             = "https://auth.${domain}/application/o/token/";
-        api_url               = "https://auth.${domain}/application/o/userinfo/";
+        client_id = "grafana";
+        client_secret = "$__env{GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET}";
+        scopes = "openid email profile";
+        auth_url = "https://auth.${domain}/application/o/authorize/";
+        token_url = "https://auth.${domain}/application/o/token/";
+        api_url = "https://auth.${domain}/application/o/userinfo/";
         # Map all Authentik users to Viewer by default; promote in Grafana UI.
-        role_attribute_path   = "contains(groups, 'grafana-admins') && 'Admin' || 'Viewer'";
-        login_attribute_path  = "preferred_username";
-        name_attribute_path   = "name";
-        email_attribute_path  = "email";
-        use_pkce              = true;
+        role_attribute_path = "contains(groups, 'grafana-admins') && 'Admin' || 'Viewer'";
+        login_attribute_path = "preferred_username";
+        name_attribute_path = "name";
+        email_attribute_path = "email";
+        use_pkce = true;
       };
     };
 
@@ -85,14 +87,14 @@ let domain = config.lanbat.domain; in
 
       datasources.settings.datasources = [
         {
-          name      = "InfluxDB";
-          type      = "influxdb";
-          access    = "proxy";
-          url       = "http://127.0.0.1:8086";
+          name = "InfluxDB";
+          type = "influxdb";
+          access = "proxy";
+          url = "http://127.0.0.1:8086";
           isDefault = true;
 
           jsonData = {
-            version      = "Flux";
+            version = "Flux";
             organization = "homelab";
             defaultBucket = "metrics";
             tlsSkipVerify = false;
@@ -110,7 +112,7 @@ let domain = config.lanbat.domain; in
   # ---------------------------------------------------------------------------
   # Inject secrets at runtime
   # ---------------------------------------------------------------------------
-  systemd.services.grafana.serviceConfig.EnvironmentFiles = [
+  systemd.services.grafana.serviceConfig.EnvironmentFile = [
     config.age.secrets.grafana-env.path
   ];
 
@@ -118,7 +120,7 @@ let domain = config.lanbat.domain; in
   # Agenix secret
   # ---------------------------------------------------------------------------
   age.secrets.grafana-env = {
-    file  = ../../../secrets/grafana-env.age;
+    file = ../../../secrets/grafana-env.age;
     owner = "grafana";
   };
 }
