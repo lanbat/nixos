@@ -21,6 +21,13 @@ stdenv.mkDerivation {
   installPhase = ''
     install -Dm755 $src $out/bin/home-assistant-bootstrap
     wrapProgram $out/bin/home-assistant-bootstrap \
-      --prefix PATH : "${lib.makeBinPath [ curl jq openssl home-assistant ]}"
+      --prefix PATH : "${
+        lib.makeBinPath [
+          curl
+          jq
+          openssl
+          home-assistant
+        ]
+      }"
   '';
 }

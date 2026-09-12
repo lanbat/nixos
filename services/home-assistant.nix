@@ -53,147 +53,149 @@ in
   };
 
   config = {
-  lanbat.services.home-assistant = {
-    subdomain = "ha";
-    port = 8123;
-    auth = "forward-auth";
-    apiClients = true; # companion apps — /auth/token and /api/* bypass forward-auth
-    secrets.hass-bootstrap-env = { };
-    caddy.proxyOptions = ''
-      # Long-lived websockets for HA's live updates.
-      transport http {
-        keepalive 24h
-      }
-    '';
-    dashboard = {
-      group = "Automation";
-      name = "Home Assistant";
-      description = "Home automation";
-      widget = {
-        type = "homeassistant";
-        key = "CHANGE_ME_HA_LONG_LIVED_TOKEN";
+    lanbat.services.home-assistant = {
+      subdomain = "ha";
+      port = 8123;
+      auth = "forward-auth";
+      apiClients = true; # companion apps — /auth/token and /api/* bypass forward-auth
+      secrets.hass-bootstrap-env = {
+        owner = "hass";
+      };
+      caddy.proxyOptions = ''
+        # Long-lived websockets for HA's live updates.
+        transport http {
+          keepalive 24h
+        }
+      '';
+      dashboard = {
+        group = "Automation";
+        name = "Home Assistant";
+        description = "Home automation";
+        widget = {
+          type = "homeassistant";
+          key = "CHANGE_ME_HA_LONG_LIVED_TOKEN";
+        };
       };
     };
-  };
 
-  # The recorder (history) lives in the always-on PostgreSQL. HA logs in as
-  # its system user over the socket, so no password is needed.
-  lanbat.postgresql.databases.hass.instance = "always-on";
+    # The recorder (history) lives in the always-on PostgreSQL. HA logs in as
+    # its system user over the socket, so no password is needed.
+    lanbat.postgresql.databases.hass.instance = "always-on";
 
-  systemd.services.home-assistant = {
-    after = [ config.lanbat.postgresql.instances.always-on.unit ];
-    requires = [ config.lanbat.postgresql.instances.always-on.unit ];
-  };
-
-  systemd.services.home-assistant-bootstrap = {
-    description = "Complete Home Assistant onboarding and provision SSO users";
-    wantedBy = [ "multi-user.target" ];
-    after = [ "home-assistant.service" ];
-    wants = [ "home-assistant.service" ];
-
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = "hass";
-      Group = "hass";
-      EnvironmentFile = config.age.secrets.hass-bootstrap-env.path;
+    systemd.services.home-assistant = {
+      after = [ config.lanbat.postgresql.instances.always-on.unit ];
+      requires = [ config.lanbat.postgresql.instances.always-on.unit ];
     };
 
-    path = [ bootstrap ];
+    systemd.services.home-assistant-bootstrap = {
+      description = "Complete Home Assistant onboarding and provision SSO users";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "home-assistant.service" ];
+      wants = [ "home-assistant.service" ];
 
-    script = ''
-      set -a
-      . ${config.age.secrets.hass-bootstrap-env.path}
-      set +a
-      export INTERNAL_URL="http://127.0.0.1:8123"
-      export EXTERNAL_URL="https://ha.${domain}"
-      export SSO_USERS="${lib.concatStringsSep " " config.lanbat.homeAssistant.ssoUsers}"
-      exec home-assistant-bootstrap
-    '';
-  };
-
-  services.home-assistant = {
-    enable = true;
-    openFirewall = false; # Caddy handles exposure.
-
-    # PostgreSQL driver for the recorder.
-    extraPackages = ps: [ ps.psycopg2 ];
-
-    # Install extra Python components declaratively.
-    customComponents = [
-      # 2 upstream test failures in nixpkgs 26.05 packaging; skip checks.
-      (pkgs.home-assistant-custom-components.frigate.overridePythonAttrs (_: {
-        doCheck = false;
-      }))
-      (authHeaderComponent.overridePythonAttrs (_: {
-        doCheck = false;
-      }))
-    ];
-
-    extraComponents = [
-      "default_config"
-      "met" # weather
-      "radio_browser"
-      "google_translate" # TTS — gtts dependency
-      "mqtt" # Zigbee devices arrive via Zigbee2MQTT → MQTT discovery
-      "mobile_app"
-      "person"
-      "history"
-      "logbook"
-      "recorder"
-      "frontend"
-      "config"
-      "lovelace"
-      "network"
-      "stream"
-      "camera"
-      "ffmpeg"
-      # Wyoming voice assistant protocol
-      "wyoming"
-      "music_assistant"
-      "qbittorrent"
-    ];
-
-    config = {
-      # Trust Caddy as reverse proxy.
-      http = {
-        use_x_forwarded_for = true;
-        trusted_proxies = [
-          "127.0.0.1"
-          "::1"
-        ];
-        ip_ban_enabled = true;
-        login_attempts_threshold = 5;
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = "hass";
+        Group = "hass";
+        EnvironmentFile = config.age.secrets.hass-bootstrap-env.path;
       };
 
-      homeassistant = {
-        name = "Home";
-        latitude = config.lanbat.haLatitude;
-        longitude = config.lanbat.haLongitude;
-        elevation = config.lanbat.haElevation;
-        unit_system = "metric";
-        time_zone = config.lanbat.timezone;
-        external_url = "https://ha.${domain}";
-      };
+      path = [ bootstrap ];
 
-      # Authentik forward-auth → header-based login (users must exist in HA).
-      auth_header = {
-        username_header = "X-Authentik-Username";
-      };
+      script = ''
+        set -a
+        . ${config.age.secrets.hass-bootstrap-env.path}
+        set +a
+        export INTERNAL_URL="http://127.0.0.1:8123"
+        export EXTERNAL_URL="https://ha.${domain}"
+        export SSO_USERS="${lib.concatStringsSep " " config.lanbat.homeAssistant.ssoUsers}"
+        exec home-assistant-bootstrap
+      '';
+    };
 
-      # Recorder — keep 30 days in the always-on PostgreSQL.
-      recorder = {
-        purge_keep_days = 30;
-        db_url =
-          let
-            pg = config.lanbat.postgresql.instances.always-on;
-          in
-          "postgresql://@/hass?host=${pg.socket}&port=${toString pg.port}";
+    services.home-assistant = {
+      enable = true;
+      openFirewall = false; # Caddy handles exposure.
+
+      # PostgreSQL driver for the recorder.
+      extraPackages = ps: [ ps.psycopg2 ];
+
+      # Install extra Python components declaratively.
+      customComponents = [
+        # 2 upstream test failures in nixpkgs 26.05 packaging; skip checks.
+        (pkgs.home-assistant-custom-components.frigate.overridePythonAttrs (_: {
+          doCheck = false;
+        }))
+        (authHeaderComponent.overridePythonAttrs (_: {
+          doCheck = false;
+        }))
+      ];
+
+      extraComponents = [
+        "default_config"
+        "met" # weather
+        "radio_browser"
+        "google_translate" # TTS — gtts dependency
+        "mqtt" # Zigbee devices arrive via Zigbee2MQTT → MQTT discovery
+        "mobile_app"
+        "person"
+        "history"
+        "logbook"
+        "recorder"
+        "frontend"
+        "config"
+        "lovelace"
+        "network"
+        "stream"
+        "camera"
+        "ffmpeg"
+        # Wyoming voice assistant protocol
+        "wyoming"
+        "music_assistant"
+        "qbittorrent"
+      ];
+
+      config = {
+        # Trust Caddy as reverse proxy.
+        http = {
+          use_x_forwarded_for = true;
+          trusted_proxies = [
+            "127.0.0.1"
+            "::1"
+          ];
+          ip_ban_enabled = true;
+          login_attempts_threshold = 5;
+        };
+
+        homeassistant = {
+          name = "Home";
+          latitude = config.lanbat.haLatitude;
+          longitude = config.lanbat.haLongitude;
+          elevation = config.lanbat.haElevation;
+          unit_system = "metric";
+          time_zone = config.lanbat.timezone;
+          external_url = "https://ha.${domain}";
+        };
+
+        # Authentik forward-auth → header-based login (users must exist in HA).
+        auth_header = {
+          username_header = "X-Authentik-Username";
+        };
+
+        # Recorder — keep 30 days in the always-on PostgreSQL.
+        recorder = {
+          purge_keep_days = 30;
+          db_url =
+            let
+              pg = config.lanbat.postgresql.instances.always-on;
+            in
+            "postgresql://@/hass?host=${pg.socket}&port=${toString pg.port}";
+        };
       };
     };
-  };
 
-  # HA state lives entirely on server-local storage — resilient to Pi loss.
-  # /var/lib/hass is managed by the NixOS module.
+    # HA state lives entirely on server-local storage — resilient to Pi loss.
+    # /var/lib/hass is managed by the NixOS module.
   };
 }
