@@ -29,7 +29,7 @@
 }:
 
 {
-  # With the TV frontend, audio goes through PipeWire (see frontend.nix) and its
+  # With the TV frontend, audio goes through PipeWire (see tv.nix) and its
   # PulseAudio compat socket. Without it, snapclient plays through ALSA.
 
   # nixos-24.11 has no services.snapclient module — run it manually.

@@ -44,9 +44,9 @@
                          │  SD card: NixOS OS (boots independently of Tang)            │
                          │                                                              │
                          │  NFS server  ──►  exports /mnt/storage-{a,b}               │
-                         │  TV Launcher (openbox)                                       │
+                         │  TV sessions (tv-switch, controller hotkey)                  │
                          │    ├── Kodi                                                  │
-                         │    └── RetroArch                                             │
+                         │    └── EmulationStation (ES-DE) + RetroArch                  │
                          │  Snapclient ──► server:1704                                  │
                          │  Wyoming Satellite (10700) ◄── HA on server                  │
                          │  Telegraf → server:8086                                      │

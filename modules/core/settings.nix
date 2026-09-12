@@ -161,9 +161,9 @@ in
       type = types.bool;
       example = false;
       description = ''
-        Whether the Pi runs the TV frontend (X session, Kodi and the launcher)
-        on its HDMI output. Without it the Pi is a headless storage host, and
-        installing it doesn't compile the frontend's graphics stack on the Pi.
+        Whether the Pi runs the TV frontend (Kodi and EmulationStation
+        sessions, modules/pi/tv.nix) on its HDMI output. Without it the Pi is a
+        headless storage host.
       '';
     };
 

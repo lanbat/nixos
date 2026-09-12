@@ -397,7 +397,8 @@ From now on, deploy with `deploy path:.#pi`.
 - Verify: `lsblk` should show storage-a and storage-b as open mappers.
 - Verify NFS: `showmount -e localhost`
 - Verify Snapclient: `systemctl status snapclient`
-- TV launcher should appear on HDMI (if monitor attached).
+- With `piTvFrontend` on, Kodi should appear on HDMI (if a screen is attached). Holding a
+  controller's Guide button for 2 seconds switches to EmulationStation and back.
 
 ---
 

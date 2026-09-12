@@ -6,8 +6,8 @@
 #   1. Encrypted storage appliance: two LUKS drives unlocked automatically
 #      via Clevis/Tang on the server.
 #   2. NFS export of both drives to the server.
-#   3. TV frontend: Kodi and RetroArch via a simple launcher, when
-#      lanbat.piTvFrontend is set.
+#   3. TV frontend: Kodi and EmulationStation sessions, when
+#      lanbat.piTvFrontend is set (modules/pi/tv.nix).
 #
 # Heavy compute, databases and containers all live on the server.
 #
@@ -21,12 +21,11 @@
     ../../modules/core
 
     ../../modules/pi/clevis-unlock.nix
-    ../../modules/pi/frontend.nix
-    ../../modules/pi/launcher.nix
     ../../modules/pi/nfs-exports.nix
     ../../modules/pi/snapclient.nix
     ../../modules/pi/storage.nix
     ../../modules/pi/telegraf.nix
+    ../../modules/pi/tv.nix
     ../../modules/pi/wyoming-satellite.nix
   ];
 

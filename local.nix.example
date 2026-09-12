@@ -54,9 +54,8 @@
     piStorageDriveB = "CHANGE_ME";
 
     # ── Raspberry Pi ──────────────────────────────────────────────────────────
-    # The TV frontend (Kodi and the launcher) on the Pi's HDMI output. Its
-    # graphics stack compiles on the Pi for hours, so consider false for the
-    # first install and turning it on in a later deploy.
+    # The TV frontend (Kodi and EmulationStation) on the Pi's HDMI output.
+    # false gives a headless storage host, and a quicker first install.
     piTvFrontend = true;
 
     # ── Access ────────────────────────────────────────────────────────────────
