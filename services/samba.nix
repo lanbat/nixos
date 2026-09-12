@@ -51,6 +51,7 @@
     units = [
       "samba-smbd"
       "samba-nmbd"
+      "samba-winbindd" # RequiresMountsFor=/var/lib/samba
       "avahi-daemon" # announces the shares
     ];
     # winbindd requires private/ to exist before it starts.
@@ -65,6 +66,13 @@
       ];
       units = [ "samba-smbd" ];
     };
+  };
+
+  # The socket would start avahi-daemon, and with it the workload layer, on the
+  # first connection. Listen only while the layer is unlocked.
+  systemd.sockets.avahi-daemon = {
+    wantedBy = lib.mkForce [ "workload-online.target" ];
+    partOf = [ "workload-online.target" ];
   };
 
   services.samba = {

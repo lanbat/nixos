@@ -105,7 +105,8 @@ Follow this checklist every time:
    `secrets/README.md`.
 6. **Check**: run the commands above. Evaluation rejects clashing ports, subdomains,
    UIDs and secrets, forward auth on services with API clients, workload-tier services
-   without state, and units that no module defines.
+   without state, units that no module defines, and units outside `units` that would
+   start a gated unit at boot (a helper service, a timer or a socket).
 7. **Update docs**:
    - `docs/architecture.md` — auth matrix + hostname map
    - `docs/secure-layers.md` — add to the correct tier table

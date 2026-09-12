@@ -7,7 +7,7 @@
 
 let
   evalServices =
-    services:
+    extraConfig: services:
     let
       system = lib.nixosSystem {
         modules = [
@@ -20,6 +20,7 @@ let
             lanbat.services = services;
             systemd.services.demo.script = "true";
           }
+          extraConfig
         ];
       };
       checks = import ../modules/wiring/checks.nix {
@@ -29,10 +30,10 @@ let
     in
     map (a: a.message) (lib.filter (a: !a.assertion) checks.assertions);
 
-  expect =
-    name: services: fragments:
+  expectWith =
+    name: extraConfig: services: fragments:
     let
-      messages = evalServices services;
+      messages = evalServices extraConfig services;
       missing = lib.filter (f: !lib.any (lib.hasInfix f) messages) fragments;
       unexpected = fragments == [ ] && messages != [ ];
     in
@@ -40,6 +41,16 @@ let
       throw "assertion test '${name}' failed: expected ${builtins.toJSON fragments}, got ${builtins.toJSON messages}"
     else
       name;
+
+  expect = name: expectWith name { };
+
+  gatedDemo = {
+    demo = {
+      tier = "workload";
+      state = [ "demo" ];
+      units = [ "demo" ];
+    };
+  };
 
   results = [
     (expect "valid service passes" {
@@ -106,6 +117,28 @@ let
         description = "d";
       };
     } [ "demo is on the dashboard but has no subdomain" ])
+
+    (expectWith "boot unit that pulls in a gated unit" {
+      systemd.services.helper = {
+        script = "true";
+        wantedBy = [ "multi-user.target" ];
+        requires = [ "demo.service" ];
+      };
+    } gatedDemo [ "helper pulls in the workload-gated demo.service" ])
+
+    (expectWith "boot unit that needs a workload directory" {
+      systemd.services.helper = {
+        script = "true";
+        unitConfig.RequiresMountsFor = "/var/lib/demo/cache";
+      };
+    } gatedDemo [ "helper needs /var/lib/demo/cache, which is on the workload layer" ])
+
+    (expectWith "timer of a gated unit that starts at boot" {
+      systemd.timers.demo = {
+        wantedBy = [ "timers.target" ];
+        timerConfig.OnBootSec = "5m";
+      };
+    } gatedDemo [ "demo.timer starts the workload-gated demo.service outside the gate" ])
   ];
 in
 pkgs.runCommand "lanbat-assertions" { } ''
