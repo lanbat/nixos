@@ -22,7 +22,7 @@
 #
 # Local music library
 # -------------------
-# The filesystem_local provider reads /srv/storage/a/media/music over NFS.
+# The filesystem_local provider reads /srv/storage/b/media/music over NFS.
 # That path is Pi-backed (automount, not workload-gated).  MA is always-on:
 # we deliberately avoid lanbat.services.*.nfs.drives (which would stop MA when
 # the Pi disappears).  The service starts without the mount; library scans fail
@@ -45,7 +45,7 @@
 }:
 
 let
-  musicLibrary = "/srv/storage/a/media/music";
+  musicLibrary = "/srv/storage/b/media/music";
   domain = config.lanbat.domain;
   setup = pkgs.callPackage ../pkgs/music-assistant-setup {
     inherit pkgs;

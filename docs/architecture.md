@@ -55,8 +55,8 @@
                          │  /dev/nvme0n1 — NVMe drive A                                │
                          │  ┌──────────────────────────────────────────────────────┐   │
                          │  │ LUKS2  →  XFS (pquota)   [locked until Tang replies] │   │
-                         │  │  /mnt/storage-a/media/       (Jellyfin)              │   │
-                         │  │  /mnt/storage-a/downloads/   (qBittorrent)           │   │
+                         │  │  /mnt/storage-a/media/  (qBittorrent, Jellyfin)      │   │
+                         │  │    movies, TV, music videos                          │   │
                          │  │  /mnt/storage-a/photos/      (Immich)                │   │
                          │  │  /mnt/storage-a/surveillance/(Frigate)               │   │
                          │  └──────────────────────────────────────────────────────┘   │
@@ -64,6 +64,7 @@
                          │  /dev/nvme1n1 — NVMe drive B                                │
                          │  ┌──────────────────────────────────────────────────────┐   │
                          │  │ LUKS2  →  XFS (pquota)   [locked until Tang replies] │   │
+                         │  │  /mnt/storage-b/media/  the rest of the media        │   │
                          │  │  /mnt/storage-b/nextcloud/   (Nextcloud)             │   │
                          │  │  /mnt/storage-b/users/       (SMB homes)             │   │
                          │  │  /mnt/storage-b/shared/      (SMB shared)            │   │

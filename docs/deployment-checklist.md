@@ -623,7 +623,7 @@ Music Assistant is the music controller; Snapcast remains the distribution layer
      `services.snapserver` on the same ports).
 3. **Local filesystem music provider** — Settings → Music Providers → Add →
    Local Filesystem:
-   - Path: `/srv/storage/a/media/music` (NFS from Pi; scans fail gracefully
+   - Path: `/srv/storage/b/media/music` (NFS from Pi; scans fail gracefully
      while the Pi is down).
 4. **Base URL** — Settings → System → set Base URL to `https://music.<domain>`.
 5. **Home Assistant** — Settings → Devices & Services → Add Integration →

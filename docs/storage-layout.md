@@ -8,19 +8,19 @@ Raspberry Pi 5
 │   └── NixOS system
 │
 ├── Drive A  /dev/disk/by-id/DRIVE_A  →  LUKS  →  /dev/mapper/storage-a  →  XFS  →  /mnt/storage-a
-│   ├── /mnt/storage-a/media/              ← Jellyfin libraries (movies, TV, music)
+│   ├── /mnt/storage-a/media/              ← qBittorrent saves here, Jellyfin reads
 │   │   ├── movies/
 │   │   ├── tv/
-│   │   └── music/
-│   ├── /mnt/storage-a/downloads/          ← qBittorrent output
-│   │   ├── admin/                         ← per-user download dirs
-│   │   └── ...
+│   │   └── music-videos/
 │   ├── /mnt/storage-a/photos/             ← Immich originals / uploads
 │   └── /mnt/storage-a/surveillance/       ← Frigate recordings
 │       ├── clips/
 │       └── exports/
 │
 └── Drive B  /dev/disk/by-id/DRIVE_B  →  LUKS  →  /dev/mapper/storage-b  →  XFS  →  /mnt/storage-b
+    ├── /mnt/storage-b/media/              ← the rest of the media, as on drive A
+    │   ├── music/  documentaries/  adult/  roms/
+    │   └── audiobooks/  books/  gym/  games/  misc/
     ├── /mnt/storage-b/nextcloud/          ← Nextcloud external storage
     ├── /mnt/storage-b/users/              ← per-user SMB home dirs
     │   ├── admin/
@@ -153,7 +153,7 @@ Run `quota-setup.sh` on the Pi after first format (see docs/deployment-checklist
 | Project name | ID | Path | Drive | Suggested limit |
 |---|---|---|---|---|
 | media | 100 | /mnt/storage-a/media | A | no limit (fill the drive) |
-| downloads | 101 | /mnt/storage-a/downloads | A | 1 TB soft, 1.1 TB hard |
+| media-b | 101 | /mnt/storage-b/media | B | no limit |
 | photos | 102 | /mnt/storage-a/photos | A | no limit |
 | surveillance | 103 | /mnt/storage-a/surveillance | A | 500 GB soft, 550 GB hard |
 | nextcloud | 200 | /mnt/storage-b/nextcloud | B | 500 GB soft, 550 GB hard |
