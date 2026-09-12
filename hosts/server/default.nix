@@ -66,7 +66,7 @@
   # ---------------------------------------------------------------------------
   networking = {
     useNetworkd = true;
-    interfaces.eno1 = {
+    interfaces.${config.lanbat.serverInterface} = {
       useDHCP = false;
       ipv4.addresses = [
         {
@@ -77,7 +77,7 @@
     };
     defaultGateway = {
       address = config.lanbat.gatewayIp;
-      interface = "eno1";
+      interface = config.lanbat.serverInterface;
     };
     nameservers = [
       config.lanbat.gatewayIp

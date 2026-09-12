@@ -64,6 +64,12 @@ in
       description = "Hostname of the server.";
     };
 
+    serverInterface = mkOption {
+      type = types.str;
+      example = "enp1s0";
+      description = "Network interface of the server that gets serverIp. Find it with: ip -o link";
+    };
+
     piHostname = mkOption {
       type = types.str;
       example = "pi5";

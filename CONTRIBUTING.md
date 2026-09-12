@@ -141,6 +141,7 @@ when `local.nix` does, and only a `path:` flake reference includes it
 | `config.lanbat.gatewayIp` | Default gateway |
 | `config.lanbat.lanSubnet` | LAN-only firewall rules |
 | `config.lanbat.serverHostname` | Server hostname |
+| `config.lanbat.serverInterface` | Server network interface for the static address |
 | `config.lanbat.piHostname` | NFS mount target / Pi hostname |
 | `config.lanbat.nfsIdmapdDomain` | NFSv4 ID mapping domain (must match on both hosts) |
 | `config.lanbat.timezone` | System timezone + service TZ env vars |
