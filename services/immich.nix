@@ -47,6 +47,10 @@ let
   immichServerEnv = "/run/immich/server.env";
   immichConfigPath = "/run/immich/config.json";
   immichConfigMount = "/config/immich-config.json";
+  # Immich reaches Authentik over https://auth.<domain> during OAuth discovery.
+  lanbatCaBundle = "/var/lib/caddy-local-ca/ca-certificates.crt";
+  lanbatCaBundleMount = "/etc/ssl/lanbat/ca-certificates.crt";
+  lanbatCaRootMount = "/etc/ssl/lanbat/ca-root.crt";
 in
 {
   options.lanbat.immich = {
@@ -149,6 +153,9 @@ in
         ENCODED_VIDEO_PATH = "/usr/src/app/encoded-video";
         PROFILE_PATH = "/usr/src/app/profile";
         IMMICH_CONFIG_FILE = immichConfigMount;
+        # Node fetch for OIDC discovery does not inherit the host trust store.
+        NODE_EXTRA_CA_CERTS = lanbatCaRootMount;
+        SSL_CERT_FILE = lanbatCaBundleMount;
       };
       environmentFiles = [
         immichServerEnv
@@ -161,6 +168,8 @@ in
         "/var/lib/immich/profile:/usr/src/app/profile"
         "${immichConfigPath}:${immichConfigMount}:ro"
         "/etc/localtime:/etc/localtime:ro"
+        "/etc/caddy/ca-root.crt:${lanbatCaRootMount}:ro"
+        "${lanbatCaBundle}:${lanbatCaBundleMount}:ro"
       ];
       autoStart = true;
     };
