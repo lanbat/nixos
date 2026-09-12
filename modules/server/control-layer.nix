@@ -74,7 +74,7 @@ in
     ];
 
     fileSystems."/mnt/control" = {
-      device = "/dev/mapper/control";
+      device = "/dev/mapper/control-luks";
       fsType = "ext4";
       options = [
         "noauto"
@@ -128,10 +128,10 @@ in
       (adminScript "unlock-control" ''
         echo "=== unlock-control: opening control LUKS layer ==="
         echo
-        if [ -e /dev/mapper/control ]; then
-          echo "INFO: /dev/mapper/control already exists, skipping luksOpen."
+        if [ -e /dev/mapper/control-luks ]; then
+          echo "INFO: /dev/mapper/control-luks already exists, skipping luksOpen."
         else
-          cryptsetup luksOpen ${config.lanbat.layers.controlDevice} control
+          cryptsetup luksOpen ${config.lanbat.layers.controlDevice} control-luks
         fi
         echo "Mounting /mnt/control and activating control-online.target..."
         systemctl start control-online.target
@@ -162,11 +162,11 @@ in
         if mountpoint -q /mnt/control; then
           umount /mnt/control
         fi
-        if [ -e /dev/mapper/control ]; then
-          cryptsetup luksClose control
+        if [ -e /dev/mapper/control-luks ]; then
+          cryptsetup luksClose control-luks
           echo "Control LUKS closed."
         else
-          echo "INFO: /dev/mapper/control not found, already closed."
+          echo "INFO: /dev/mapper/control-luks not found, already closed."
         fi
       '')
 
@@ -188,7 +188,7 @@ in
         for layer in control workload; do
           echo
           echo "── $layer layer ──"
-          if [ -e "/dev/mapper/$layer" ]; then
+          if [ -e "/dev/mapper/$layer-luks" ]; then
             echo "  LUKS mapper:   OPEN"
           else
             echo "  LUKS mapper:   LOCKED"

@@ -336,7 +336,7 @@ Then run a LUKS header backup again to capture the new Clevis metadata.
 **New or wiped disk:** install as in `docs/deployment-checklist.md` Phase 1 (disko creates
 fresh volumes), then restore the data:
 
-1. `sudo cryptsetup luksOpen /dev/lanbat/control control && sudo mount /dev/mapper/control /mnt/control`
+1. `sudo cryptsetup luksOpen /dev/lanbat/control control-luks && sudo mount /dev/mapper/control-luks /mnt/control`
 2. Restore Tang keys from control backup:
    `restic -r <control-repo> restore latest --target /`
 3. `sudo systemctl start control-online.target` — Tang starts

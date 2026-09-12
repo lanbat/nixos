@@ -221,8 +221,8 @@ scp admin@<serverIp>:/tmp/server-*-luks-header.img ~/
 The fresh control volume needs a directory for Tang's keys, once:
 
 ```bash
-sudo cryptsetup luksOpen /dev/lanbat/control control
-sudo mount /dev/mapper/control /mnt/control
+sudo cryptsetup luksOpen /dev/lanbat/control control-luks
+sudo mount /dev/mapper/control-luks /mnt/control
 sudo install -d -m 0700 /mnt/control/tang
 sudo umount /mnt/control
 
