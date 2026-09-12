@@ -76,6 +76,12 @@ in
       description = "Hostname of the Raspberry Pi. The server mounts NFS from it.";
     };
 
+    piInterface = mkOption {
+      type = types.str;
+      example = "end0";
+      description = "Network interface of the Raspberry Pi that gets piIp. Find it with: ip -o link";
+    };
+
     nfsIdmapdDomain = mkOption {
       type = types.str;
       example = "home.lan";

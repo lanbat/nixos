@@ -35,7 +35,7 @@
   networking = {
     useNetworkd = true;
     # Static IP: the server's NFS mounts and firewall rules need a stable address.
-    interfaces.eth0 = {
+    interfaces.${config.lanbat.piInterface} = {
       useDHCP = false;
       ipv4.addresses = [
         {
@@ -46,7 +46,7 @@
     };
     defaultGateway = {
       address = config.lanbat.gatewayIp;
-      interface = "eth0";
+      interface = config.lanbat.piInterface;
     };
     nameservers = [ config.lanbat.gatewayIp ];
   };

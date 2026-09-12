@@ -25,6 +25,7 @@
     serverHostname = "server";
     serverInterface = "CHANGE_ME"; # e.g. "enp1s0"; find with: ip -o link
     piHostname = "pi5"; # or piIp if hostname resolution is unreliable
+    piInterface = "end0"; # the Pi 5's on-board Ethernet; find with: ip -o link
 
     # ── DNS ───────────────────────────────────────────────────────────────────
     domain = "CHANGE_ME"; # e.g. "home.example.com"; *.<domain> must resolve to the server

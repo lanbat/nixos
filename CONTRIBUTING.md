@@ -143,6 +143,7 @@ when `local.nix` does, and only a `path:` flake reference includes it
 | `config.lanbat.serverHostname` | Server hostname |
 | `config.lanbat.serverInterface` | Server network interface for the static address |
 | `config.lanbat.piHostname` | NFS mount target / Pi hostname |
+| `config.lanbat.piInterface` | Pi network interface for the static address |
 | `config.lanbat.nfsIdmapdDomain` | NFSv4 ID mapping domain (must match on both hosts) |
 | `config.lanbat.timezone` | System timezone + service TZ env vars |
 | `config.lanbat.phoneRegion` | Phone number formatting (Nextcloud) |

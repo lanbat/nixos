@@ -372,11 +372,22 @@ nix run nixpkgs#nixos-rebuild -- switch --flake path:.#pi \
   --target-host root@<pi-ip> --build-host root@<pi-ip>
 ```
 
-> **Prerequisite:** the Pi configuration must boot a Pi 5 the way the installer does,
-> with nixos-raspberrypi's Raspberry Pi 5 modules and
-> `boot.loader.raspberry-pi.bootloader = "kernel"`. `hosts/pi` doesn't do that yet: it
-> uses the nixos-hardware kernel and configures no bootloader, so switching to it as it
-> is now would not produce a bootable card.
+The Pi configuration boots the same way as the installer: `hosts/pi/hardware.nix` imports
+nixos-raspberrypi's Raspberry Pi 5 modules and sets
+`boot.loader.raspberry-pi.bootloader = "kernel"`. The Pi is built with nixos-raspberrypi's
+pinned nixpkgs (see `flake.nix`), so its kernel comes from that project's binary cache.
+
+Set `piInterface` in `local.nix` first (the Pi 5's on-board Ethernet is `end0`). If
+`piIp` differs from the installer's DHCP address, use `boot` instead of `switch` and
+reboot, so the address doesn't change in the middle of the SSH session:
+
+```bash
+nix run nixpkgs#nixos-rebuild -- boot --flake path:.#pi \
+  --target-host root@<pi-ip> --build-host root@<pi-ip>
+ssh root@<pi-ip> reboot
+```
+
+After the reboot, log in as `admin` on `piIp`; the configuration disables root login.
 
 From now on, deploy with `deploy path:.#pi`.
 

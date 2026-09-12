@@ -16,6 +16,7 @@
     serverHostname = "server";
     serverInterface = "eno1";
     piHostname = "pi5";
+    piInterface = "end0";
     nfsIdmapdDomain = "home.lan";
     timezone = "UTC";
     phoneRegion = "GB";

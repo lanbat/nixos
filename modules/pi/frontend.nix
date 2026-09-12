@@ -28,7 +28,8 @@
   # ---------------------------------------------------------------------------
   # Video acceleration — Pi 5 uses V3D (not VC4 like Pi 4).
   # ---------------------------------------------------------------------------
-  # V3D is the KMS driver for Pi 5; enabled automatically by nixos-hardware.
+  # V3D is the KMS driver for Pi 5; nixos-raspberrypi's raspberry-pi-5.display-vc4
+  # module (hosts/pi/hardware.nix) sets up the vc4-kms-v3d overlay.
   # If Kodi has no acceleration, check /sys/class/drm for card0/render devices.
 
   hardware.graphics.enable = true;

@@ -2,11 +2,14 @@
   description = "lanbat homelab — server + Raspberry Pi 5";
 
   inputs = {
-    # One nixpkgs for both hosts.
+    # nixpkgs of the server. The Pi uses nixos-raspberrypi's own pinned nixpkgs
+    # (see mkPi), because its binary cache only has the Raspberry Pi kernel and
+    # firmware built for that nixpkgs.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # Raspberry Pi 5 hardware support.
-    nixos-hardware.url = "github:NixOS/nixos-hardware";
+    # Raspberry Pi 5 support: vendor kernel, firmware and the firmware-partition
+    # bootloader. Doesn't follow our nixpkgs, to keep its binary cache usable.
+    nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
 
     # Secrets as age-encrypted files (secrets/).
     agenix = {
@@ -31,7 +34,7 @@
     {
       self,
       nixpkgs,
-      nixos-hardware,
+      nixos-raspberrypi,
       agenix,
       disko,
       deploy-rs,
@@ -64,12 +67,19 @@
           ./hosts/server
         ];
 
+      # nixos-raspberrypi's nixosSystem uses its pinned nixpkgs and trusts its
+      # binary cache, so the Pi downloads its kernel instead of compiling it.
       mkPi =
         settings:
-        mkHost settings [
-          nixos-hardware.nixosModules.raspberry-pi-5
-          ./hosts/pi
-        ];
+        nixos-raspberrypi.lib.nixosSystem {
+          specialArgs = { inherit inputs nixos-raspberrypi; };
+          modules = [
+            agenix.nixosModules.default
+            { nixpkgs.config.allowUnfree = true; }
+            settings
+            ./hosts/pi
+          ];
+        };
 
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
     in
