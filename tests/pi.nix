@@ -71,8 +71,9 @@ pkgs.testers.runNixOSTest {
             "systemctl show storage-a-unlock.service -p ActiveState --value | grep -qE '^(activating|failed)$'",
             timeout=120,
         )
-        # The NFS server runs, but exports nothing while the drives are locked.
+        # The NFS server runs, and serves a drive only once it is mounted.
         pi.wait_for_unit("nfs-server.service")
-        pi.succeed('test -z "$(exportfs)"')
+        pi.succeed("exportfs -v | grep -q mountpoint")
+        pi.fail("mountpoint -q /mnt/storage-a")
   '';
 }

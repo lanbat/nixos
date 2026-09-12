@@ -45,9 +45,15 @@ in
   # refreshes the exports then. One locked drive doesn't keep the other off
   # the network.
 
-  # rpcbind is needed for NFSv3 clients; not required for v4-only.
-  # mkForce to override the default-true set by the nfs module.
+  # NFSv4 only. rpcbind is needed for NFSv3 clients; not required for v4-only.
+  # mkForce to override the default-true set by the nfs module. With NFSv3
+  # still enabled, rpc.nfsd tries to register with the missing rpcbind and
+  # fails to start ("error starting threads: errno 111").
   services.rpcbind.enable = lib.mkForce false;
+  services.nfs.settings.nfsd = {
+    vers3 = false;
+    udp = false;
+  };
 
   # NFSv4 ID mapping domain — must match server config.
   services.nfs.idmapd.settings = {
