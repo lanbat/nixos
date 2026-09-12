@@ -112,7 +112,7 @@ in
   # ---------------------------------------------------------------------------
   # Inject secrets at runtime
   # ---------------------------------------------------------------------------
-  systemd.services.grafana.serviceConfig.EnvironmentFiles = [
+  systemd.services.grafana.serviceConfig.EnvironmentFile = [
     config.age.secrets.grafana-env.path
   ];
 
