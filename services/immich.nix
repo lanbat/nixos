@@ -33,6 +33,9 @@
 let
   immichVersion = "release"; # CHANGE_ME: pin to a specific tag, e.g. "v1.118.2"
   domain = config.lanbat.domain;
+  # immich-db-password.age exports POSTGRES_PASSWORD for postgres init; Immich v3
+  # reads DB_PASSWORD at runtime.
+  immichServerEnv = "/run/immich/server.env";
 in
 {
   lanbat.services.immich = {
@@ -90,7 +93,11 @@ in
   lanbat.postgresql.databases.immich = {
     instance = "workload";
     passwordFile = config.age.secrets.immich-db-password.path;
-    extraSql = "CREATE EXTENSION IF NOT EXISTS vchord CASCADE;";
+    extraSql = ''
+      CREATE EXTENSION IF NOT EXISTS vchord CASCADE;
+      CREATE EXTENSION IF NOT EXISTS cube;
+      CREATE EXTENSION IF NOT EXISTS earthdistance;
+    '';
   };
 
   # ---------------------------------------------------------------------------
@@ -117,10 +124,8 @@ in
       # OIDC / OAuth2 — configure Authentik as the provider.
       # These values are populated from the agenix secret below once the
       # Authentik application is created (see docs/authentik-setup.md).
-      # The env file must export:
-      #   POSTGRES_PASSWORD=<value>
-      #   IMMICH_OAUTH_CLIENT_ID=<value>
-      #   IMMICH_OAUTH_CLIENT_SECRET=<value>
+      # immich-oidc-env must export IMMICH_OAUTH_CLIENT_ID and
+      # IMMICH_OAUTH_CLIENT_SECRET.  DB_PASSWORD is written at container start.
       IMMICH_OAUTH_ENABLED = "true";
       IMMICH_OAUTH_ISSUER_URL = "https://auth.${domain}/application/o/immich/";
       IMMICH_OAUTH_SCOPE = "openid profile email";
@@ -129,10 +134,7 @@ in
       # Immich binds on port 2283 by default.
     };
     environmentFiles = [
-      config.age.secrets.immich-db-password.path
-      # immich-oidc-env.age exports IMMICH_OAUTH_CLIENT_ID and
-      # IMMICH_OAUTH_CLIENT_SECRET.  Create this secret once you have the
-      # Authentik application credentials.
+      immichServerEnv
       config.age.secrets.immich-oidc-env.path
     ];
     volumes = [
@@ -165,8 +167,20 @@ in
     autoStart = true;
   };
 
+  systemd.services.podman-immich-server = {
+    preStart = ''
+      set -euo pipefail
+      install -d -m 0750 -o immich -g immich /run/immich
+      umask 0177
+      . ${config.age.secrets.immich-db-password.path}
+      printf 'DB_PASSWORD=%s\n' "$POSTGRES_PASSWORD" > ${immichServerEnv}
+      chown immich:immich ${immichServerEnv}
+    '';
+  };
+
   # Ensure the photo path exists when NFS is mounted.
   systemd.tmpfiles.rules = [
     "d /srv/storage/a/photos 0750 immich immich -"
+    "d /run/immich 0750 immich immich -"
   ];
 }
