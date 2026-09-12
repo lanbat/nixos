@@ -254,6 +254,8 @@ let
           managed: "goauthentik.io/outposts/embedded"
         attrs:
           type: proxy
+          config:
+            authentik_host: "https://auth.${domain}"
           providers:
             - !KeyOf provider-home-assistant-proxy
             - !KeyOf provider-frigate

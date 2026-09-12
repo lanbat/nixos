@@ -50,20 +50,19 @@ exchange_auth_code() {
 
 run_onboarding() {
   log "creating owner user ${OWNER_USERNAME}"
-  local auth_code
-  auth_code="$(
-    curl -fsS -X POST "${INTERNAL_URL}/api/onboarding/users" \
-      -H "Content-Type: application/json" \
-      -d "$(jq -n \
-        --arg client_id "${EXTERNAL_URL}/" \
-        --arg name "$OWNER_USERNAME" \
-        --arg username "$OWNER_USERNAME" \
-        --arg password "$OWNER_PASSWORD" \
-        '{client_id: $client_id, name: $name, username: $username, password: $password, language: "en"}')"
-      | jq -r .auth_code
-  )"
+  local payload auth_code access_token
+  payload="$(jq -n \
+    --arg client_id "${EXTERNAL_URL}/" \
+    --arg name "$OWNER_USERNAME" \
+    --arg username "$OWNER_USERNAME" \
+    --arg password "$OWNER_PASSWORD" \
+    '{client_id: $client_id, name: $name, username: $username, password: $password, language: "en"}')"
 
-  local access_token
+  auth_code="$(curl -fsS -X POST "${INTERNAL_URL}/api/onboarding/users" \
+    -H "Content-Type: application/json" \
+    -d "$payload" \
+    | jq -r .auth_code)"
+
   access_token="$(exchange_auth_code "$auth_code")"
 
   log "finishing onboarding steps"
@@ -101,11 +100,10 @@ ensure_sso_users() {
   done
 }
 
-wait_for_ha
-
 if onboarding_done; then
   log "onboarding already complete"
 else
+  wait_for_ha
   run_onboarding
   touch "$STATE_FILE"
   log "onboarding complete"

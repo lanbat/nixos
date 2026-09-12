@@ -29,7 +29,11 @@
     extraPorts = [ 1883 ];
     # Plaintext passwords, one line each. Frigate reads its password too.
     secrets = {
-      mosquitto-ha-pass = { };
+      # homeassistant-bootstrap reads this to configure the MQTT integration.
+      mosquitto-ha-pass = {
+        group = "hass";
+        mode = "0440";
+      };
       mosquitto-frigate-pass = { };
       mosquitto-z2m-pass = { };
     };

@@ -51,6 +51,18 @@ let
         }
       '';
 
+  errorPage = svc: if svc.nfs.drives != [ ] then "storage.html" else "offline.html";
+
+  handleErrors = svc: ''
+    handle_errors {
+      @upstream `{http.error.status_code}` >= 502 && `{http.error.status_code}` <= 504
+      rewrite @upstream /${errorPage svc}
+      file_server {
+        root /var/lib/caddy-error-pages
+      }
+    }
+  '';
+
   # Companion apps and REST clients authenticate directly with HA tokens, so
   # /auth/token and /api/* bypass Authentik when apiClients is set.
   forwardAuthWithApiBypass =
@@ -94,6 +106,7 @@ let
             on_demand
           }
         ''
+        (handleErrors svc)
         (
           if svc.auth == "forward-auth" && svc.apiClients then
             forwardAuthWithApiBypass svc

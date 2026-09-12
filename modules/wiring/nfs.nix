@@ -5,8 +5,9 @@
 # The Pi exports /mnt/storage-a and /mnt/storage-b over NFSv4; the server
 # mounts them at /srv/storage/a and /srv/storage/b. Every unit listed in
 # lanbat.services.<name>.nfs.units gets After= and BindsTo= on the mount of
-# each drive in nfs.drives, so systemd stops it when the Pi goes away, plus
-# Restart=on-failure so it comes back.
+# each drive in nfs.drives, plus ConditionPathIsMountPoint so a missing mount
+# is a clean skip (not a dependency failure). BindsTo still stops the unit when
+# the mount goes away; Restart=on-failure brings it back.
 #
 # The mounts are "soft,timeo=30,retrans=3": the kernel returns errors after
 # about 90 s instead of hanging forever when the Pi is unreachable.
@@ -16,6 +17,7 @@ let
   piHost = config.lanbat.piHostname;
 
   mountUnit = drive: "srv-storage-${drive}.mount";
+  mountPoint = drive: "/srv/storage/${drive}";
 
   nfsOpts = [
     "nfsvers=4.2"
@@ -78,6 +80,7 @@ in
       ${dep.unit} = {
         after = map mountUnit dep.drives;
         bindsTo = map mountUnit dep.drives;
+        unitConfig.ConditionPathIsMountPoint = map mountPoint dep.drives;
         serviceConfig.Restart = lib.mkDefault "on-failure";
         serviceConfig.RestartSec = lib.mkDefault "10s";
       };

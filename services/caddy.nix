@@ -159,7 +159,24 @@ in
     };
   };
 
-  systemd.tmpfiles.rules = [ "d /var/lib/ca-landing 0755 root root -" ];
+  systemd.tmpfiles.rules = [
+    "d /var/lib/ca-landing 0755 root root -"
+    "d /var/lib/caddy-error-pages 0755 root root -"
+  ];
+
+  systemd.services."caddy-install-error-pages" = {
+    description = "Install Caddy upstream error pages";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "install-caddy-error-pages" ''
+        cp -r ${pkgs.callPackage ../pkgs/service-unavailable-page { inherit domain; }}/. /var/lib/caddy-error-pages/
+        chmod -R 644 /var/lib/caddy-error-pages/*
+        chmod 755 /var/lib/caddy-error-pages
+      '';
+    };
+  };
 
   # ---------------------------------------------------------------------------
   # Server-side CA trust

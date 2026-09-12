@@ -28,15 +28,28 @@
 # the Pi disappears).  The service starts without the mount; library scans fail
 # gracefully until NFS is available.
 #
+# Auth with Home Assistant
+# ----------------------
+# Browser access to music.<domain> is gated by Caddy forward-auth (Authentik).
+# Music Assistant has no Authentik header passthrough like Home Assistant, so
+# users sign in via "Login with Home Assistant" (HA OAuth) after Authentik.
+# music-assistant-setup provisions the hass plugin, base URL, self-registration,
+# and the bidirectional long-lived tokens for the HA integration.
+#
 # Always-on: yes.  State in /var/lib/music-assistant (provider config, playlists).
 {
   config,
+  pkgs,
   lib,
   ...
 }:
 
 let
   musicLibrary = "/srv/storage/a/media/music";
+  domain = config.lanbat.domain;
+  setup = pkgs.callPackage ../pkgs/music-assistant-setup {
+    inherit pkgs;
+  };
 in
 {
   lanbat.services.music-assistant = {
@@ -79,8 +92,57 @@ in
       User = "music-assistant";
       Group = "music-assistant";
       SupplementaryGroups = [ "media" ];
+      # HA OAuth token exchange calls https://ha.<domain> server-side; trust the
+      # internal Caddy CA (global environment.variables do not reach systemd units).
+      Environment = [
+        "SSL_CERT_FILE=/var/lib/caddy-local-ca/ca-certificates.crt"
+        "REQUESTS_CA_BUNDLE=/var/lib/caddy-local-ca/ca-certificates.crt"
+      ];
       # Do not bind the NFS library path here — systemd fails to start when
       # the Pi automount is not yet available.  Scans fail gracefully instead.
     };
   };
+
+  systemd.services.music-assistant-setup = {
+    description = "Configure Music Assistant Home Assistant integration and OAuth login";
+    wantedBy = [ "multi-user.target" ];
+    after = [
+      "music-assistant.service"
+      "home-assistant.service"
+      "home-assistant-bootstrap.service"
+    ];
+    wants = [
+      "music-assistant.service"
+      "home-assistant.service"
+    ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "root";
+    };
+
+    path = with pkgs; [
+      setup
+      sudo
+      config.services.home-assistant.package
+    ];
+
+    script = ''
+      set -a
+      . ${config.age.secrets.hass-bootstrap-env.path}
+      set +a
+      export MA_URL="http://127.0.0.1:8095"
+      export MA_PUBLIC_URL="https://music.${domain}"
+      export HA_INTERNAL_URL="http://127.0.0.1:8123"
+      export HA_PUBLIC_URL="https://ha.${domain}"
+      export HASS_BIN="${config.services.home-assistant.package}/bin/hass"
+      export HASS_CONFIG="/var/lib/hass"
+      exec music-assistant-setup
+    '';
+  };
+
+  systemd.tmpfiles.rules = [
+    "d /var/lib/music-assistant/.lanbat-setup 0700 music-assistant music-assistant -"
+  ];
 }

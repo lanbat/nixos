@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Storage unavailable</title>
+  <style>
+    :root {
+      --bg: #0f172a; --surface: #1e293b; --text: #e2e8f0; --muted: #94a3b8;
+      --accent: #6366f1; --yellow: #eab308;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, sans-serif; background: var(--bg); color: var(--text);
+      margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;
+    }
+    .card {
+      max-width: 560px; background: var(--surface); border-radius: 12px;
+      padding: 2rem;
+    }
+    h1 { margin: 0 0 .75rem; font-size: 1.5rem; }
+    p { margin: 0 0 1rem; color: var(--muted); line-height: 1.6; }
+    .note {
+      border-left: 4px solid var(--yellow); padding: .75rem 1rem;
+      background: #1e293b; border-radius: 4px; color: var(--muted); font-size: .95rem;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Pi storage unavailable</h1>
+    <p>
+      This app needs NFS storage from the Raspberry Pi and will not start until
+      <code>/srv/storage</code> is mounted.
+    </p>
+    <div class="note">
+      Check that the Pi is online and its storage drives are unlocked, then wait for
+      the mount to come back. The service should start automatically once storage is available.
+    </div>
+    <p style="margin-top:1.25rem">
+      <a href="https://home.@domain@/">Back to the dashboard</a>
+    </p>
+  </div>
+</body>
+</html>

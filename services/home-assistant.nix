@@ -39,6 +39,7 @@ let
   domain = config.lanbat.domain;
   authHeaderComponent = pkgs.callPackage ../pkgs/home-assistant-auth-header { };
   bootstrap = pkgs.callPackage ../pkgs/home-assistant-bootstrap { };
+  postSetup = pkgs.callPackage ../pkgs/home-assistant-post-setup { };
 in
 {
   options.lanbat.homeAssistant = {
@@ -83,8 +84,14 @@ in
     lanbat.postgresql.databases.hass.instance = "always-on";
 
     systemd.services.home-assistant = {
-      after = [ config.lanbat.postgresql.instances.always-on.unit ];
-      requires = [ config.lanbat.postgresql.instances.always-on.unit ];
+      after = [
+        config.lanbat.postgresql.instances.always-on.unit
+        "mosquitto.service"
+      ];
+      requires = [
+        config.lanbat.postgresql.instances.always-on.unit
+        "mosquitto.service"
+      ];
     };
 
     systemd.services.home-assistant-bootstrap = {
@@ -111,6 +118,38 @@ in
         export EXTERNAL_URL="https://ha.${domain}"
         export SSO_USERS="${lib.concatStringsSep " " config.lanbat.homeAssistant.ssoUsers}"
         exec home-assistant-bootstrap
+      '';
+    };
+
+    systemd.services.home-assistant-post-setup = {
+      description = "Configure Home Assistant integrations (MQTT, Frigate, Wyoming, Music Assistant)";
+      wantedBy = [ "multi-user.target" ];
+      after = [
+        "home-assistant.service"
+        "home-assistant-bootstrap.service"
+        "music-assistant-setup.service"
+        "mosquitto.service"
+      ];
+      wants = [ "music-assistant-setup.service" ];
+      requires = [ "mosquitto.service" ];
+
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = "root";
+      };
+
+      path = [ postSetup ];
+
+      script = ''
+        export MQTT_BROKER="127.0.0.1"
+        export MQTT_PORT="1883"
+        export MQTT_USERNAME="homeassistant"
+        export MQTT_PASSWORD="$(cat ${config.age.secrets.mosquitto-ha-pass.path})"
+        export FRIGATE_URL="http://127.0.0.1:5000/"
+        export MUSIC_ASSISTANT_URL="http://127.0.0.1:8095"
+        export PI_HOST="${config.lanbat.piIp}"
+        exec home-assistant-post-setup
       '';
     };
 
@@ -191,7 +230,92 @@ in
               pg = config.lanbat.postgresql.instances.always-on;
             in
             "postgresql://@/hass?host=${pg.socket}&port=${toString pg.port}";
+          exclude = {
+            entity_globs = [
+              "*.linkquality"
+              "*.rssi"
+              "select.*switch_type"
+            ];
+          };
         };
+
+        automation = [
+          {
+            alias = "Zigbee bridge offline";
+            id = "lanbat_zigbee_bridge_offline";
+            trigger = [
+              {
+                platform = "state";
+                entity_id = "binary_sensor.zigbee2mqtt_bridge_connection_state";
+                to = "off";
+              }
+            ];
+            action = [
+              {
+                service = "persistent_notification.create";
+                data = {
+                  notification_id = "zigbee_bridge_offline";
+                  title = "Zigbee bridge offline";
+                  message = "Zigbee2MQTT lost its MQTT connection.";
+                };
+              }
+            ];
+          }
+          {
+            alias = "Zigbee bridge online";
+            id = "lanbat_zigbee_bridge_online";
+            trigger = [
+              {
+                platform = "state";
+                entity_id = "binary_sensor.zigbee2mqtt_bridge_connection_state";
+                to = "on";
+              }
+            ];
+            action = [
+              {
+                service = "persistent_notification.dismiss";
+                data.notification_id = "zigbee_bridge_offline";
+              }
+            ];
+          }
+        ];
+      };
+
+      lovelaceConfig = {
+        title = "Home";
+        views = [
+          {
+            title = "Overview";
+            path = "home";
+            cards = [
+              {
+                type = "entities";
+                title = "Zigbee bridge";
+                entities = [
+                  "switch.zigbee2mqtt_bridge_permit_join"
+                  "binary_sensor.zigbee2mqtt_bridge_connection_state"
+                  "binary_sensor.zigbee2mqtt_bridge_restart_required"
+                ];
+              }
+              {
+                type = "entity-filter";
+                show_empty = false;
+                filters = [
+                  {
+                    domain = "switch";
+                    options = {
+                      exclude = "switch.zigbee2mqtt_bridge_permit_join";
+                    };
+                  }
+                ];
+                card = {
+                  type = "entities";
+                  title = "Switches";
+                };
+              }
+            ];
+          }
+        ];
       };
     };
 

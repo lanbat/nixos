@@ -65,8 +65,10 @@ bash secrets/generate-oidc-secrets.sh
 
 This creates `authentik-oidc-secrets.age` and wires the matching secrets into
 `grafana-env.age`, `nextcloud-oidc-env.age`, and `immich-oidc-env.age`.  It
-also prints the client credentials needed for manual UI setup in Home Assistant
-and Jellyfin.
+also prints the client credentials needed for manual UI setup in Jellyfin.
+
+`generate-secrets.sh` also creates `hass-bootstrap-env.age` (owner username and
+break-glass password for automated Home Assistant onboarding).
 
 The full list for reference:
 
