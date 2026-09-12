@@ -28,10 +28,10 @@ configurations, which take placeholder settings from `hosts/example-settings.nix
 ```bash
 nix fmt                                   # format all .nix files
 nix flake check --no-build --all-systems  # evaluate the example hosts and the checks
-nix build .#checks.x86_64-linux.assertions .#checks.x86_64-linux.workload-gate  # wiring tests
+nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql}  # wiring tests
 ```
 
-The workload-gate test boots a VM and needs KVM. CI runs all three on every pull request.
+The workload-gate and postgresql tests boot VMs and need KVM. CI runs all three on every pull request.
 
 ## Pull requests
 
@@ -167,7 +167,7 @@ availability requirements:
 
 **Always-on** (the default; start at boot, data on the unencrypted host root):
 - The service starts without any LUKS unlock and NixOS manages `/var/lib/<name>` normally.
-- Current members: Caddy, PostgreSQL, Redis, Authentik, Home Assistant, Grafana, InfluxDB,
+- Current members: Caddy, PostgreSQL (always-on instance), Redis, Authentik, Home Assistant, Grafana, InfluxDB,
   Mosquitto, Zigbee2MQTT, Frigate, Snapcast, Wyoming pipeline, SearXNG, Telegraf, Homepage
 
 **Workload-gated** (start only after `unlock-workload`, data on encrypted LUKS):
@@ -175,7 +175,7 @@ availability requirements:
   units in `units`. The wiring creates the mode-0000 stubs, bind-mounts
   `/mnt/workload/<dir>` over them, and moves the units under `workload-online.target`.
 - Current members: Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba,
-  qBittorrent, Bitmagnet
+  qBittorrent, Bitmagnet, PostgreSQL (workload instance)
 
 When in doubt, prefer **always-on** for monitoring/automation/infrastructure services
 and **workload-gated** for personal data vaults (passwords, photos, documents, media).
@@ -183,6 +183,20 @@ and **workload-gated** for personal data vaults (passwords, photos, documents, m
 ### Prefer NixOS-native services over containers
 Use `services.<name>` when a good NixOS module exists.
 Use `virtualisation.oci-containers` only when necessary (e.g. Authentik, Immich, Frigate).
+
+### Databases
+Prefer PostgreSQL over a service's own SQLite file when the service supports it. There are
+two instances, one per tier (`services/postgresql.nix`); put a database on the instance
+matching its service's tier, so workload data never lands on the unencrypted host root:
+```nix
+lanbat.postgresql.databases.<name> = {
+  instance = "always-on";   # or "workload"
+  # passwordFile = config.age.secrets.<name>-env.path;   # only for TCP logins (containers)
+};
+```
+This creates a database and owner role named `<name>`. A NixOS-native service running as
+the system user `<name>` logs in over the socket without a password; take the socket, port
+and the unit to order after from `config.lanbat.postgresql.instances.<instance>`.
 
 ### Rootless containers
 Give each container service its own account:

@@ -94,7 +94,8 @@ sudo nix-collect-garbage --delete-older-than 14d
 systemctl status caddy podman-authentik-server podman-authentik-worker
 systemctl status jellyfin podman-qbittorrent podman-frigate
 systemctl status podman-immich-server podman-homepage podman-searxng
-systemctl status postgresql redis-shared
+systemctl status postgresql-always-on redis-shared
+systemctl status postgresql       # workload instance: only runs while the workload layer is unlocked
 systemctl status home-assistant mosquitto samba-smbd tangd.socket
 systemctl status vaultwarden grafana influxdb2
 

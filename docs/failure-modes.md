@@ -3,11 +3,11 @@
 ## Normal boot (server then Pi)
 
 1. Server boots. Host layer comes up immediately — SSH reachable, both LUKS layers locked.
-2. Always-on services start automatically: Caddy, PostgreSQL, Authentik, HA, Grafana,
-   InfluxDB, Mosquitto, Frigate, Snapcast, Wyoming, SearXNG, Telegraf.
+2. Always-on services start automatically: Caddy, PostgreSQL (always-on instance),
+   Authentik, HA, Grafana, InfluxDB, Mosquitto, Frigate, Snapcast, Wyoming, SearXNG, Telegraf.
 3. Admin SSHes in and runs `sudo unlock-control` → Tang starts on port 7500.
-4. Admin runs `sudo unlock-workload` → Nextcloud, Immich, Jellyfin, Vaultwarden,
-   Syncthing, Samba, qBittorrent, Bitmagnet come up.
+4. Admin runs `sudo unlock-workload` → the PostgreSQL workload instance, Nextcloud, Immich,
+   Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet come up.
 5. Pi boots from SD card. After network is up, `storage-a-unlock` and `storage-b-unlock`
    contact Tang, unlock both NVMe drives (retries every 5 min until Tang is reachable).
 6. `/mnt/storage-a` and `/mnt/storage-b` mount on the Pi. NFS server starts.
@@ -82,7 +82,7 @@ Usually 2-3 minutes total.
 
 Services that stay up during Pi reboot (always-on tier):
 - Caddy ✓
-- PostgreSQL ✓
+- PostgreSQL, always-on instance ✓ (the workload instance keeps running too; it doesn't use NFS)
 - Authentik ✓
 - Home Assistant ✓
 - Grafana ✓

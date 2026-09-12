@@ -10,6 +10,6 @@
 
 - [ ] Ran `nix fmt`
 - [ ] `nix flake check --no-build --all-systems` passes
-- [ ] `nix build .#checks.x86_64-linux.assertions` passes (and `.workload-gate` if you have KVM)
+- [ ] `nix build .#checks.x86_64-linux.assertions` passes (and `.workload-gate`, `.postgresql` if you have KVM)
 - [ ] Docs updated per the checklist in CONTRIBUTING.md (if a service was added or changed)
 - [ ] No real IP addresses, domains, keys or plaintext secrets

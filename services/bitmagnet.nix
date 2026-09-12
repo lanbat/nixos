@@ -51,7 +51,10 @@
     };
   };
 
-  lanbat.postgresql.databases.bitmagnet.passwordFile = config.age.secrets.bitmagnet-db-pass.path;
+  lanbat.postgresql.databases.bitmagnet = {
+    instance = "workload";
+    passwordFile = config.age.secrets.bitmagnet-db-pass.path;
+  };
 
   # ---------------------------------------------------------------------------
   # Bitmagnet container

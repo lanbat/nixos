@@ -62,9 +62,9 @@ These paths live on `/dev/lanbat/root` and are accessible at boot without any un
 ```
 /var/lib/
 ├── caddy/             Caddy TLS state, internal CA keys
-├── hass/              Home Assistant config + SQLite DB
+├── hass/              Home Assistant config (history is in PostgreSQL)
 ├── authentik/         Authentik media, certs
-├── postgresql/        PostgreSQL data directory
+├── postgresql-always-on/  PostgreSQL always-on instance: Authentik, Home Assistant, Grafana
 ├── frigate/
 │   ├── config/        frigate.yml
 │   └── db/            Frigate SQLite event DB
@@ -86,8 +86,9 @@ are overlaid by bind mounts from `/mnt/workload/`.
 
 ```
 /mnt/workload/
+├── postgresql/        PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet
 ├── nextcloud/         Nextcloud app + config (bulk data is on Pi)
-├── immich/            (database: the shared PostgreSQL on host root)
+├── immich/
 │   ├── thumbs/        Generated thumbnails
 │   ├── encoded-video/ Re-encoded video previews
 │   ├── profile/       User profile photos
@@ -110,20 +111,20 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Service | Config | Database | Bulk content / originals |
 |---|---|---|---|
 | Caddy | server-local | — | — |
-| Authentik | server-local | server-local (PostgreSQL) | — |
-| Home Assistant | server-local | server-local (SQLite) | — |
-| Nextcloud | server-local | server-local (PostgreSQL) | Pi/b (external storage) |
-| Immich | server-local | server-local (PostgreSQL) | Pi/a/photos |
+| Authentik | server-local | always-on PostgreSQL | — |
+| Home Assistant | server-local | always-on PostgreSQL | — |
+| Nextcloud | server-local | workload PostgreSQL | Pi/b (external storage) |
+| Immich | server-local | workload PostgreSQL | Pi/a/photos |
 | Jellyfin | server-local | server-local | Pi/a/media |
 | qBittorrent | server-local | — | Pi/a/downloads |
 | Frigate | server-local | server-local (SQLite) | Pi/a/surveillance |
-| Bitmagnet | server-local | server-local (PostgreSQL) | — |
+| Bitmagnet | server-local | workload PostgreSQL | — |
 | SearXNG | server-local | — | — |
 | Homepage | server-local | — | — |
 | Samba | (via nss) | — | Pi/a + Pi/b |
 | MQTT | server-local | — | — |
 | Vaultwarden | server-local | server-local (SQLite) | — |
-| Grafana | server-local | server-local (SQLite) | — |
+| Grafana | server-local | always-on PostgreSQL | — |
 | InfluxDB | server-local | server-local | — |
 | Syncthing | server-local | server-local (SQLite index) | Pi/b/syncthing |
 | Snapcast | — | — | — (stateless; audio piped at runtime) |

@@ -88,6 +88,7 @@ in
   };
 
   lanbat.postgresql.databases.immich = {
+    instance = "workload";
     passwordFile = config.age.secrets.immich-db-password.path;
     extraSql = "CREATE EXTENSION IF NOT EXISTS vchord CASCADE;";
   };

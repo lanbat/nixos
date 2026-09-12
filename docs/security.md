@@ -7,7 +7,7 @@
 The server uses a three-layer design. See `docs/secure-layers.md` for full detail.
 
 - **`/dev/lanbat/root` (host root)** — plain ext4, **not encrypted**. Contains NixOS, SSH,
-  networking, admin tools, and always-on service data (PostgreSQL, Authentik, HA,
+  networking, admin tools, and always-on service data (always-on PostgreSQL, Authentik, HA,
   Grafana, InfluxDB, Mosquitto, Frigate, Caddy TLS certs). Always available after boot.
   This is intentional: the server must be remotely administrable after reboot without
   physical presence. An encrypted root would require console access for every reboot.
@@ -18,11 +18,12 @@ The server uses a three-layer design. See `docs/secure-layers.md` for full detai
 
 - **`/dev/lanbat/workload` (workload LUKS)** — LUKS2-encrypted. Contains workload-gated service
   data: Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent,
-  Bitmagnet. Unlocked manually by admin after each reboot (`unlock-workload`).
+  Bitmagnet, including the PostgreSQL instance with the Nextcloud, Immich and Bitmagnet
+  databases. Unlocked manually by admin after each reboot (`unlock-workload`).
 
 **Threat model**: if the server is stolen while both LUKS layers are locked, the
 attacker gets SSH access to an empty host but cannot reach Tang (Pi drives stay locked)
-and cannot access workload data. Host-root data (PostgreSQL, HA history, etc.) is
+and cannot access workload data. Host-root data (Authentik, HA history, Grafana, etc.) is
 visible, so it is treated as lower-sensitivity data.
 
 ### Pi

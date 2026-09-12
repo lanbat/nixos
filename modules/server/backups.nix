@@ -270,8 +270,13 @@ in
   #       set -euo pipefail
   #       DUMPDIR=/mnt/workload/postgresql-dumps
   #       mkdir -p "$DUMPDIR"
-  #       for db in authentik nextcloud bitmagnet; do
+  #       # Workload instance (port 5432).
+  #       for db in nextcloud immich bitmagnet; do
   #         pg_dump -Fc "$db" > "$DUMPDIR/$db-$(date +%Y%m%d).dump"
+  #       done
+  #       # Always-on instance (port 5433).
+  #       for db in authentik hass grafana; do
+  #         pg_dump -Fc -h /run/postgresql-always-on -p 5433 "$db" > "$DUMPDIR/$db-$(date +%Y%m%d).dump"
   #       done
   #       # Prune dumps older than 7 days.
   #       find "$DUMPDIR" -name "*.dump" -mtime +7 -delete
