@@ -134,6 +134,13 @@ agenix -e grafana-env.age
 #   ADMIN_TOKEN=<openssl rand -base64 48>
 agenix -e vaultwarden-env.age
 
+# ---- Caddy internal CA ----
+# Created once when pinning the root CA (see services/caddy.nix). The public
+# cert is secrets/caddy-ca-root.crt (committed). Encrypt the private key:
+#   agenix -e caddy-ca-root-key.age < /path/to/root.key
+# To rotate deliberately: generate a new root, re-encrypt, redeploy, then
+# redistribute ca.<domain>/root.crt to every client.
+
 # ---- Telegraf ----
 # Leave empty for now — fill in AFTER deploying InfluxDB and creating a
 # write token in its UI (Data → API Tokens → Generate → Write to "metrics").
@@ -178,3 +185,5 @@ agenix -r
 | `grafana-env.age` | `KEY=value` × 4 | Grafana |
 | `vaultwarden-env.age` | `ADMIN_TOKEN=<value>` | Vaultwarden |
 | `telegraf-token.age` | `TELEGRAF_INFLUXDB_TOKEN=<value>` | Telegraf (server + Pi) |
+| `caddy-ca-root.crt` | PEM root certificate (public) | Caddy internal CA — committed plaintext |
+| `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |

@@ -77,9 +77,14 @@ in
   services.nextcloud = {
     enable = true;
     hostName = "cloud.${domain}";
-    # UPGRADE PATH: NC30 → NC31 → NC32 → NC33 (Nextcloud forbids skipping majors).
-    # NC31 migration complete. Now on NC32.
-    # Next step: after NC32 migration succeeds, switch to pkgs.nextcloud33.
+    # Pin the major version explicitly — Nextcloud cannot skip majors, and nixpkgs
+    # removes old majors (nextcloud31 already throws). Without this line, the module
+    # default depends on system.stateVersion and will drift on nixpkgs bumps.
+    #
+    # UPGRADE PATH: one major at a time (NC32 → NC33 → …). See docs/runbook.md
+    # § Nextcloud major version upgrade. nix flake check still warns while the pin
+    # is below the latest packaged major (33); that warning clears only after the
+    # live instance is migrated and this line is bumped to pkgs.nextcloud33.
     package = pkgs.nextcloud32;
 
     https = true;

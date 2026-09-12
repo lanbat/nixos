@@ -60,8 +60,14 @@ account prunes its dangling images weekly.
 These paths live on `/dev/lanbat/root` and are accessible at boot without any unlock.
 
 ```
+/etc/caddy/
+└── ca-root.crt        Persisted internal root CA (public; also secrets/caddy-ca-root.crt)
+
+/run/agenix/
+└── caddy-ca-root-key  Root CA private key (agenix; survives host-root reinstall)
+
 /var/lib/
-├── caddy/             Caddy TLS state, internal CA keys
+├── caddy/             Caddy TLS state (intermediate + leaf certs; rotates)
 ├── hass/              Home Assistant config (history is in PostgreSQL)
 ├── authentik/         Authentik media, certs
 ├── postgresql-always-on/  PostgreSQL always-on instance: Authentik, Home Assistant, Grafana
@@ -127,7 +133,8 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Grafana | server-local | always-on PostgreSQL | — |
 | InfluxDB | server-local | server-local | — |
 | Syncthing | server-local | server-local (SQLite index) | Pi/b/syncthing |
-| Snapcast | — | — | — (stateless; audio piped at runtime) |
+| Music Assistant | server-local | server-local (embedded) | Pi/a/media/music (NFS, read-only) |
+| Snapcast | — | — | — (streams created dynamically by MA) |
 | Wyoming (server) | — | — | — (models re-downloaded on first start) |
 | Wyoming satellite (Pi) | — | — | — (stateless) |
 | Telegraf (server + Pi) | — | → InfluxDB | — |

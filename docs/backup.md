@@ -10,10 +10,11 @@
 | PostgreSQL databases (always-on and workload instances) | server | `pg_dumpall` of each instance via `backup-server.sh` |
 | Authentik state | `/var/lib/authentik/` | `backup-server.sh` |
 | Home Assistant config | `/var/lib/hass/` | `backup-server.sh` |
-| Caddy CA keys | `/var/lib/caddy/` | `backup-server.sh` |
+| Caddy root CA key | `secrets/caddy-ca-root-key.age` (agenix) + `secrets/caddy-ca-root.crt` (git) | git + agenix |
+| Caddy intermediate/leaf state | `/var/lib/caddy/` | `backup-server.sh` (regenerates from root if lost) |
 | agenix secrets | `secrets/*.age` | git repository |
 | Frigate config | `/var/lib/frigate/config/` | `backup-server.sh` |
-| Nextcloud config | `/var/lib/nextcloud/` | `backup-server.sh` |
+| Nextcloud config | `/var/lib/nextcloud/` | `backup-server.sh` (back up before any major upgrade — see `docs/runbook.md` § Nextcloud major version upgrade) |
 | Vaultwarden data | `/var/lib/vaultwarden/` | `backup-server.sh` |
 | InfluxDB data (metrics) | `/var/lib/influxdb2/` | `backup-server.sh` |
 | Grafana state | `/var/lib/grafana/` | `backup-server.sh` |
@@ -28,6 +29,7 @@
 | Kodi library | `/var/lib/kodi/.kodi/` | manual rsync |
 | Nextcloud user data | `/srv/storage/b/nextcloud/` | Already on Pi LUKS storage |
 | qBittorrent config | `/var/lib/qbittorrent/` | `backup-server.sh` |
+| Music Assistant state | `/var/lib/music-assistant/` | `backup-server.sh` |
 
 ### Regenerable (do not need to back up)
 
@@ -45,9 +47,10 @@
 
 ### Server → Pi backup (nightly)
 
-`backup-server.sh` runs via a systemd timer every night at 03:00.
-It writes to `/srv/storage/b/backups/server/` (Pi Drive B).
-Keeps 7 daily backups.
+`backup-server.sh` writes to `/srv/storage/b/backups/server/` (Pi Drive B) and
+keeps 7 daily backups. It is **not enabled by default**: the timer requires Pi
+NFS (`srv-storage-b.mount`) to be available. Enable it in `hosts/server/default.nix`
+only after Phase 2 (Pi install) is complete.
 
 Add to `hosts/server/default.nix`:
 

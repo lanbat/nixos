@@ -19,6 +19,7 @@
     .card { background: var(--surface); border-radius: 12px;
             padding: 1.5rem; margin-bottom: 1.5rem; }
     .card h2 { margin: 0 0 1rem; font-size: 1.25rem; }
+    .card h3 { margin: 1.25rem 0 .5rem; font-size: 1rem; }
     .download-btn {
       display: inline-block; background: var(--accent); color: #fff;
       padding: .75rem 1.75rem; border-radius: 8px; font-size: 1rem;
@@ -46,6 +47,7 @@
             border-radius: 4px; padding: .75rem 1rem; font-size: .9rem;
             color: var(--muted); margin-top: 1rem; }
     .note strong { color: var(--text); }
+    .fingerprint { word-break: break-all; font-size: .85rem; }
   </style>
 </head>
 <body>
@@ -75,9 +77,28 @@
     </div>
   </div>
 
+  <!-- Fingerprint -->
+  <div class="card">
+    <h2>Verify the download</h2>
+    <p style="color:var(--muted); font-size:.9rem; margin:0 0 .75rem">
+      The SHA-256 fingerprint of the current root must match after you download it:
+    </p>
+    <pre><code class="fingerprint">PLACEHOLDER_SHA256_FINGERPRINT</code></pre>
+    <p style="color:var(--muted); font-size:.9rem; margin:.75rem 0 .5rem">
+      Check a saved copy:
+    </p>
+    <pre><code>openssl x509 -in lanbat-ca.crt -noout -fingerprint -sha256</code></pre>
+  </div>
+
   <!-- OS instructions -->
   <div class="card">
     <h2>Install Instructions</h2>
+    <div class="note" style="margin-top:0; margin-bottom:1rem">
+      <strong>Re-installing or updating the root?</strong> Remove any older
+      <em>Lanbat Root CA</em> first. Every generation shares the same name, so
+      stores can keep trusting an old key unless you delete it — browsers then
+      report errors such as "invalid signature".
+    </div>
     <div class="tabs">
       <div class="tab active" onclick="showTab('linux')">Linux</div>
       <div class="tab" onclick="showTab('macos')">macOS</div>
@@ -87,26 +108,59 @@
     </div>
 
     <div id="tab-linux" class="tab-content active">
-      <p>Run as root on Debian/Ubuntu/NixOS:</p>
-      <pre><code>curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o /usr/local/share/ca-certificates/lanbat-ca.crt
+      <h3>System trust store</h3>
+      <p>Debian / Ubuntu / NixOS (run as root):</p>
+      <pre><code># Remove any previous Lanbat root (same CN → same hash slot)
+rm -f /usr/local/share/ca-certificates/lanbat-ca.crt
+curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o /usr/local/share/ca-certificates/lanbat-ca.crt
 update-ca-certificates</code></pre>
-      <p>Or on Fedora/RHEL:</p>
-      <pre><code>curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o /etc/pki/ca-trust/source/anchors/lanbat-ca.crt
+      <p>Fedora / RHEL:</p>
+      <pre><code>rm -f /etc/pki/ca-trust/source/anchors/lanbat-ca.crt
+curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o /etc/pki/ca-trust/source/anchors/lanbat-ca.crt
 update-ca-trust</code></pre>
       <p>On NixOS (add to configuration.nix):</p>
       <pre><code>security.pki.certificateFiles = [ /etc/ssl/certs/lanbat-ca.crt ];</code></pre>
+      <div class="note">
+        <strong>CLI tools only.</strong> <code>update-ca-certificates</code> does
+        <em>not</em> affect Firefox or Chrome — configure browsers separately below.
+      </div>
+
+      <h3>Firefox and Chrome / Chromium / Brave</h3>
+      <p>These browsers use their own NSS databases on Linux, not the system store.</p>
+      <p><strong>GUI (Firefox):</strong> Settings → Privacy &amp; Security →
+      Certificates → View Certificates → Authorities → remove any old
+      <em>Lanbat Root CA</em> → Import the downloaded <code>lanbat-ca.crt</code>
+      → check "Trust this CA to identify websites" → OK. Restart Firefox.</p>
+      <p><strong>Terminal</strong> (<code>certutil</code> is in
+      <code>libnss3-tools</code> on Debian/Ubuntu):</p>
+      <pre><code># Download first, then (replace &lt;profile&gt; with your profile dir):
+curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o ~/lanbat-ca.crt
+
+# Firefox — native package (~/.mozilla/firefox/&lt;profile&gt;/)
+certutil -d sql:~/.mozilla/firefox/&lt;profile&gt; -D -n "Lanbat Root CA" 2>/dev/null || true
+certutil -d sql:~/.mozilla/firefox/&lt;profile&gt; -A -n "Lanbat Root CA" -t "C,," \
+  -i ~/lanbat-ca.crt
+
+# Firefox Snap: ~/snap/firefox/common/.mozilla/firefox/&lt;profile&gt;/
+# Firefox Flatpak: ~/.var/app/org.mozilla.firefox/.mozilla/firefox/&lt;profile&gt;/
+
+# Chrome, Chromium, Brave (shared NSS db)
+certutil -d sql:~/.pki/nssdb -D -n "Lanbat Root CA" 2>/dev/null || true
+certutil -d sql:~/.pki/nssdb -A -n "Lanbat Root CA" -t "C,," -i ~/lanbat-ca.crt</code></pre>
+      <p>Restart the browser after importing.</p>
     </div>
 
     <div id="tab-macos" class="tab-content">
       <p>Option 1 — GUI:</p>
       <ol>
         <li>Download <strong>lanbat-ca.crt</strong> above.</li>
-        <li>Double-click the file → Keychain Access opens.</li>
-        <li>Add to <em>System</em> keychain.</li>
-        <li>Find the certificate, double-click → Trust → "Always Trust".</li>
+        <li>Open Keychain Access → search for <em>Lanbat Root CA</em> → delete any old copy.</li>
+        <li>Double-click the new file → add to <em>System</em> keychain.</li>
+        <li>Find the certificate, double-click → Trust → <em>Always Trust</em>.</li>
       </ol>
       <p>Option 2 — Terminal:</p>
       <pre><code>curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o ~/Downloads/lanbat-ca.crt
+sudo security delete-certificate -c "Lanbat Root CA" /Library/Keychains/System.keychain 2>/dev/null || true
 sudo security add-trusted-cert -d -r trustRoot \
   -k /Library/Keychains/System.keychain ~/Downloads/lanbat-ca.crt</code></pre>
     </div>
@@ -115,12 +169,17 @@ sudo security add-trusted-cert -d -r trustRoot \
       <p>Run in PowerShell as Administrator:</p>
       <pre><code>Invoke-WebRequest -Uri PLACEHOLDER_CA_ORIGIN/root.crt `
   -OutFile "$env:TEMP\lanbat-ca.crt" -SkipCertificateCheck
+Get-ChildItem Cert:\LocalMachine\Root |
+  Where-Object { $_.Subject -match 'Lanbat Root CA' } |
+  Remove-Item
 Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
   -CertStoreLocation Cert:\LocalMachine\Root</code></pre>
       <p>Or manually:</p>
       <ol>
         <li>Download <strong>lanbat-ca.crt</strong>.</li>
-        <li>Right-click → Install Certificate.</li>
+        <li>Open <em>certmgr.msc</em> → Trusted Root Certification Authorities →
+        Certificates → remove any old <em>Lanbat Root CA</em>.</li>
+        <li>Right-click the new file → Install Certificate.</li>
         <li>Store location: <em>Local Machine</em>.</li>
         <li>Place in: <em>Trusted Root Certification Authorities</em>.</li>
       </ol>
@@ -129,6 +188,8 @@ Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
     <div id="tab-android" class="tab-content">
       <ol>
         <li>Scan the QR code above or download the cert via browser.</li>
+        <li>If updating: <strong>Settings → Security → Encryption &amp; Credentials →
+        Trusted credentials → User</strong> → remove any old <em>Lanbat Root CA</em>.</li>
         <li>Go to <strong>Settings → Security → Encryption &amp; Credentials → Install a Certificate</strong>.</li>
         <li>Choose <em>CA Certificate</em>.</li>
         <li>Select the downloaded <code>.crt</code> file.</li>
@@ -136,7 +197,7 @@ Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
       </ol>
       <div class="note">
         <strong>Note:</strong> On Android, user-installed CAs are not trusted by all apps
-        by default (Chrome works; some apps enforce system trust).
+        by default (Chrome works; many apps enforce system trust only).
         This is an Android security policy — nothing we can change.
       </div>
     </div>
@@ -146,11 +207,29 @@ Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
         <li>Scan the QR code above → Safari opens the cert download.</li>
         <li>Tap <em>Allow</em> to download the profile.</li>
         <li>Go to <strong>Settings → General → VPN &amp; Device Management</strong>.</li>
-        <li>Tap the profile → <em>Install</em>.</li>
+        <li>Remove any older Lanbat CA profile, then tap the new profile → <em>Install</em>.</li>
         <li>Go to <strong>Settings → General → About → Certificate Trust Settings</strong>.</li>
-        <li>Enable full trust for <em>Lanbat Root CA</em>.</li>
+        <li>Enable full trust for <em>Lanbat Root CA</em> (required — install alone is not enough).</li>
       </ol>
+      <div class="note">
+        <strong>Easy to miss:</strong> step 6 is mandatory on iOS. Without it the
+        profile is installed but Safari still warns.
+      </div>
     </div>
+  </div>
+
+  <!-- Verify install -->
+  <div class="card">
+    <h2>Verify it worked</h2>
+    <p style="color:var(--muted); font-size:.9rem; margin:0 0 .75rem">
+      After installing in your browser (and restarting it), open the homepage or
+      run:
+    </p>
+    <pre><code>curl -sS -o /dev/null -w '%{http_code}\n' PLACEHOLDER_VERIFY_URL</code></pre>
+    <p style="color:var(--muted); font-size:.9rem; margin:.75rem 0 0">
+      You should see <code>200</code> with no certificate warning. Or reload
+      <code>PLACEHOLDER_VERIFY_URL</code> in the browser — the padlock should be valid.
+    </p>
   </div>
 </div>
 
@@ -161,14 +240,18 @@ Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
 (function() {
   var origin = window.location.origin; // e.g. https://ca.<domain>
   var caUrl  = origin + '/root.crt';
+  var domain = window.location.hostname.replace(/^ca\./, '');
+  var verifyUrl = 'https://home.' + domain + '/';
 
   // Fill domain display span in the subtitle.
   var domainEl = document.getElementById('domain-display');
-  if (domainEl) domainEl.textContent = window.location.hostname.replace(/^ca\./, '');
+  if (domainEl) domainEl.textContent = domain;
 
-  // Replace PLACEHOLDER_CA_ORIGIN in all <code> and <pre> blocks.
+  // Replace placeholders in all <code> and <pre> blocks.
   document.querySelectorAll('code, pre').forEach(function(el) {
-    el.innerHTML = el.innerHTML.split('PLACEHOLDER_CA_ORIGIN').join(origin);
+    el.innerHTML = el.innerHTML
+      .split('PLACEHOLDER_CA_ORIGIN').join(origin)
+      .split('PLACEHOLDER_VERIFY_URL').join(verifyUrl);
   });
 
   // QR code fallback: show the cert URL as a link.

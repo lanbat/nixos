@@ -149,6 +149,29 @@ let
           provider: !KeyOf provider-syncthing
           policy_engine_mode: any
 
+      # ── Music Assistant ─────────────────────────────────────────────────────
+      - model: authentik_providers_proxy.proxyprovider
+        id: provider-music-assistant
+        state: present
+        identifiers:
+          name: "Music Assistant"
+        attrs:
+          name: "Music Assistant"
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: "https://music.${domain}"
+
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: music-assistant
+        attrs:
+          name: "Music Assistant"
+          slug: music-assistant
+          provider: !KeyOf provider-music-assistant
+          policy_engine_mode: any
+
       # ── Snapcast ────────────────────────────────────────────────────────────
       - model: authentik_providers_proxy.proxyprovider
         id: provider-snapcast
@@ -210,6 +233,7 @@ let
             - !KeyOf provider-qbittorrent
             - !KeyOf provider-bitmagnet
             - !KeyOf provider-syncthing
+            - !KeyOf provider-music-assistant
             - !KeyOf provider-snapcast
             - !KeyOf provider-zigbee2mqtt
   '';

@@ -33,6 +33,7 @@
     ../../services/influxdb.nix
     ../../services/jellyfin.nix
     ../../services/mosquitto.nix
+    ../../services/music-assistant.nix
     ../../services/nextcloud.nix
     ../../services/postgresql.nix
     ../../services/qbittorrent.nix

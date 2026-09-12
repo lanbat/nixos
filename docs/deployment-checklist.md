@@ -250,7 +250,8 @@ sudo server-health
 systemctl status caddy podman-authentik-server postgresql
 ```
 
-Wait for Caddy to generate the CA cert (usually 10–30 seconds after start).
+The root CA cert is pinned in the repo and available at boot (`/etc/caddy/ca-root.crt`);
+Caddy does not need time to generate it.
 
 From now on, deploy changes from your workstation with `deploy path:.#server`.
 
@@ -464,8 +465,25 @@ sudo xfs_quota -x -c "limit -p bsoft=1t   bhard=1.1t backups"      /mnt/storage-
 
 ### 3e. Install CA on your devices
 
-Visit `https://ca.<domain>` from each device.
-Follow the OS-specific instructions on the page.
+The internal root CA is pinned in the repository (`secrets/caddy-ca-root.crt` +
+`secrets/caddy-ca-root-key.age`) so a host-root reinstall does not mint a new
+root. Install the **current** root once on every client that uses the HTTPS
+services.
+
+Visit `https://ca.<domain>` from each device (or download
+`https://ca.<domain>/root.crt` with `curl -k` if the browser does not trust the
+CA yet). Follow the OS-specific instructions on the page.
+
+After a **fresh** install (first time only for this root), redistribute the CA
+to phones, laptops and other devices. A routine `deploy` or host-root reinstall
+does **not** require re-trusting unless the root key material is deliberately
+rotated.
+
+See `docs/security.md` (Internal CA trust on client devices) for Debian/Ubuntu
+removal of old roots, browser NSS stores, and what to do after a deliberate root
+rotation. If a browser still warns after install, see the same doc (TLS chain
+troubleshooting) — a server-side intermediate cleanup is only needed when the
+served chain does not verify against the pinned root.
 
 ### 3f. Configure Frigate cameras
 
@@ -583,14 +601,37 @@ Visit `https://sync.<domain>` (protected by Authentik forward auth).
 > **Tip:** faster-whisper and piper download their models on first start.
 > Allow a minute or two for the first pipeline run — subsequent runs are fast.
 
-### 3m. Snapcast audio source
+### 3m. Music Assistant
 
-Snapcast streams whatever is written to `/run/snapserver/main.fifo` on the server.
-Wire an audio player to that pipe — see the comments in
-`services/snapcast.nix` for examples (MPD, librespot, shairport-sync).
+Music Assistant is the music controller; Snapcast remains the distribution layer.
 
-Until a source is connected, the pipe is silent but Snapclient on the Pi will
-connect and wait. Verify the client is connected at `https://audio.<domain>`.
+1. Visit `https://music.<domain>` (Authentik forward-auth).
+2. **Snapcast player provider** — Settings → Player Providers → Add → Snapcast:
+   - Enable **Use existing Snapserver**.
+   - Host: `127.0.0.1`, control port: `1705`.
+   - Do **not** use MA's built-in snapserver (it conflicts with the declarative
+     `services.snapserver` on the same ports).
+3. **Local filesystem music provider** — Settings → Music Providers → Add →
+   Local Filesystem:
+   - Path: `/srv/storage/a/media/music` (NFS from Pi; scans fail gracefully
+     while the Pi is down).
+4. **Base URL** — Settings → System → set Base URL to `https://music.<domain>`.
+5. **Home Assistant** — Settings → Devices & Services → Add Integration →
+   Music Assistant → URL `http://127.0.0.1:8095`.
+   - Keep HA's legacy **slimproto** (Squeezebox) integration disabled.
+6. Verify the Pi snapclient appears as a Snapcast player in MA, then play a
+   test track. Confirm sync at `https://audio.<domain>` (Snapcast web UI).
+
+> The `music.<domain>` subdomain may be consolidated to `audio.<domain>` when
+> Snapcast's own web UI is retired in a later change.
+
+### 3n. Snapcast (distribution)
+
+Snapserver runs declaratively on the server (ports 1704/1705). Music Assistant
+feeds it via the control API — no manual FIFO wiring is needed.
+
+Verify Snapclient on the Pi: `systemctl status snapclient`. The client should
+appear in both the Snapcast web UI (`https://audio.<domain>`) and Music Assistant.
 
 ---
 
@@ -602,3 +643,7 @@ connect and wait. Verify the client is connected at `https://audio.<domain>`.
 - Back up the Tang key directory: `docs/runbook.md` § Backing up Tang keys.
 - Test Pi unlock after a server reboot to verify Clevis/Tang works.
 - Pin container image versions when stability matters.
+- **Nextcloud major upgrades:** check the running version with
+  `sudo -u nextcloud nextcloud-occ status`, back up (`docs/backup.md`), then bump
+  `services.nextcloud.package` one major at a time — full steps in
+  `docs/runbook.md` § Nextcloud major version upgrade.

@@ -26,8 +26,9 @@
                          │  │  Home Assistant (8123)   Mosquitto (1883)       │ │      │
                          │  │  Nextcloud (8080)        Samba (445)            │ │      │
                          │  │  Vaultwarden (8222)      Grafana (3030)         │ │      │
-                         │  │  InfluxDB (8086)         Snapserver (1704/1780) │ │      │
-                         │  │  Wyoming pipeline        Telegraf               │ │      │
+                         │  │  InfluxDB (8086)         Music Assistant (8095) │ │      │
+                         │  │  Snapserver (1704/1780)  Telegraf               │ │      │
+                         │  │  Wyoming pipeline                             │ │      │
                          │  │  Jellyfin / Frigate / Immich / qBittorrent      │ │      │
                          │  │  Bitmagnet / Syncthing / Homepage / SearXNG     │ │      │
                          │  └──────────────────────────┬──────────────────────┘ │      │
@@ -112,6 +113,7 @@
 | Grafana | OIDC (Authentik) + local admin | Native generic_oauth support |
 | InfluxDB | Token auth (not exposed publicly) | Accessed by Grafana only; no browser UI needed on LAN |
 | Syncthing | Caddy forward-auth (Authentik) | Sync clients use port 22000 directly, not Caddy |
+| Music Assistant | Caddy forward-auth (Authentik) | No native OIDC; stream port (8097) not exposed on firewall |
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming port (1704) is LAN-open |
 | Wyoming satellite | No auth (firewall-restricted to server IP) | Internal protocol; only HA connects |
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
@@ -134,7 +136,8 @@
 | `vault.<domain>` | Vaultwarden password manager |
 | `grafana.<domain>` | Grafana dashboards |
 | `sync.<domain>` | Syncthing web UI |
-| `audio.<domain>` | Snapcast control UI |
+| `music.<domain>` | Music Assistant web UI |
+| `audio.<domain>` | Snapcast control UI (may merge with `music` when retired) |
 
 DNS assumption: `*.<domain>` resolves to the server's IPv4 address.
 This is configured in your router/DNS and is out of scope for this repo.
