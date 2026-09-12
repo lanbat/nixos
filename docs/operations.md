@@ -35,6 +35,20 @@ journalctl -u nixos-upgrade-pull.service -n 20
 ssh admin@pi5 journalctl -u nixos-upgrade.service -n 50
 ```
 
+If a run fails with "Refusing to switch: these settings still have placeholder
+values", the build could not see a complete `/etc/nixos/local.nix` (the file is
+missing, or some values are still `CHANGE_ME`). The pre-switch check stops the
+switch before anything is activated or the boot entry changes, so the host keeps
+running its current generation. The rejected build may still be recorded as the
+newest system profile, so the reboot-pending check below can report a reboot
+that isn't needed. To fix it, fill in the settings the error lists in
+`/etc/nixos/local.nix` (for `fileSystems` entries, replace the template
+`hosts/pi/hardware-configuration.nix` with the host's own), confirm with
+`sudo nix eval path:/etc/nixos#nixosConfigurations.<host>.config.lanbat.placeholderSettings`
+(it should print `[ ]`), then run `sudo systemctl start nixos-upgrade.service` or
+wait for the next night. `NIXOS_NO_CHECK=1` overrides the check; use it only for
+a deliberate one-off switch.
+
 **Server:** upgrades apply immediately but the machine is **not rebooted** —
 a new kernel only takes effect after the next manual reboot.  Check whether a
 reboot is pending:
