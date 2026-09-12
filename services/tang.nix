@@ -59,10 +59,9 @@
     # Port 7500 is the default in the NixOS Tang module.
     # The socket is gated on control-online.target by control-layer.nix —
     # do not add socket overrides here to avoid attribute conflicts.
-    listenStream = [
-      "0.0.0.0:7500"
-      "[::]:7500"
-    ];
+    # Single wildcard bind: listing both 0.0.0.0 and [::] makes systemd fail the
+    # second socket with "Address already in use" on dual-stack kernels.
+    listenStream = [ "0.0.0.0:7500" ];
     # Firewall already restricts port 7500 to the LAN; allow all at socket level.
     ipAddressAllow = [ "any" ];
   };
