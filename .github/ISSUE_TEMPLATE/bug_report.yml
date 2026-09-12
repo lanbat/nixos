@@ -1,0 +1,40 @@
+name: Bug report
+description: Something in this configuration doesn't work as intended
+labels: [bug]
+body:
+  - type: dropdown
+    id: host
+    attributes:
+      label: Affected host
+      options:
+        - server
+        - pi
+        - both
+        - CI or docs
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: Service or file
+      placeholder: hosts/server/services/nextcloud.nix
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or configuration
+      description: Remove IP addresses, domains, keys and secrets first.
+      render: shell
