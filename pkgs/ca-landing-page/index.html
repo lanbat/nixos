@@ -236,6 +236,7 @@ Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
 <!-- Dynamic URL and domain injection.
      The page derives the CA URL from window.location so it works regardless
      of what domain the homelab is deployed under. -->
+<script src="/qrcode.min.js"></script>
 <script>
 (function() {
   var origin = window.location.origin; // e.g. https://ca.<domain>
@@ -254,9 +255,19 @@ Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
       .split('PLACEHOLDER_VERIFY_URL').join(verifyUrl);
   });
 
-  // QR code fallback: show the cert URL as a link.
+  // QR code for mobile cert download.
   var qrEl = document.getElementById('qrcode');
-  if (qrEl) {
+  if (qrEl && typeof QRCode !== 'undefined') {
+    qrEl.innerHTML = '';
+    new QRCode(qrEl, {
+      text: caUrl,
+      width: 192,
+      height: 192,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  } else if (qrEl) {
     qrEl.innerHTML = '<a href="' + caUrl + '" style="color:#6366f1;font-size:.8rem;word-break:break-all">' + caUrl + '</a>';
   }
 })();

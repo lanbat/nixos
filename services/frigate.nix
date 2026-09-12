@@ -341,5 +341,6 @@ in
     "d /var/lib/frigate/db          0750 frigate frigate -"
     "d /var/lib/frigate/clips       0750 frigate frigate -"
     "d /var/lib/frigate/recordings  0750 frigate frigate -"
+    "d /var/lib/frigate/models      0750 frigate frigate -"
   ];
 }

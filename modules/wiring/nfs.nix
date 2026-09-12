@@ -46,6 +46,9 @@ let
   );
 in
 {
+  # NFS mounts use piHostname; ensure it resolves even without LAN DNS/mDNS.
+  networking.hosts.${config.lanbat.piIp} = [ config.lanbat.piHostname ];
+
   systemd.tmpfiles.rules = [
     "d /srv/storage      0755 root root -"
     "d /srv/storage/a    0755 root root -"

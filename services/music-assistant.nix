@@ -79,7 +79,8 @@ in
       User = "music-assistant";
       Group = "music-assistant";
       SupplementaryGroups = [ "media" ];
-      ReadOnlyPaths = [ musicLibrary ];
+      # Do not bind the NFS library path here — systemd fails to start when
+      # the Pi automount is not yet available.  Scans fail gracefully instead.
     };
   };
 }
