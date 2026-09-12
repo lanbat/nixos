@@ -54,7 +54,10 @@ in
     auth = "forward-auth";
     tier = "workload";
     state = [ "syncthing" ];
-    units = [ "syncthing" ];
+    units = [
+      "syncthing"
+      "syncthing-init" # requires syncthing, so it can't start at boot
+    ];
     nfs.drives = [ "b" ];
     dashboard = {
       group = "Files & Sync";

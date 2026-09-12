@@ -55,6 +55,8 @@
 }:
 
 let
+  yolov8nOpenVinoModel = pkgs.callPackage ../pkgs/frigate-yolov8n-openvino-model { };
+
   frigateConfig = pkgs.writeText "frigate.yml" ''
     mqtt:
       enabled: true
@@ -85,8 +87,8 @@ let
     model:
       path: /models/yolov8n_openvino_model/yolov8n.xml
       model_type: yolo-generic
-      width: 320
-      height: 320
+      width: 640
+      height: 640
       input_tensor: nchw
       input_pixel_format: rgb
 
@@ -284,7 +286,7 @@ in
       "/var/lib/frigate/recordings:/media/frigate/recordings"
       "/var/cache/frigate:/tmp/cache"
       "/etc/localtime:/etc/localtime:ro"
-      "/var/lib/frigate/models:/models:ro"
+      "${yolov8nOpenVinoModel}:/models/yolov8n_openvino_model:ro"
     ];
 
     extraOptions = [

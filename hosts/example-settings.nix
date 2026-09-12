@@ -14,6 +14,7 @@
     gatewayIp = "192.0.2.1";
     lanSubnet = "192.0.2.0/24";
     serverHostname = "server";
+    serverInterface = "eno1";
     piHostname = "pi5";
     nfsIdmapdDomain = "home.lan";
     timezone = "UTC";

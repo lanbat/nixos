@@ -72,7 +72,7 @@ in
     # noauto: not part of local-fs.target, so nothing mounts at boot.
     lanbat.layers.workloadFileSystems = {
       "/mnt/workload" = {
-        device = "/dev/mapper/workload";
+        device = "/dev/mapper/workload-luks";
         fsType = "ext4";
         options = [
           "noauto"
@@ -140,10 +140,10 @@ in
       (adminScript "unlock-workload" ''
         echo "=== unlock-workload: opening workload LUKS layer ==="
         echo
-        if [ -e /dev/mapper/workload ]; then
-          echo "INFO: /dev/mapper/workload already exists, skipping luksOpen."
+        if [ -e /dev/mapper/workload-luks ]; then
+          echo "INFO: /dev/mapper/workload-luks already exists, skipping luksOpen."
         else
-          cryptsetup luksOpen ${config.lanbat.layers.workloadDevice} workload
+          cryptsetup luksOpen ${config.lanbat.layers.workloadDevice} workload-luks
         fi
         echo "Mounting /mnt/workload and activating workload-online.target..."
         systemctl start workload-online.target
@@ -168,11 +168,11 @@ in
         if mountpoint -q /mnt/workload; then
           umount /mnt/workload
         fi
-        if [ -e /dev/mapper/workload ]; then
-          cryptsetup luksClose workload
+        if [ -e /dev/mapper/workload-luks ]; then
+          cryptsetup luksClose workload-luks
           echo "Workload LUKS closed."
         else
-          echo "INFO: /dev/mapper/workload not found, already closed."
+          echo "INFO: /dev/mapper/workload-luks not found, already closed."
         fi
       '')
     ];

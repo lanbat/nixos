@@ -42,6 +42,11 @@
     };
   };
 
+  systemd.services.zigbee2mqtt = {
+    after = [ "mosquitto.service" ];
+    requires = [ "mosquitto.service" ];
+  };
+
   services.zigbee2mqtt = {
     enable = true;
 

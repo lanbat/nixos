@@ -19,10 +19,12 @@
 #  This is enforced by modules/server/control-layer.nix:
 #
 #    1. Tang keys live in /mnt/control/tang/ on the control LUKS partition.
-#    2. /var/lib/tang is a bind mount from /mnt/control/tang (noauto).
+#    2. /var/lib/private/tang is a bind mount from /mnt/control/tang (noauto).
+#       tangd runs with DynamicUser, so that is where systemd keeps its state;
+#       /var/lib/tang is a symlink to it.
 #    3. tangd.socket has WantedBy=control-online.target (not sockets.target).
-#    4. ConditionPathIsMountPoint=/var/lib/tang prevents Tang from activating
-#       if the bind mount is not in place (defence in depth).
+#    4. ConditionPathIsMountPoint=/var/lib/private/tang prevents Tang from
+#       activating if the bind mount is not in place (defence in depth).
 #
 #  Result: if someone reboots the server and does not enter the control
 #  passphrase, Tang remains unreachable and the Pi's NVMe volumes stay locked.
@@ -59,10 +61,9 @@
     # Port 7500 is the default in the NixOS Tang module.
     # The socket is gated on control-online.target by control-layer.nix —
     # do not add socket overrides here to avoid attribute conflicts.
-    listenStream = [
-      "0.0.0.0:7500"
-      "[::]:7500"
-    ];
+    # Single wildcard bind: listing both 0.0.0.0 and [::] makes systemd fail the
+    # second socket with "Address already in use" on dual-stack kernels.
+    listenStream = [ "0.0.0.0:7500" ];
     # Firewall already restricts port 7500 to the LAN; allow all at socket level.
     ipAddressAllow = [ "any" ];
   };

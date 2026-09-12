@@ -4,7 +4,7 @@
 
 1. Server boots. Host layer comes up immediately — SSH reachable, both LUKS layers locked.
 2. Always-on services start automatically: Caddy, PostgreSQL (always-on instance),
-   Authentik, HA, Grafana, InfluxDB, Mosquitto, Frigate, Snapcast, Wyoming, SearXNG, Telegraf.
+   Authentik, HA, Grafana, InfluxDB, Mosquitto, Frigate, Music Assistant, Snapcast, Wyoming, SearXNG, Telegraf.
 3. Admin SSHes in and runs `sudo unlock-control` → Tang starts on port 7500.
 4. Admin runs `sudo unlock-workload` → the PostgreSQL workload instance, Nextcloud, Immich,
    Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet come up.
@@ -90,6 +90,7 @@ Services that stay up during Pi reboot (always-on tier):
 - Mosquitto ✓
 - Frigate ✓ (local DB; live stream from cameras unaffected)
 - SearXNG ✓
+- Music Assistant ✓ (library scans fail while Pi NFS is down; service stays up)
 - Snapserver ✓
 - Wyoming pipeline (STT/TTS/wake word) ✓
 - Telegraf (server) ✓
@@ -143,6 +144,8 @@ this is harmless until the next manual maintenance window.
 
 | Situation | Manual action needed? |
 |---|---|
+| Host-root reinstall (disk intact) | No CA redistribution — root is in git/agenix; clients keep trusting the same root |
+| Browser TLS warning on homelab sites (e.g. "invalid signature") | Usually yes — **client** stale root in trust store (most common); verify with `openssl verify -CAfile secrets/caddy-ca-root.crt` on the served chain — if OK, fix client trust (`docs/security.md`); if not, server intermediate may be stale (same doc, TLS chain troubleshooting) |
 | Server LUKS at boot | Yes — SSH in, run `unlock-control` then `unlock-workload` |
 | Pi boots before server | No — Pi retries every 5 min until Tang is reachable |
 | Normal Pi reboot | No |

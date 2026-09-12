@@ -105,7 +105,8 @@ Follow this checklist every time:
    `secrets/README.md`.
 6. **Check**: run the commands above. Evaluation rejects clashing ports, subdomains,
    UIDs and secrets, forward auth on services with API clients, workload-tier services
-   without state, and units that no module defines.
+   without state, units that no module defines, and units outside `units` that would
+   start a gated unit at boot (a helper service, a timer or a socket).
 7. **Update docs**:
    - `docs/architecture.md` — auth matrix + hostname map
    - `docs/secure-layers.md` — add to the correct tier table
@@ -141,6 +142,7 @@ when `local.nix` does, and only a `path:` flake reference includes it
 | `config.lanbat.gatewayIp` | Default gateway |
 | `config.lanbat.lanSubnet` | LAN-only firewall rules |
 | `config.lanbat.serverHostname` | Server hostname |
+| `config.lanbat.serverInterface` | Server network interface for the static address |
 | `config.lanbat.piHostname` | NFS mount target / Pi hostname |
 | `config.lanbat.nfsIdmapdDomain` | NFSv4 ID mapping domain (must match on both hosts) |
 | `config.lanbat.timezone` | System timezone + service TZ env vars |
@@ -168,7 +170,7 @@ availability requirements:
 **Always-on** (the default; start at boot, data on the unencrypted host root):
 - The service starts without any LUKS unlock and NixOS manages `/var/lib/<name>` normally.
 - Current members: Caddy, PostgreSQL (always-on instance), Redis, Authentik, Home Assistant, Grafana, InfluxDB,
-  Mosquitto, Zigbee2MQTT, Frigate, Snapcast, Wyoming pipeline, SearXNG, Telegraf, Homepage
+  Mosquitto, Zigbee2MQTT, Frigate, Music Assistant, Snapcast, Wyoming pipeline, SearXNG, Telegraf, Homepage
 
 **Workload-gated** (start only after `unlock-workload`, data on encrypted LUKS):
 - Set `tier = "workload"`, list the `/var/lib` directories in `state` and the systemd

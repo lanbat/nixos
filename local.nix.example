@@ -23,6 +23,7 @@
     lanSubnet = "CHANGE_ME"; # e.g. "192.168.1.0/24"
 
     serverHostname = "server";
+    serverInterface = "CHANGE_ME"; # e.g. "enp1s0"; find with: ip -o link
     piHostname = "pi5"; # or piIp if hostname resolution is unreliable
 
     # ── DNS ───────────────────────────────────────────────────────────────────

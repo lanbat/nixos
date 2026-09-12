@@ -145,9 +145,8 @@ in
       "${servicesYaml}:/app/config/services.yaml:ro"
       "${settingsYaml}:/app/config/settings.yaml:ro"
       "${widgetsYaml}:/app/config/widgets.yaml:ro"
-      # Caddy's internal CA root cert, for widget TLS verification. The
-      # ExecStartPre below makes it reachable for the rootless homepage user.
-      "/var/lib/caddy/.local/share/caddy/pki/authorities/local:/caddy-ca:ro"
+      # Persisted Caddy root CA, for widget TLS verification.
+      "/etc/caddy/ca-root.crt:/caddy-ca/root.crt:ro"
     ];
 
     extraOptions = [ "--network=host" ];
@@ -162,28 +161,4 @@ in
     autoStart = true;
   };
 
-  # Start after Caddy so the CA cert is more likely to exist.
-  systemd.services."podman-homepage" = {
-    after = [ "caddy.service" ];
-    wants = [ "caddy.service" ];
-    serviceConfig.ExecStartPre = [
-      "+${pkgs.writeShellScript "homepage-fix-ca-perms" ''
-        set -euo pipefail
-        # Rootless Podman must be able to traverse every parent directory of the
-        # bind-mount source. Caddy's state dir is 0700, so grant o+x down to the
-        # cert dir. The cert itself may not exist yet on first boot.
-        CERT_DIR=/var/lib/caddy/.local/share/caddy/pki/authorities/local
-        if [ -d "$CERT_DIR" ]; then
-          chmod o+x /var/lib/caddy
-          chmod o+x /var/lib/caddy/.local
-          chmod o+x /var/lib/caddy/.local/share
-          chmod o+x /var/lib/caddy/.local/share/caddy
-          chmod o+x /var/lib/caddy/.local/share/caddy/pki
-          chmod o+x /var/lib/caddy/.local/share/caddy/pki/authorities
-          chmod o+x "$CERT_DIR"
-          [ -f "$CERT_DIR/root.crt" ] && chmod o+r "$CERT_DIR/root.crt"
-        fi
-      ''}"
-    ];
-  };
 }

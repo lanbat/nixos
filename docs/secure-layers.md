@@ -39,7 +39,8 @@ work. Nothing sensitive is exposed.
 - **Unlocked by**: admin passphrase (`unlock-control`)
 - **Contains**: `/mnt/control/tang/` — Tang key material only
 
-A bind mount makes `/mnt/control/tang` available as `/var/lib/tang`.
+A bind mount makes `/mnt/control/tang` available as `/var/lib/private/tang`, where
+systemd keeps the state of Tang (a DynamicUser service); `/var/lib/tang` links to it.
 Tang's socket unit (`tangd.socket`) is `WantedBy=control-online.target` and
 will not start until that target is active.
 
@@ -77,7 +78,8 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
 | InfluxDB | `/var/lib/influxdb2` | Time-series data — metrics collection starts immediately after boot |
 | Mosquitto | `/var/lib/mosquitto` | MQTT broker — IoT devices reconnect at boot |
 | Frigate | `/var/lib/frigate` | NVR event database — surveillance must not wait for unlock |
-| Snapcast | — | Audio streaming — ephemeral, no persistent state |
+| Music Assistant | `/var/lib/music-assistant` | Music controller — provider config, playlists, player state |
+| Snapcast | — | Audio distribution — streams created dynamically by MA |
 | Wyoming pipeline | — | STT/TTS/wake word — model files managed by NixOS module |
 | SearXNG | — | Search proxy — stateless |
 | Telegraf | — | Metrics collector — stateless |
@@ -129,7 +131,7 @@ boot
  └── host root available
       └── [admin] unlock-control
            └── /mnt/control mounted
-                └── /var/lib/tang bind-mounted
+                └── /var/lib/private/tang bind-mounted
                      └── control-online.target activated
                           └── tangd.socket started
                                └── Tang serving keys
@@ -143,7 +145,8 @@ boot
 boot
  └── host root available → SSH + always-on services start automatically
       │                    (Caddy, always-on PostgreSQL, Authentik, HA, Grafana,
-      │                     InfluxDB, Mosquitto, Frigate, Snapcast, Wyoming,
+      │                     InfluxDB, Mosquitto, Frigate, Music Assistant,
+      │                     Snapcast, Wyoming,
       │                     SearXNG, Telegraf)
       └── [admin] unlock-workload
            └── /mnt/workload mounted

@@ -12,11 +12,15 @@
 #   /var/lib/jellyfin/            — config, database, metadata, posters
 #   /var/cache/jellyfin/          — transcodes (safe to delete at any time)
 #
-# Pi-backed via NFS (/srv/storage/a):
-#   /srv/storage/a/media/         — all media libraries (movies, TV, music)
+# Pi-backed via NFS, media split across both drives by folder:
+#   /srv/storage/a/media/         — movies, TV, music videos
+#   /srv/storage/b/media/         — music, documentaries, books and the rest
+# Add the folders of both drives to the libraries. The Pi creates them
+# (modules/pi/storage.nix), owned by qbt, group media; Jellyfin reads them
+# through its media group.
 #
 # NFS dependency: strong.
-#   Jellyfin should not run if /srv/storage/a is unavailable — it would
+#   Jellyfin should not run if Pi storage is unavailable — it would
 #   write error states into its database and display a broken library.
 #   We declare a hard BindsTo dependency so systemd stops Jellyfin when
 #   the mount disappears and restarts it when the mount returns.
@@ -35,7 +39,13 @@
     tier = "workload";
     state = [ "jellyfin" ];
     units = [ "jellyfin" ];
-    nfs.drives = [ "a" ];
+    # Created for jellyfin on the workload layer; root-owned, Jellyfin can't
+    # write its data and aborts on start.
+    workloadDirs."jellyfin".user = "jellyfin";
+    nfs.drives = [
+      "a"
+      "b"
+    ];
     account = {
       uid = 992;
       extraGroups = [ "media" ];
@@ -60,10 +70,6 @@
   # Set JellyfinFFmpegTranscodingPath in the admin UI or via config below.
   systemd.tmpfiles.rules = [
     "d /var/cache/jellyfin    0750 jellyfin jellyfin -"
-    "d /srv/storage/a/media   0750 jellyfin media    -"
-    "d /srv/storage/a/media/movies  0750 jellyfin media -"
-    "d /srv/storage/a/media/tv      0750 jellyfin media -"
-    "d /srv/storage/a/media/music   0750 jellyfin media -"
   ];
 
   # Restart on failure so it comes back when NFS is restored.

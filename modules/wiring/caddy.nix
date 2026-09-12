@@ -4,9 +4,12 @@
 #
 #   <subdomain>.<domain> {
 #     tls internal { on_demand }
-#     forward_auth ...            # auth = "forward-auth" only
-#     <caddy.extraConfig>
-#     reverse_proxy localhost:<port or onDemand.activatorPort> { <caddy.proxyOptions> }
+#     route {                     # auth = "forward-auth" only
+#       reverse_proxy /outpost.goauthentik.io/* → Authentik outpost
+#       forward_auth ...
+#       <caddy.extraConfig>
+#       reverse_proxy localhost:<port>
+#     }
 #   }
 #
 # Caddy itself (global options, internal CA, CA landing page) is configured
@@ -15,15 +18,20 @@
 
 let
   domain = config.lanbat.domain;
+  authentikPort = config.lanbat.services.authentik.port;
+
+  # OAuth callback after login — must hit the outpost, not the backend app.
+  authentikOutpostProxy = "reverse_proxy /outpost.goauthentik.io/* localhost:${toString authentikPort}";
 
   authentikFwdAuth = ''
-    forward_auth localhost:${toString config.lanbat.services.authentik.port} {
+    forward_auth localhost:${toString authentikPort} {
       uri /outpost.goauthentik.io/auth/caddy
-      copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Email \
+      copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Entitlements X-Authentik-Email \
                    X-Authentik-Name X-Authentik-Uid X-Authentik-Jwt \
                    X-Authentik-Meta-Jwks X-Authentik-Meta-Outpost \
                    X-Authentik-Meta-Provider X-Authentik-Meta-App \
                    X-Authentik-Meta-Version
+      trusted_proxies private_ranges
     }
   '';
 
@@ -42,6 +50,51 @@ let
         }
       '';
 
+  errorPage = svc: if svc.nfs.drives != [ ] then "storage.html" else "offline.html";
+
+  handleErrors = svc: ''
+    handle_errors 502 503 504 {
+      rewrite * /${errorPage svc}
+      file_server {
+        root /var/lib/caddy-error-pages
+      }
+    }
+  '';
+
+  # Companion apps and REST clients authenticate directly with HA tokens, so
+  # /auth/token and /api/* bypass Authentik when apiClients is set.
+  forwardAuthWithApiBypass =
+    svc:
+    lib.concatStringsSep "\n" [
+      ''
+        route {
+          ${authentikOutpostProxy}
+          @api_clients path /auth/token* /api/*
+          handle @api_clients {
+            ${reverseProxy svc}
+          }
+          handle {
+            ${authentikFwdAuth}
+            ${svc.caddy.extraConfig}
+            ${reverseProxy svc}
+          }
+        }
+      ''
+    ];
+
+  forwardAuthRoute =
+    svc:
+    lib.concatStringsSep "\n" [
+      ''
+        route {
+          ${authentikOutpostProxy}
+          ${authentikFwdAuth}
+          ${svc.caddy.extraConfig}
+          ${reverseProxy svc}
+        }
+      ''
+    ];
+
   vhost =
     svc:
     lib.concatStringsSep "\n" (
@@ -51,9 +104,20 @@ let
             on_demand
           }
         ''
-        (lib.optionalString (svc.auth == "forward-auth") authentikFwdAuth)
-        svc.caddy.extraConfig
-        (reverseProxy svc)
+        (handleErrors svc)
+        (
+          if svc.auth == "forward-auth" && svc.apiClients then
+            forwardAuthWithApiBypass svc
+          else if svc.auth == "forward-auth" then
+            forwardAuthRoute svc
+          else
+            lib.concatStringsSep "\n" (
+              lib.filter (s: s != "") [
+                svc.caddy.extraConfig
+                (reverseProxy svc)
+              ]
+            )
+        )
       ]
     );
 

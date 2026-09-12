@@ -28,7 +28,8 @@
 let
   lockedVolume = name: {
     type = "luks";
-    inherit name;
+    # "control" is a reserved device-mapper name (/dev/mapper/control).
+    name = "${name}-luks";
     initrdUnlock = false;
     passwordFile = "/tmp/${name}.key";
     settings.allowDiscards = true;

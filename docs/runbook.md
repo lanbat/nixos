@@ -103,6 +103,84 @@ space in the LVM volume group, and key service states. To grow a full volume, se
 
 ---
 
+## Nextcloud major version upgrade
+
+Nextcloud is pinned in `services/nextcloud.nix` (`services.nextcloud.package`).
+**Do not skip majors** — upgrade one major at a time, deploy, verify, then repeat.
+The pin stops nixpkgs from jumping two majors in one deploy; it does not run the
+upgrade for you.
+
+### Before you change the pin
+
+On the server, with the workload layer unlocked:
+
+```bash
+sudo unlock-workload   # if not already unlocked
+sudo -u nextcloud nextcloud-occ status
+```
+
+Note the `version:` line. It must match the major you are upgrading **from**
+(e.g. `32.x.x` before changing the pin to `pkgs.nextcloud33`). If the running
+version is unknown or behind the pin, stop and reconcile before deploying a newer
+major.
+
+### Back up first
+
+See `docs/backup.md`. At minimum before a major upgrade:
+
+| What | Location |
+|---|---|
+| Nextcloud config + app state | `/var/lib/nextcloud/` (workload layer) |
+| PostgreSQL workload databases | `pg_dumpall` on the workload instance (port 5432, socket `/run/postgresql`) |
+| Bulk user data (External Storage) | `/srv/storage/b/nextcloud/` (Pi LUKS — usually already durable) |
+
+Run a manual workload backup (`docs/runbook.md` § Running backups manually) or
+ensure the nightly `backup-server` timer has a recent snapshot. If the upgrade
+fails, restore `/var/lib/nextcloud/` and the workload PostgreSQL dump from
+`docs/backup.md` § Restore procedure before retrying.
+
+### Prerequisites (workload gate)
+
+Nextcloud and its database live on the **workload** tier. These must be up:
+
+```bash
+sudo unlock-workload
+systemctl is-active postgresql phpfpm-nextcloud nextcloud-setup
+```
+
+Pi NFS (`srv-storage-b.mount`) is optional for the upgrade itself; external
+storage folders show errors while the Pi is down but the core app migrates
+without them.
+
+### Upgrade one major
+
+1. Edit `services/nextcloud.nix`: bump `package = pkgs.nextcloudNN` by one major
+   (currently `pkgs.nextcloud32`; next step is `pkgs.nextcloud33`).
+2. From the workstation: `deploy path:.#server`.
+3. On the server, watch migration units:
+   ```bash
+   journalctl -u nextcloud-setup -u nextcloud-update-db -f
+   ```
+4. Verify:
+   ```bash
+   sudo -u nextcloud nextcloud-occ status
+   sudo -u nextcloud nextcloud-occ app:list
+   ```
+   Open `https://cloud.<domain>`, log in (Authentik OIDC or break-glass admin),
+   and spot-check file sync.
+
+### After upgrading
+
+- Re-run `nix flake check` — the nixpkgs evaluation warning for Nextcloud clears
+  only when the pin reaches the latest packaged major (currently 33).
+- Third-party and community apps often lag a major release; Nextcloud may
+  **auto-disable** incompatible apps during migration. Re-enable or update them
+  in the Apps UI or with `nextcloud-occ app:update --all`.
+- `user_oidc` is configured by `nextcloud-oidc-setup`; confirm OIDC login still
+  works after the upgrade.
+
+---
+
 ## Verify Tang health
 
 ```bash
@@ -336,7 +414,7 @@ Then run a LUKS header backup again to capture the new Clevis metadata.
 **New or wiped disk:** install as in `docs/deployment-checklist.md` Phase 1 (disko creates
 fresh volumes), then restore the data:
 
-1. `sudo cryptsetup luksOpen /dev/lanbat/control control && sudo mount /dev/mapper/control /mnt/control`
+1. `sudo cryptsetup luksOpen /dev/lanbat/control control-luks && sudo mount /dev/mapper/control-luks /mnt/control`
 2. Restore Tang keys from control backup:
    `restic -r <control-repo> restore latest --target /`
 3. `sudo systemctl start control-online.target` — Tang starts

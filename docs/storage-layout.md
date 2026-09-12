@@ -8,19 +8,19 @@ Raspberry Pi 5
 │   └── NixOS system
 │
 ├── Drive A  /dev/disk/by-id/DRIVE_A  →  LUKS  →  /dev/mapper/storage-a  →  XFS  →  /mnt/storage-a
-│   ├── /mnt/storage-a/media/              ← Jellyfin libraries (movies, TV, music)
+│   ├── /mnt/storage-a/media/              ← qBittorrent saves here, Jellyfin reads
 │   │   ├── movies/
 │   │   ├── tv/
-│   │   └── music/
-│   ├── /mnt/storage-a/downloads/          ← qBittorrent output
-│   │   ├── admin/                         ← per-user download dirs
-│   │   └── ...
+│   │   └── music-videos/
 │   ├── /mnt/storage-a/photos/             ← Immich originals / uploads
 │   └── /mnt/storage-a/surveillance/       ← Frigate recordings
 │       ├── clips/
 │       └── exports/
 │
 └── Drive B  /dev/disk/by-id/DRIVE_B  →  LUKS  →  /dev/mapper/storage-b  →  XFS  →  /mnt/storage-b
+    ├── /mnt/storage-b/media/              ← the rest of the media, as on drive A
+    │   ├── music/  documentaries/  adult/  roms/
+    │   └── audiobooks/  books/  gym/  games/  misc/
     ├── /mnt/storage-b/nextcloud/          ← Nextcloud external storage
     ├── /mnt/storage-b/users/              ← per-user SMB home dirs
     │   ├── admin/
@@ -60,8 +60,14 @@ account prunes its dangling images weekly.
 These paths live on `/dev/lanbat/root` and are accessible at boot without any unlock.
 
 ```
+/etc/caddy/
+└── ca-root.crt        Persisted internal root CA (public; also secrets/caddy-ca-root.crt)
+
+/run/agenix/
+└── caddy-ca-root-key  Root CA private key (agenix; survives host-root reinstall)
+
 /var/lib/
-├── caddy/             Caddy TLS state, internal CA keys
+├── caddy/             Caddy TLS state (intermediate + leaf certs; rotates)
 ├── hass/              Home Assistant config (history is in PostgreSQL)
 ├── authentik/         Authentik media, certs
 ├── postgresql-always-on/  PostgreSQL always-on instance: Authentik, Home Assistant, Grafana
@@ -74,7 +80,8 @@ These paths live on `/dev/lanbat/root` and are accessible at boot without any un
 ├── homepage/          Homepage config (stateless, managed in repo)
 └── containers/<account>/  rootless Podman image storage, one per container account
 
-/var/lib/tang/         ← bind mount from /mnt/control/tang (control LUKS)
+/var/lib/private/tang/ ← bind mount from /mnt/control/tang (control LUKS);
+                         /var/lib/tang links to it
                          Tang key pairs (BACK THIS UP — only available when
                          control is unlocked)
 ```
@@ -127,7 +134,8 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Grafana | server-local | always-on PostgreSQL | — |
 | InfluxDB | server-local | server-local | — |
 | Syncthing | server-local | server-local (SQLite index) | Pi/b/syncthing |
-| Snapcast | — | — | — (stateless; audio piped at runtime) |
+| Music Assistant | server-local | server-local (embedded) | Pi/a/media/music (NFS, read-only) |
+| Snapcast | — | — | — (streams created dynamically by MA) |
 | Wyoming (server) | — | — | — (models re-downloaded on first start) |
 | Wyoming satellite (Pi) | — | — | — (stateless) |
 | Telegraf (server + Pi) | — | → InfluxDB | — |
@@ -145,7 +153,7 @@ Run `quota-setup.sh` on the Pi after first format (see docs/deployment-checklist
 | Project name | ID | Path | Drive | Suggested limit |
 |---|---|---|---|---|
 | media | 100 | /mnt/storage-a/media | A | no limit (fill the drive) |
-| downloads | 101 | /mnt/storage-a/downloads | A | 1 TB soft, 1.1 TB hard |
+| media-b | 101 | /mnt/storage-b/media | B | no limit |
 | photos | 102 | /mnt/storage-a/photos | A | no limit |
 | surveillance | 103 | /mnt/storage-a/surveillance | A | 500 GB soft, 550 GB hard |
 | nextcloud | 200 | /mnt/storage-b/nextcloud | B | 500 GB soft, 550 GB hard |

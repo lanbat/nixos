@@ -6,7 +6,7 @@
 # State is "present" (idempotent create/update) throughout.
 #
 # Proxy providers (forward auth via Caddy):
-#   Frigate, qBittorrent, Bitmagnet, Syncthing, Snapcast, Zigbee2MQTT
+#   Home Assistant, Immich, Frigate, qBittorrent, Bitmagnet, Syncthing, Snapcast, Zigbee2MQTT
 #
 # OIDC providers (native SSO):
 #   Grafana, Nextcloud, Immich, Home Assistant, Jellyfin
@@ -56,6 +56,58 @@ let
         blueprints.goauthentik.io/instantiate: "true"
 
     entries:
+
+      # ── Home Assistant ──────────────────────────────────────────────────────
+      # Browser UI is gated by Caddy forward-auth.  HA itself authenticates via
+      # the hass-auth-header custom component (X-Authentik-Username).
+      - model: authentik_providers_proxy.proxyprovider
+        id: provider-home-assistant-proxy
+        state: present
+        identifiers:
+          name: "Home Assistant (proxy)"
+        attrs:
+          name: "Home Assistant (proxy)"
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: "https://ha.${domain}"
+          internal_host: "http://127.0.0.1:8123"
+
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: home-assistant-proxy
+        attrs:
+          name: "Home Assistant"
+          slug: home-assistant-proxy
+          provider: !KeyOf provider-home-assistant-proxy
+          policy_engine_mode: any
+
+      # ── Immich ──────────────────────────────────────────────────────────────
+      # Browser UI is gated by Caddy forward-auth.  Immich login uses native OIDC
+      # (Authentik) via IMMICH_CONFIG_FILE after the session gate.
+      - model: authentik_providers_proxy.proxyprovider
+        id: provider-immich-proxy
+        state: present
+        identifiers:
+          name: "Immich (proxy)"
+        attrs:
+          name: "Immich (proxy)"
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: "https://photos.${domain}"
+          internal_host: "http://127.0.0.1:2283"
+
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: immich-proxy
+        attrs:
+          name: "Immich"
+          slug: immich-proxy
+          provider: !KeyOf provider-immich-proxy
+          policy_engine_mode: any
 
       # ── Frigate ─────────────────────────────────────────────────────────────
       - model: authentik_providers_proxy.proxyprovider
@@ -149,6 +201,29 @@ let
           provider: !KeyOf provider-syncthing
           policy_engine_mode: any
 
+      # ── Music Assistant ─────────────────────────────────────────────────────
+      - model: authentik_providers_proxy.proxyprovider
+        id: provider-music-assistant
+        state: present
+        identifiers:
+          name: "Music Assistant"
+        attrs:
+          name: "Music Assistant"
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: "https://music.${domain}"
+
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: music-assistant
+        attrs:
+          name: "Music Assistant"
+          slug: music-assistant
+          provider: !KeyOf provider-music-assistant
+          policy_engine_mode: any
+
       # ── Snapcast ────────────────────────────────────────────────────────────
       - model: authentik_providers_proxy.proxyprovider
         id: provider-snapcast
@@ -205,11 +280,16 @@ let
           managed: "goauthentik.io/outposts/embedded"
         attrs:
           type: proxy
+          config:
+            authentik_host: "https://auth.${domain}"
           providers:
+            - !KeyOf provider-home-assistant-proxy
+            - !KeyOf provider-immich-proxy
             - !KeyOf provider-frigate
             - !KeyOf provider-qbittorrent
             - !KeyOf provider-bitmagnet
             - !KeyOf provider-syncthing
+            - !KeyOf provider-music-assistant
             - !KeyOf provider-snapcast
             - !KeyOf provider-zigbee2mqtt
   '';
@@ -328,12 +408,9 @@ let
           provider: !KeyOf provider-immich
           policy_engine_mode: any
 
-      # ── Home Assistant ──────────────────────────────────────────────────────
-      # Authentik side only — HA side requires manual UI setup:
-      #   Settings → Devices & Services → Add Integration → search "Authentik"
-      #   (or via HACS: https://github.com/jchonig/ha-authentik)
-      #   client_id: home-assistant
-      #   discovery URL: https://auth.${domain}/application/o/home-assistant/.well-known/openid-configuration
+      # ── Home Assistant (OIDC, optional) ─────────────────────────────────────
+      # Primary SSO is forward-auth + hass-auth-header (see proxy blueprint).
+      # This OIDC provider remains for optional HACS/native OAuth integrations.
       - model: authentik_providers_oauth2.oauth2provider
         id: provider-home-assistant
         state: present
