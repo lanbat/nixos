@@ -39,6 +39,9 @@
     tier = "workload";
     state = [ "jellyfin" ];
     units = [ "jellyfin" ];
+    # Created for jellyfin on the workload layer; root-owned, Jellyfin can't
+    # write its data and aborts on start.
+    workloadDirs."jellyfin".user = "jellyfin";
     nfs.drives = [
       "a"
       "b"
