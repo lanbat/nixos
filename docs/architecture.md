@@ -99,7 +99,7 @@
 |---|---|---|
 | Authentik | local only | It IS the identity provider |
 | Homepage | none | LAN landing page |
-| Home Assistant | OIDC (Authentik) + local break-glass | Native OIDC support |
+| Home Assistant | Caddy forward-auth (Authentik) + header auth + local break-glass | Companion apps use /auth/token; browser SSO via hass-auth-header |
 | Nextcloud | OIDC (user_oidc app) + local admin | Native OIDC support |
 | Immich | OIDC (native) + local admin | Native OIDC support |
 | Jellyfin | OIDC (plugin) or local | Native OIDC plugin available |

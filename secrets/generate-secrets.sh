@@ -98,6 +98,12 @@ encrypt frigate-rtsp-env.age \
   "FRIGATE_RTSP_USER=$(openssl rand -hex 8)
 FRIGATE_RTSP_PASSWORD=$(openssl rand -hex 16)"
 
+# ---- Home Assistant ----
+# Break-glass owner password; onboarding is completed automatically on deploy.
+encrypt hass-bootstrap-env.age \
+  "OWNER_USERNAME=akadmin
+OWNER_PASSWORD=$(rand 24)"
+
 # ---- Bitmagnet ----
 encrypt bitmagnet-db-pass.age "POSTGRES_PASSWORD=$(rand 36)"
 

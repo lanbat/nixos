@@ -42,6 +42,26 @@ let
         }
       '';
 
+  # Companion apps and REST clients authenticate directly with HA tokens, so
+  # /auth/token and /api/* bypass Authentik when apiClients is set.
+  forwardAuthWithApiBypass =
+    svc:
+    lib.concatStringsSep "\n" [
+      svc.caddy.extraConfig
+      ''
+        route {
+          @api_clients path /auth/token* /api/*
+          handle @api_clients {
+            ${reverseProxy svc}
+          }
+          handle {
+            ${authentikFwdAuth}
+            ${reverseProxy svc}
+          }
+        }
+      ''
+    ];
+
   vhost =
     svc:
     lib.concatStringsSep "\n" (
@@ -51,9 +71,18 @@ let
             on_demand
           }
         ''
-        (lib.optionalString (svc.auth == "forward-auth") authentikFwdAuth)
-        svc.caddy.extraConfig
-        (reverseProxy svc)
+        (
+          if svc.auth == "forward-auth" && svc.apiClients then
+            forwardAuthWithApiBypass svc
+          else
+            lib.concatStringsSep "\n" (
+              lib.filter (s: s != "") [
+                (lib.optionalString (svc.auth == "forward-auth") authentikFwdAuth)
+                svc.caddy.extraConfig
+                (reverseProxy svc)
+              ]
+            )
+        )
       ]
     );
 

@@ -116,7 +116,9 @@ let
           default = false;
           description = ''
             Whether non-browser clients (mobile or desktop apps) call the service
-            directly. Such services can't sit behind forward auth.
+            directly. With forward-auth, Caddy exempts /auth/token* and /api/*
+            so clients can authenticate with the app while the browser UI stays
+            behind Authentik.
           '';
         };
 

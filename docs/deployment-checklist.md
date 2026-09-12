@@ -417,15 +417,25 @@ Log in at `https://cloud.<domain>` as the local `admin`, then either:
 Once the app is enabled, the `nextcloud-oidc-setup` systemd service runs
 automatically and registers the Authentik provider.  No further steps needed.
 
-#### Home Assistant — manual UI setup
+#### Home Assistant — bootstrap secret and SSO users
 
-1. Install the HACS integration from the [HACS store](https://hacs.xyz) or use
-   the built-in "Home Assistant OAuth2" integration if available.
-2. Settings → Devices & Services → Add Integration → search "Authentik".
-3. Use the values printed by `generate-oidc-secrets.sh`:
-   - client_id: `home-assistant`
-   - client_secret: (from the script output)
-   - discovery URL: `https://auth.<domain>/application/o/home-assistant/.well-known/openid-configuration`
+1. Create `secrets/hass-bootstrap-env.age` (one `KEY=value` per line):
+
+   ```
+   OWNER_USERNAME=akadmin
+   OWNER_PASSWORD=<random break-glass password>
+   ```
+
+2. Add Authentik usernames that should land in HA without a second login to
+   `lanbat.homeAssistant.ssoUsers` in `local.nix` (default: `[ "akadmin" ]`).
+   Usernames must match Authentik exactly.
+
+3. Deploy.  `home-assistant-bootstrap` completes first-run onboarding and
+   creates the SSO users.  Entitled Authentik users opening `https://ha.<domain>`
+   are authenticated via forward-auth + header auth.
+
+4. Grant users access to the **Home Assistant** application in Authentik
+   (Applications → Home Assistant → Policy / group bindings).
 
 #### Jellyfin — manual UI setup
 
