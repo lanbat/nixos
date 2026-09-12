@@ -88,6 +88,16 @@ let
   # Arguments: $1 = by-id path, $2 = mapper name, $3 = mount point.
   unlockScript = pkgs.writeShellScript "clevis-unlock-drive" ''
     set -euo pipefail
+    # clevis-decrypt-tang calls curl and jose from PATH, which a systemd
+    # service doesn't provide.
+    export PATH=${
+      lib.makeBinPath [
+        pkgs.curl
+        pkgs.jose
+        pkgs.cryptsetup
+        pkgs.util-linux
+      ]
+    }:$PATH
     DRIVE_ID="$1"
     MAPPER="$2"
     MOUNTPOINT="$3"

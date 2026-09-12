@@ -66,11 +66,13 @@ pkgs.testers.runNixOSTest {
         pi.wait_for_unit("telegraf.service")
         pi.wait_for_unit("snapclient.service")
 
-    with subtest("storage unlock retries without blocking boot"):
+    with subtest("storage unlock retries without blocking boot or NFS"):
         pi.wait_until_succeeds(
             "systemctl show storage-a-unlock.service -p ActiveState --value | grep -qE '^(activating|failed)$'",
             timeout=120,
         )
-        pi.fail("systemctl is-active nfs-server.service")
+        # The NFS server runs, but exports nothing while the drives are locked.
+        pi.wait_for_unit("nfs-server.service")
+        pi.succeed('test -z "$(exportfs)"')
   '';
 }

@@ -57,21 +57,20 @@
 
 {
   # ── Storage A initialisation ───────────────────────────────────────────────
-  # Runs once after storage-a is unlocked and mounted.
-  # Creates the top-level directory tree with correct permissions.
-  # Wired before nfs-server.service so NFS always exports a fully-initialised tree.
+  # Runs after storage-a is unlocked and mounted, creates the top-level
+  # directory tree with correct permissions, then refreshes the NFS exports so
+  # the drive is served (modules/pi/nfs-exports.nix exports it once mounted).
   systemd.services."storage-a-init" = {
     description = "Initialise storage-a directory tree after unlock";
     # Require successful unlock (which implies the filesystem is mounted).
     requires = [ "storage-a-unlock.service" ];
     after = [ "storage-a-unlock.service" ];
-    # nfs-server.service wants this init, ensuring exports are ready before NFS starts.
-    before = [ "nfs-server.service" ];
-    wantedBy = [ "nfs-server.service" ];
+    wantedBy = [ "storage-a-unlock.service" ];
 
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      ExecStartPost = "-${pkgs.nfs-utils}/bin/exportfs -ra";
       ExecStart = pkgs.writeShellScript "init-storage-a" ''
         set -e
         base=/mnt/storage-a
@@ -94,12 +93,12 @@
     description = "Initialise storage-b directory tree after unlock";
     requires = [ "storage-b-unlock.service" ];
     after = [ "storage-b-unlock.service" ];
-    before = [ "nfs-server.service" ];
-    wantedBy = [ "nfs-server.service" ];
+    wantedBy = [ "storage-b-unlock.service" ];
 
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      ExecStartPost = "-${pkgs.nfs-utils}/bin/exportfs -ra";
       ExecStart = pkgs.writeShellScript "init-storage-b" ''
         set -e
         base=/mnt/storage-b

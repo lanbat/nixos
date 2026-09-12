@@ -24,8 +24,9 @@
 let
   serverIp = config.lanbat.serverIp;
 
-  # Common NFS export options.
-  exportOpts = "rw,sync,no_subtree_check,no_root_squash";
+  # Common NFS export options. mp exports a drive only while it is mounted, so
+  # a locked drive is never served as the empty directory on the SD card.
+  exportOpts = "rw,sync,no_subtree_check,no_root_squash,mp";
 in
 {
   services.nfs.server = {
@@ -39,20 +40,10 @@ in
     '';
   };
 
-  # The NFS server must wait for the storage drives to be mounted and
-  # initialized.  Otherwise it exports empty paths.
-  systemd.services."nfs-server" = {
-    after = [
-      "mnt-storage-a.mount"
-      "mnt-storage-b.mount"
-      "storage-a-init.service"
-      "storage-b-init.service"
-    ];
-    requires = [
-      "mnt-storage-a.mount"
-      "mnt-storage-b.mount"
-    ];
-  };
+  # The NFS server starts at boot without waiting for the drives: each drive is
+  # exported (mp) once its unlock service has mounted it, and storage-*-init
+  # refreshes the exports then. One locked drive doesn't keep the other off
+  # the network.
 
   # rpcbind is needed for NFSv3 clients; not required for v4-only.
   # mkForce to override the default-true set by the nfs module.
