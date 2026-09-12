@@ -78,7 +78,8 @@
         install -d -m 0755 -o root   -g root    "$base/media/movies"
         install -d -m 0755 -o root   -g root    "$base/media/tv"
         install -d -m 0755 -o root   -g root    "$base/media/music"
-        install -d -m 0775 -o nobody -g nogroup "$base/downloads"
+        # qBittorrent on the server writes here as qbt (UID 994), group media (GID 988).
+        install -d -m 2775 -o 994    -g 988     "$base/downloads"
         install -d -m 0755 -o nobody -g nogroup "$base/photos"
         install -d -m 0755 -o nobody -g nogroup "$base/surveillance"
         install -d -m 0755 -o nobody -g nogroup "$base/surveillance/clips"
