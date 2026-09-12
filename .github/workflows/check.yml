@@ -29,5 +29,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
-      - name: Evaluate both hosts with placeholder settings
+      - name: Evaluate the example hosts and checks
         run: nix flake check --no-build --all-systems
+
+  vm-test:
+    name: vm-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Enable KVM
+        run: |
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::This runner has no /dev/kvm; the VM test needs KVM."
+            exit 1
+          fi
+          sudo chmod 0666 /dev/kvm
+          ls -l /dev/kvm
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: system-features = nixos-test benchmark big-parallel kvm
+      - name: Run the wiring tests
+        run: nix build -L .#checks.x86_64-linux.assertions .#checks.x86_64-linux.workload-gate

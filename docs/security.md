@@ -6,17 +6,17 @@
 
 The server uses a three-layer design. See `docs/secure-layers.md` for full detail.
 
-- **`/dev/sda2` (host root)** — plain ext4, **not encrypted**. Contains NixOS, SSH,
+- **`/dev/lanbat/root` (host root)** — plain ext4, **not encrypted**. Contains NixOS, SSH,
   networking, admin tools, and always-on service data (PostgreSQL, Authentik, HA,
   Grafana, InfluxDB, Mosquitto, Frigate, Caddy TLS certs). Always available after boot.
   This is intentional: the server must be remotely administrable after reboot without
   physical presence. An encrypted root would require console access for every reboot.
 
-- **`/dev/sda3` (control LUKS)** — LUKS2-encrypted. Contains only Tang key material.
+- **`/dev/lanbat/control` (control LUKS)** — LUKS2-encrypted. Contains only Tang key material.
   Unlocked manually by admin after each reboot (`unlock-control`). Until unlocked, Tang
   is unavailable and the Pi cannot auto-unlock its NVMe drives.
 
-- **`/dev/sda4` (workload LUKS)** — LUKS2-encrypted. Contains workload-gated service
+- **`/dev/lanbat/workload` (workload LUKS)** — LUKS2-encrypted. Contains workload-gated service
   data: Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent,
   Bitmagnet. Unlocked manually by admin after each reboot (`unlock-workload`).
 

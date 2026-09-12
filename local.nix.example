@@ -1,102 +1,62 @@
-# local.nix — per-deployment settings, not tracked by git.
+# local.nix — your deployment's settings. Not tracked by git.
 #
 # HOW TO USE
 # ----------
-# 1. Copy this file to local.nix:
-#      cp local.nix.example local.nix
-# 2. Fill in all values below.
-# 3. Deploy with a path: flake reference so Nix includes this untracked file:
-#      nixos-rebuild switch --flake path:.#server --target-host admin@server
-#      nixos-rebuild switch --flake path:.#pi     --target-host admin@pi5
-# 4. hosts/pi/hardware-configuration.nix is a template whose filesystem UUIDs are
-#    CHANGE_ME placeholders; replace it with your own nixos-generate-config
-#    output before deploying the Pi. Deploys refuse to switch while any
-#    placeholder setting or UUID remains.
+# 1. cp local.nix.example local.nix
+# 2. Replace every value. None of the settings have defaults, and most are
+#    type-checked (IP addresses, the SSH key, USB IDs, the disk path), so a
+#    missing or malformed value fails evaluation.
+# 3. Refer to the flake with a path: reference, which includes this untracked
+#    file. The `server` and `pi` configurations only exist when local.nix does:
+#      deploy path:.#server
+#      nix build path:.#nixosConfigurations.server.config.system.build.toplevel
+#    A git reference such as .#server fails with "does not provide attribute".
 #
-# This file is gitignored. Never commit local.nix — it contains your real IPs
-# and SSH keys. The shared repo keeps only placeholder defaults in
-# modules/common/settings.nix.
-{ ... }: {
+# Option documentation: modules/core/settings.nix.
+# Never commit local.nix: it holds your real addresses and keys.
+{
   lanbat = {
-    # -------------------------------------------------------------------------
-    # Network
-    # -------------------------------------------------------------------------
-    serverIp       = "CHANGE_ME";   # e.g. "192.168.1.10"
-    piIp           = "CHANGE_ME";   # e.g. "192.168.1.11"
-    gatewayIp      = "CHANGE_ME";   # e.g. "192.168.1.1"
-    lanSubnet      = "CHANGE_ME";   # e.g. "192.168.1.0/24"
+    # ── Network ───────────────────────────────────────────────────────────────
+    serverIp = "CHANGE_ME"; # e.g. "192.168.1.10"
+    piIp = "CHANGE_ME"; # e.g. "192.168.1.11"
+    gatewayIp = "CHANGE_ME"; # e.g. "192.168.1.1"
+    lanSubnet = "CHANGE_ME"; # e.g. "192.168.1.0/24"
 
-    serverHostname = "server";      # hostname for the main server
-    piHostname     = "pi5";         # or set to piIp if hostname resolution is unreliable
+    serverHostname = "server";
+    piHostname = "pi5"; # or piIp if hostname resolution is unreliable
 
-    # -------------------------------------------------------------------------
-    # DNS
-    # -------------------------------------------------------------------------
-    domain         = "CHANGE_ME";   # e.g. "home.example.com"
-    rootDomain     = "CHANGE_ME";   # e.g. "example.com" (parent of domain)
+    # ── DNS ───────────────────────────────────────────────────────────────────
+    domain = "CHANGE_ME"; # e.g. "home.example.com"; *.<domain> must resolve to the server
+    rootDomain = "CHANGE_ME"; # e.g. "example.com"
 
-    # -------------------------------------------------------------------------
-    # NFS
-    # -------------------------------------------------------------------------
-    # NFSv4 ID mapping domain — must be identical on server and Pi.
-    # Any string works; a common choice is your local DNS suffix.
-    nfsIdmapdDomain = "CHANGE_ME"; # e.g. "home.lan"
+    # NFSv4 ID mapping domain, identical on both hosts. Any string works.
+    nfsIdmapdDomain = "home.lan";
 
-    # -------------------------------------------------------------------------
-    # System
-    # -------------------------------------------------------------------------
-    timezone       = "Europe/London";  # e.g. "Europe/London", "America/New_York" — see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+    # ── System ────────────────────────────────────────────────────────────────
+    timezone = "Europe/London"; # https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+    phoneRegion = "GB"; # ISO 3166-1 alpha-2, used by Nextcloud
 
-    # ISO 3166-1 alpha-2 country code for phone number formatting (Nextcloud).
-    phoneRegion    = "GB";             # e.g. "GB", "US", "DE", "FR"
+    # ── Home Assistant location ───────────────────────────────────────────────
+    haLatitude = "51.5074";
+    haLongitude = "-0.1278";
+    haElevation = 11; # metres
 
-    # -------------------------------------------------------------------------
-    # Home Assistant location
-    # -------------------------------------------------------------------------
-    haLatitude     = "51.5074";        # decimal degrees, e.g. "51.5074" (London)
-    haLongitude    = "-0.1278";        # decimal degrees, e.g. "-0.1278" (London)
-    haElevation    = 11;               # metres above sea level, e.g. 11 (London)
+    # ── Disks ─────────────────────────────────────────────────────────────────
+    # The server's system disk. nixos-anywhere ERASES it and applies
+    # hosts/server/disk.nix. From the installer: ls -l /dev/disk/by-id/
+    serverDisk = "/dev/disk/by-id/CHANGE_ME";
 
-    # -------------------------------------------------------------------------
-    # Server disk encryption — three-layer design
-    #
-    # Partition layout (adjust sda to match your disk name):
-    #   sda1:  1 GiB   /boot (EFI, vfat)              — systemd-boot kernels
-    #   sda2: 50 GiB   /     (ext4, no encryption)     — host OS, SSH, admin
-    #   sda3: 256 MiB  control LUKS → /mnt/control     — Tang keys only
-    #   sda4: rest     workload LUKS → /mnt/workload   — all container data
-    #
-    # Get UUIDs with:
-    #   blkid /dev/sda3   # → serverControlLuksUuid
-    #   blkid /dev/sda4   # → serverWorkloadLuksUuid
-    # -------------------------------------------------------------------------
-    serverControlLuksUuid  = "CHANGE_ME";  # UUID of /dev/sda3 (control LUKS)
-    serverWorkloadLuksUuid = "CHANGE_ME";  # UUID of /dev/sda4 (workload LUKS)
+    # The Pi's storage drives, filename only (no /dev/disk/by-id/ prefix).
+    # On the Pi: ls -l /dev/disk/by-id/ | grep nvme | grep -v part
+    piStorageDriveA = "CHANGE_ME"; # e.g. "nvme-Samsung_SSD_970_EVO_1TB_ABC123"
+    piStorageDriveB = "CHANGE_ME";
 
-    # -------------------------------------------------------------------------
-    # Raspberry Pi NVMe storage drives
-    # Both drives are Clevis/Tang bound and stay locked until Tang is reachable.
-    # Get stable by-id paths with (on the Pi):
-    #   ls -la /dev/disk/by-id/ | grep nvme | grep -v part
-    # Use only the filename, not the /dev/disk/by-id/ prefix.
-    # -------------------------------------------------------------------------
-    piStorageDriveA = "CHANGE_ME";  # e.g. "nvme-Samsung_SSD_970_EVO_1TB_ABC123"
-    piStorageDriveB = "CHANGE_ME";  # e.g. "nvme-Samsung_SSD_970_EVO_1TB_XYZ456"
+    # ── Access ────────────────────────────────────────────────────────────────
+    # Your SSH public key (cat ~/.ssh/id_ed25519.pub). deploy-rs logs in with it.
+    adminSshKey = "CHANGE_ME";
 
-    # -------------------------------------------------------------------------
-    # Admin SSH public key — same for both machines.
-    # Generate with: ssh-keygen -t ed25519
-    # Get the value with: cat ~/.ssh/id_ed25519.pub
-    # -------------------------------------------------------------------------
-    adminSshKey    = "CHANGE_ME";
-
-    # -------------------------------------------------------------------------
-    # Zigbee dongle (Home Assistant / ZHA)
-    # Find the by-id path with: ls /dev/serial/by-id/  (dongle must be plugged in)
-    # Find vendor/product IDs with: lsusb  (format: "ID 10c4:ea60 ...")
-    # -------------------------------------------------------------------------
-    zigbeeDongle    = "CHANGE_ME";  # just the filename under /dev/serial/by-id/
-    zigbeeVendorId  = "CHANGE_ME";  # 4 hex digits, e.g. "10c4"
-    zigbeeProductId = "CHANGE_ME";  # 4 hex digits, e.g. "ea60"
+    # ── Zigbee dongle (lsusb shows "ID 10c4:ea60 ...") ────────────────────────
+    zigbeeVendorId = "CHANGE_ME"; # e.g. "10c4"
+    zigbeeProductId = "CHANGE_ME"; # e.g. "ea60"
   };
 }

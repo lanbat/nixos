@@ -75,7 +75,7 @@ systemd.timers."backup-server" = {
 
 ### Frigate clips → cloud (real-time)
 
-`frigate-rclone-sync.service` (defined in `hosts/server/services/frigate.nix`)
+`frigate-rclone-sync.service` (planned for `services/frigate.nix`)
 watches the clips directory and uploads each clip as it closes.
 
 This keeps a cloud copy of all detected-event clips.
@@ -116,7 +116,7 @@ Add this as a weekly systemd timer.
    # etc.
    ```
 4. The Pi drives are intact and still encrypted to the same Tang key (which you restored).
-5. Rebuild: `nixos-rebuild switch --flake path:.#server`
+5. Deploy from the workstation: `deploy path:.#server`
 
 ### Tang key loss
 

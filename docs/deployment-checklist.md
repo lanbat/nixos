@@ -6,106 +6,53 @@ Follow this order exactly. The server must come up before the Pi can unlock its 
 
 ## Phase 0 — Preparation (on your workstation)
 
-### 0a. Enable Nix experimental features on your workstation
-
-The flake and `nix shell` / `nix build` commands require `nix-command` and
-`flakes` to be enabled.  The managed machines get this via
-`modules/common/base.nix`, but your workstation needs it separately.
+### 0a. Enable Nix flakes on your workstation
 
 ```bash
 mkdir -p ~/.config/nix
 echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
 ```
 
-Verify it works:
-```bash
-nix shell nixpkgs#hello --command hello
-# Hello, world!
-```
-
-> **Existing repo upgrade:** if you previously had `secrets/secrets.nix`
-> tracked in git, stop tracking it:
-> ```bash
-> git rm --cached secrets/secrets.nix
-> git commit -m "stop tracking secrets/secrets.nix (now gitignored)"
-> ```
-
 ### 0b. Clone and configure
 
-- [ ] Clone this repo
+- [ ] Clone this repo and open the dev shell, which provides `deploy`, `agenix` and
+  `nixos-anywhere`:
   ```bash
   git clone <your-repo-url> nixos && cd nixos
+  nix develop
   ```
 - [ ] Generate your SSH keypair if you don't have one: `ssh-keygen -t ed25519`
 - [ ] Create your local settings file: `cp local.nix.example local.nix`
-- [ ] Fill in all values in `local.nix` (this file is gitignored — never commit it):
-  - **Network:**
-    - `serverIp` — server static IPv4 (e.g. `"192.168.1.10"`)
-    - `piIp` — Pi static IPv4 (e.g. `"192.168.1.11"`)
-    - `gatewayIp` — router/gateway IPv4 (e.g. `"192.168.1.1"`)
-    - `lanSubnet` — your LAN CIDR (e.g. `"192.168.1.0/24"`)
-    - `serverHostname` — hostname for the server (default: `"server"`)
-    - `piHostname` — Pi hostname used as NFS target (default: `"pi5"`; or set to `piIp`)
-  - **DNS:**
-    - `domain` — wildcard DNS subdomain (e.g. `"home.example.com"`)
-    - `rootDomain` — parent DNS zone (e.g. `"example.com"`)
-  - **NFS:**
-    - `nfsIdmapdDomain` — NFSv4 ID mapping domain, must match on both machines (e.g. `"home.lan"`)
-  - **System:**
-    - `timezone` — your timezone (e.g. `"Europe/London"`)
-    - `phoneRegion` — ISO 3166-1 alpha-2 country code for Nextcloud (e.g. `"GB"`)
-  - **Home Assistant location:**
-    - `haLatitude` — decimal degrees (e.g. `"51.5"`)
-    - `haLongitude` — decimal degrees (e.g. `"-0.1"`)
-    - `haElevation` — metres above sea level (e.g. `50`)
-  - **Server disk** (fill in after partitioning in step 1b):
-    - `serverControlLuksUuid`  — UUID of `/dev/sda3` (control LUKS, Tang keys)
-    - `serverWorkloadLuksUuid` — UUID of `/dev/sda4` (workload LUKS, service data)
-  - **Raspberry Pi NVMe drives** (fill in during Pi installation step 2c):
-    - `piStorageDriveA` — by-id filename for NVMe drive A (no `/dev/disk/by-id/` prefix)
-    - `piStorageDriveB` — by-id filename for NVMe drive B
-  - **Access:**
-    - `adminSshKey` — your SSH public key (`cat ~/.ssh/id_ed25519.pub`)
-  - **Zigbee dongle** — plug the dongle into the **server** and run:
-    ```bash
-    # Find the by-id filename (copy everything after /dev/serial/by-id/):
-    ls /dev/serial/by-id/
-    # Example output: usb-Silicon_Labs_Sonoff_Zigbee_3.0_USB_Dongle_Plus_0001-if00-port0
-    # → zigbeeDongle = "usb-Silicon_Labs_Sonoff_Zigbee_3.0_USB_Dongle_Plus_0001-if00-port0"
-
-    # Find the USB vendor and product IDs:
-    lsusb
-    # Example output: Bus 001 Device 003: ID 10c4:ea60 Silicon Labs CP210x UART Bridge
-    #                                        ^^^^:^^^^
-    # → zigbeeVendorId = "10c4"   zigbeeProductId = "ea60"
+- [ ] Fill in all values in `local.nix` (gitignored — never commit it). None have
+  defaults; the options are documented in `modules/core/settings.nix`.
+  - **Network:** `serverIp`, `piIp`, `gatewayIp`, `lanSubnet`, `serverHostname`, `piHostname`
+  - **DNS:** `domain` (e.g. `"home.example.com"`), `rootDomain` (e.g. `"example.com"`)
+  - **NFS:** `nfsIdmapdDomain` (any string, e.g. `"home.lan"`)
+  - **System:** `timezone`, `phoneRegion`
+  - **Home Assistant location:** `haLatitude`, `haLongitude`, `haElevation`
+  - **Server disk:** `serverDisk` — filled in at step 1b
+  - **Raspberry Pi drives:** `piStorageDriveA`, `piStorageDriveB` — filled in at step 2c
+  - **Access:** `adminSshKey` (`cat ~/.ssh/id_ed25519.pub`)
+  - **Zigbee dongle:** plug it into any Linux machine and run `lsusb`:
+    ```
+    Bus 001 Device 003: ID 10c4:ea60 Silicon Labs CP210x UART Bridge
+                           ^^^^:^^^^
+    → zigbeeVendorId = "10c4"   zigbeeProductId = "ea60"
     ```
 - [ ] Configure DNS on your router: point `*.<domain>` to the server's static IP.
-  This must be done before any service URLs will resolve.
 
-### 0c. Install agenix on your workstation
-
-```bash
-nix shell github:ryantm/agenix
-# Or add it to your personal flake/profile permanently.
-```
-
-### 0d. Create secrets (agenix)
-
-> **Chicken-and-egg note:** agenix encrypts secrets to the host SSH key, but the
-> host doesn't exist yet. Encrypt all secrets with your admin key only for now.
-> After first boot, add the host keys to `secrets/secrets.nix` and run `agenix -r`.
+### 0c. Create secrets (agenix)
 
 > **CI note:** commit the `.age` files to the repository — they are encrypted and
-> safe to commit. The GitHub Actions workflow evaluates the NixOS configurations,
-> which requires the `.age` files to exist as paths in the store. Decryption only
-> happens at activation time on the real machines, never in CI.
+> safe to commit. Evaluation needs every declared `.age` file to exist; decryption
+> only happens on the real machines.
 
-First, create your `secrets/secrets.nix` (gitignored — like `local.nix`):
+Create your `secrets/secrets.nix` (gitignored — like `local.nix`):
 ```bash
 cp secrets/secrets.nix.example secrets/secrets.nix
 ```
-Fill in your workstation public key (`cat ~/.ssh/id_ed25519.pub`) as `admin`.
-Leave `server` and `pi` as placeholders for now — you'll fill them in at step 3a.
+Fill in your workstation public key (`cat ~/.ssh/id_ed25519.pub`) as `admin`. The
+`server` and `pi` keys are filled in at steps 1c and 2e.
 
 Generate all purely-random secrets automatically:
 ```bash
@@ -116,7 +63,7 @@ This generates and encrypts: Authentik, Nextcloud, Immich, InfluxDB, Grafana,
 and Vaultwarden secrets.  It skips any `.age` file that already exists, so it
 is safe to re-run.
 
-The script will print instructions for the secrets it **cannot** generate
+The script prints instructions for the secrets it **cannot** generate
 automatically — those that depend on external setup:
 
 | Secret | When to fill in |
@@ -129,10 +76,8 @@ automatically — those that depend on external setup:
 | `rclone-frigate-config.age` | Run `rclone config`, paste result (step 3g) |
 | `telegraf-token.age` | After deploying InfluxDB (step 3i) |
 
-All of these files **must exist** before `nixos-install` will succeed — agenix
-requires every declared secret file to be present at build time even if it won't
-be decrypted until later. Create placeholders now for the ones you can't fill in
-yet, and overwrite them at the relevant post-install step.
+All of these files **must exist** before installing. Create placeholders now for the
+ones you can't fill in yet, and overwrite them at the relevant post-install step.
 
 The mosquitto passwords should be real values now (Home Assistant and Frigate
 need them on first start). Pick strong passwords with e.g. `pwgen -s 32 2`.
@@ -158,180 +103,131 @@ echo "TELEGRAF_INFLUXDB_TOKEN=CHANGE_ME" | agenix -e telegraf-token.age
 printf "[remote]\ntype = s3\n" | agenix -e rclone-frigate-config.age
 ```
 
-Then commit all generated `.age` files:
-```bash
-git add secrets/*.age && git commit -m "add initial secrets"
-```
-
 See `secrets/README.md` for the exact format of each file.
 
 ---
 
-## Phase 1 — Server installation
+## Phase 1 — Server installation (nixos-anywhere)
 
-### 1a. Boot NixOS installer (x86_64)
+nixos-anywhere installs over SSH from your workstation: it partitions the disk with
+`hosts/server/disk.nix`, formats both LUKS volumes and installs the `server`
+configuration. **It erases `serverDisk`.**
 
-Download [NixOS minimal ISO](https://nixos.org/download), boot from USB.
+### 1a. Boot the NixOS installer
 
-**To SSH into the installer from your workstation** (recommended — easier to
-copy/paste commands):
-
-On the installer console:
-```bash
-# Set a password for the nixos user
-passwd
-# Enter any password you like — it's temporary and only used for this session.
-
-# Find the machine's IP
-ip addr show
-```
-
-Then from your workstation:
-```bash
-ssh nixos@<ip>
-```
-
-### 1b. Partition the server disk (three-layer layout)
-
-The server uses four partitions. Host root is **not** LUKS-encrypted — it
-boots without any passphrase. Control and workload partitions require manual
-unlock after boot. See `docs/secure-layers.md` for the full design.
-
-```
-sda1:  1 GiB   /boot       EFI, vfat          — systemd-boot kernels
-sda2: 50 GiB   /           ext4, plain         — host OS, SSH, admin tools
-sda3: 256 MiB  (raw)       LUKS2              — control layer (Tang keys)
-sda4: rest     (raw)       LUKS2              — workload layer (all service data)
-```
+Download the [NixOS minimal ISO](https://nixos.org/download) and boot the server from
+USB. On the installer console:
 
 ```bash
-# Identify your disk — the server uses a SATA disk (e.g. /dev/sda).
-# The USB installer will also show up (smaller, with an /iso mountpoint) —
-# do NOT touch that one.
-lsblk
-
-# Create four partitions
-parted /dev/sda -- mklabel gpt
-parted /dev/sda -- mkpart ESP fat32 1MiB 1025MiB
-parted /dev/sda -- set 1 esp on
-parted /dev/sda -- mkpart primary ext4 1025MiB 51200MiB
-parted /dev/sda -- mkpart primary 51200MiB 51456MiB
-parted /dev/sda -- mkpart primary 51456MiB 100%
-
-# Format EFI/boot partition
-mkfs.fat -F 32 -n BOOT /dev/sda1
-
-# Format host root (plain ext4 — no LUKS, boots without passphrase)
-mkfs.ext4 -L nixos /dev/sda2
-
-# Format control LUKS (Tang keys — manually unlocked after boot)
-cryptsetup luksFormat --type luks2 /dev/sda3
-# ↑ Choose a strong passphrase. This unlocks Tang, which lets the Pi unlock its drives.
-cryptsetup luksOpen /dev/sda3 ctrl
-mkfs.ext4 -L control /dev/mapper/ctrl
-# Create the Tang key directory inside the control volume:
-mount /dev/mapper/ctrl /tmp/ctrl-init
-mkdir -p /tmp/ctrl-init/tang
-umount /tmp/ctrl-init
-cryptsetup luksClose ctrl
-
-# Format workload LUKS (all service data — manually unlocked after boot)
-cryptsetup luksFormat --type luks2 /dev/sda4
-# ↑ Choose a passphrase (can be same or different from control passphrase).
-cryptsetup luksOpen /dev/sda4 workload
-mkfs.ext4 -L workload /dev/mapper/workload
-cryptsetup luksClose workload
-
-# Mount host root for installation
-mount /dev/sda2 /mnt
-mkdir -p /mnt/boot
-mount /dev/sda1 /mnt/boot
-
-# Note these UUIDs — needed in local.nix and hardware-configuration.nix
-blkid /dev/sda1  # → EFI UUID          → hardware-configuration.nix fileSystems."/boot"
-blkid /dev/sda2  # → root UUID         → hardware-configuration.nix fileSystems."/"
-blkid /dev/sda3  # → serverControlLuksUuid  → local.nix
-blkid /dev/sda4  # → serverWorkloadLuksUuid → local.nix
+passwd          # temporary password for the nixos user
+ip addr show    # note the IP
 ```
 
-### 1c. Generate hardware config and update the repo
-
+From your workstation:
 ```bash
-# On the installer:
-nixos-generate-config --root /mnt
-cat /mnt/etc/nixos/hardware-configuration.nix
+ssh-copy-id nixos@<installer-ip>
 ```
 
-On your workstation, update the repo:
-- Replace `hosts/server/hardware-configuration.nix` with the generated output.
-  **Important**: remove any `boot.initrd.luks.devices` entry that
-  `nixos-generate-config` may have added — the host root is not encrypted.
-- Update `local.nix`:
-  - `serverControlLuksUuid`  — UUID of `/dev/sda3` from `blkid /dev/sda3`
-  - `serverWorkloadLuksUuid` — UUID of `/dev/sda4` from `blkid /dev/sda4`
-- Commit and push the updated `hardware-configuration.nix`.
+### 1b. Choose the disk
 
-### 1d. Install NixOS on the server
-
-The repo is only needed on the installer for this one-time `nixos-install`.
-After first boot, all subsequent deployments are done from your workstation
-with `nixos-rebuild switch --target-host` — the repo never needs to live on
-the server itself.
-
-Get the repo onto the installer (pick one):
 ```bash
-# Option A — clone from your git remote (if the installer has internet access):
-nix-shell -p git --run "git clone <your-repo-url> /mnt/etc/nixos/repo"
-
-# Option B — copy from a USB stick:
-cp -r /media/usb/nixos /mnt/etc/nixos/repo
+ssh nixos@<installer-ip> lsblk -o NAME,SIZE,MODEL
+ssh nixos@<installer-ip> ls -l /dev/disk/by-id/
 ```
 
-**Critical:** copy your `local.nix` into the cloned repo — without it the
-flake uses `CHANGE_ME` defaults (wrong IPs, wrong SSH key, no SSH after install).
+Set `serverDisk` in `local.nix` to the whole-disk entry (no `-partN` suffix), e.g.
+`"/dev/disk/by-id/nvme-Samsung_SSD_990_PRO_2TB_S7KHNJ0W123456"`. Don't pick the USB
+installer.
 
-From your **workstation** (before or after cloning on the installer):
+The layout gives the host root 150 GiB, the control layer 1 GiB and the workload layer
+80% of the rest, leaving about 20% unallocated for growing either later
+(`docs/operations.md` § Disk space). Adjust the sizes in `hosts/server/disk.nix` first if
+they don't suit your disk. Check that the configuration builds:
+
 ```bash
-scp local.nix nixos@<installer-ip>:/tmp/local.nix
+nix build path:.#nixosConfigurations.server.config.system.build.toplevel
 ```
 
-Then on the **installer**:
+### 1c. Create the server's SSH host key
+
+agenix decrypts secrets with the host's SSH key. Creating the key now lets the server
+decrypt its secrets on first boot:
+
 ```bash
-cp /tmp/local.nix /mnt/etc/nixos/repo/local.nix
+install -d -m 0755 /tmp/server-root/etc/ssh
+ssh-keygen -t ed25519 -N "" -C root@server -f /tmp/server-root/etc/ssh/ssh_host_ed25519_key
+cat /tmp/server-root/etc/ssh/ssh_host_ed25519_key.pub
 ```
 
-Then install:
+Put the public key in `secrets/secrets.nix` as `server`, then re-encrypt and commit:
 ```bash
-nixos-install --flake path:/mnt/etc/nixos/repo#server
+(cd secrets && agenix -r)
+git add secrets/*.age && git commit -m "secrets: add server host key"
 ```
 
-### 1e. First boot
+If you are reinstalling and kept the old host key, put that key pair in
+`/tmp/server-root/etc/ssh/` instead and skip the re-encryption.
 
-The server boots directly — no LUKS passphrase at boot console. Host layer only.
+### 1d. Choose the LUKS passphrases
 
-- SSH in as `admin` (SSH is available immediately after boot).
-- **No application services are running yet — this is expected.**
-- Verify host layer: `systemctl status sshd`
-
-### 1f. Back up LUKS headers (do this before anything else)
+These are the passphrases you type for `unlock-control` and `unlock-workload`:
 
 ```bash
-# On the server (as root / sudo):
-cryptsetup luksHeaderBackup /dev/sda3 --header-backup-file /tmp/server-control-luks-header.img
-cryptsetup luksHeaderBackup /dev/sda4 --header-backup-file /tmp/server-workload-luks-header.img
+( umask 077
+  read -rsp 'control passphrase: ' p && printf '%s' "$p" > /tmp/control.key; echo
+  read -rsp 'workload passphrase: ' p && printf '%s' "$p" > /tmp/workload.key; echo )
+```
 
-# Copy to your workstation:
-scp admin@server:/tmp/server-*-luks-header.img ~/
+### 1e. Install
+
+```bash
+nixos-anywhere --flake path:.#server \
+  --target-host nixos@<installer-ip> \
+  --disk-encryption-keys /tmp/control.key /tmp/control.key \
+  --disk-encryption-keys /tmp/workload.key /tmp/workload.key \
+  --extra-files /tmp/server-root
+rm -f /tmp/control.key /tmp/workload.key
+```
+
+Store the host key from `/tmp/server-root` offline (or delete it; the server has its
+copy), then `rm -rf /tmp/server-root`.
+
+The server reboots into the installed system.
+
+### 1f. First boot
+
+The server boots without any passphrase. Both LUKS layers stay locked.
+
+- SSH in: `ssh admin@<serverIp>`.
+- Always-on services start; workload-gated services wait for `unlock-workload`.
+- Check: `sudo server-health`
+
+### 1g. Back up LUKS headers (do this before anything else)
+
+```bash
+# On the server:
+sudo cryptsetup luksHeaderBackup /dev/lanbat/control --header-backup-file /tmp/server-control-luks-header.img
+sudo cryptsetup luksHeaderBackup /dev/lanbat/workload --header-backup-file /tmp/server-workload-luks-header.img
+sudo chown admin /tmp/server-*-luks-header.img
+
+# From your workstation:
+scp admin@<serverIp>:/tmp/server-*-luks-header.img ~/
 # Store these files OFFLINE (USB drive, secure physical location).
 # A lost header means the volume is unrecoverable even with the passphrase.
 ```
 
-### 1g. Unlock control layer and initialise Tang
+### 1h. Unlock the control layer and initialise Tang
+
+The fresh control volume needs a directory for Tang's keys, once:
 
 ```bash
+sudo cryptsetup luksOpen /dev/lanbat/control control
+sudo mount /dev/mapper/control /mnt/control
+sudo install -d -m 0700 /mnt/control/tang
+sudo umount /mnt/control
+
 sudo unlock-control
-# Enter the control LUKS passphrase.
-# Tang generates its key pair on first start (keys stored in /mnt/control/tang/).
+# Tang generates its key pair on first start (stored in /mnt/control/tang/).
 ```
 
 Verify Tang:
@@ -341,55 +237,50 @@ curl http://127.0.0.1:7500/adv | jq -r '.keys[].alg'
 
 **Back up Tang keys immediately** — see `docs/runbook.md § Backing up Tang keys`.
 
-### 1h. Unlock workload layer and start services
+### 1i. Unlock the workload layer
 
 ```bash
 sudo unlock-workload
-# Enter the workload LUKS passphrase.
-# All services start. First start may be slow (pulling container images).
+# Workload-gated services start. The first start is slow (container image pulls).
 ```
 
 Verify:
 ```bash
 sudo server-health
-systemctl status caddy authentik postgresql
+systemctl status caddy podman-authentik-server postgresql
 ```
 
 Wait for Caddy to generate the CA cert (usually 10–30 seconds after start).
 
-> **Note**: Steps 3a (host SSH key for agenix) are still needed after this boot.
-> See Phase 3 below for full service configuration.
+From now on, deploy changes from your workstation with `deploy path:.#server`.
 
 ---
 
 ## Phase 2 — Pi installation
 
-### 2a. Flash NixOS installer to SD card (on your workstation)
+### 2a. Flash NixOS to the SD card (on your workstation)
 
 Download the NixOS AArch64 SD image and flash it to the Pi's microSD card:
 
 ```bash
-# Download the aarch64 SD image from https://nixos.org/download (look for
-# "NixOS 24.11 ... aarch64 ... SD image")
-# Then flash it (replace /dev/sdX with your SD card device — check with lsblk):
+# Download the aarch64 SD image from https://nixos.org/download.
+# Replace /dev/sdX with your SD card device (check with lsblk):
 zstdcat nixos-sd-image-*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Insert the SD card into the Pi 5. The Pi will boot from it.
+Insert the SD card into the Pi 5 and power it on, connected to your network.
 
-### 2b. Boot NixOS AArch64 installer on Pi 5
+### 2b. SSH into the Pi
 
-Connect the Pi to your network and power it on.
-
-If SSH asks for a password, set one first on the Pi console:
+On the Pi console:
 ```bash
-passwd   # set any temporary password
-ip addr show  # note the IP
+passwd          # temporary password for the nixos user
+ip addr show    # note the IP
 ```
 
-Then from your workstation:
+From your workstation:
 ```bash
-ssh nixos@<pi-ip>
+ssh-copy-id nixos@<pi-ip>
 ```
 
 ### 2c. Partition and format storage drives
@@ -398,81 +289,65 @@ ssh nixos@<pi-ip>
 > separate (connected via M.2 HAT or USB NVMe adapter).
 
 ```bash
-# Identify the drives — NVMe drives appear as /dev/nvme0n1, /dev/nvme1n1, etc.
+# On the Pi. NVMe drives appear as /dev/nvme0n1, /dev/nvme1n1;
 # microSD appears as /dev/mmcblk0 — do NOT touch that one.
 lsblk
 
-# Get the stable by-id paths for both NVMe drives (use these in config — not /dev/nvmeXn1):
+# Get the stable by-id paths for both NVMe drives:
 ls -la /dev/disk/by-id/ | grep nvme | grep -v part
 
 # Encrypt and format Drive A
-cryptsetup luksFormat --type luks2 /dev/disk/by-id/DRIVE_A_ID
-cryptsetup luksOpen /dev/disk/by-id/DRIVE_A_ID storage-a
-mkfs.xfs -L storage-a /dev/mapper/storage-a
+sudo cryptsetup luksFormat --type luks2 /dev/disk/by-id/DRIVE_A_ID
+sudo cryptsetup luksOpen /dev/disk/by-id/DRIVE_A_ID storage-a
+sudo mkfs.xfs -L storage-a /dev/mapper/storage-a
 
 # Encrypt and format Drive B
-cryptsetup luksFormat --type luks2 /dev/disk/by-id/DRIVE_B_ID
-cryptsetup luksOpen /dev/disk/by-id/DRIVE_B_ID storage-b
-mkfs.xfs -L storage-b /dev/mapper/storage-b
+sudo cryptsetup luksFormat --type luks2 /dev/disk/by-id/DRIVE_B_ID
+sudo cryptsetup luksOpen /dev/disk/by-id/DRIVE_B_ID storage-b
+sudo mkfs.xfs -L storage-b /dev/mapper/storage-b
 ```
 
-Now update `local.nix` on your workstation with the actual drive by-id paths:
-- `piStorageDriveA` — the drive A filename from the `ls -la /dev/disk/by-id/` output
-- `piStorageDriveB` — the drive B filename
-
-Commit and push (or make available to the Pi installer).
+Set `piStorageDriveA` and `piStorageDriveB` in `local.nix` to the by-id filenames
+(without the `/dev/disk/by-id/` prefix).
 
 ### 2d. Bind Clevis to Tang
 
 ```bash
-# Pi must be able to reach the server on port 7500.
-# Verify: curl http://SERVER_IP:7500/adv
+# The Pi must reach the server on port 7500: curl http://SERVER_IP:7500/adv
 
-# Bind Drive A
-clevis luks bind -d /dev/disk/by-id/DRIVE_A_ID tang \
+sudo clevis luks bind -d /dev/disk/by-id/DRIVE_A_ID tang \
   '{"url":"http://SERVER_IP:7500"}' -y
-
-# Bind Drive B
-clevis luks bind -d /dev/disk/by-id/DRIVE_B_ID tang \
+sudo clevis luks bind -d /dev/disk/by-id/DRIVE_B_ID tang \
   '{"url":"http://SERVER_IP:7500"}' -y
 
 # Test unlock:
-clevis luks unlock -d /dev/disk/by-id/DRIVE_A_ID -n storage-a
+sudo clevis luks unlock -d /dev/disk/by-id/DRIVE_A_ID -n storage-a
 ```
 
-### 2e. Generate Pi hardware config and update the repo
+### 2e. Add the Pi's host key to the secrets
 
 ```bash
-# On the installer:
-cat /etc/nixos/hardware-configuration.nix
+ssh nixos@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub
 ```
 
-Replace `hosts/pi/hardware-configuration.nix` in the repo with the output.
-Commit and push (or make available to the Pi installer).
-
-### 2f. Install NixOS on the Pi
-
-Same as the server: the repo is only needed here for the one-time install.
-
-Get the repo onto the installer (pick one):
+Put it in `secrets/secrets.nix` as `pi`, add `pi` to the recipients of
+`telegraf-token.age`, then re-encrypt and commit:
 ```bash
-# Option A — clone from your git remote (if the installer has internet access):
-nix-shell -p git --run "git clone <your-repo-url> /tmp/repo"
-
-# Option B — copy from USB:
-cp -r /media/usb/nixos /tmp/repo
+(cd secrets && agenix -r)
+git add secrets/*.age && git commit -m "secrets: add pi host key"
 ```
 
-Copy your `local.nix` into the repo from your workstation (Option B already includes
-it if your USB copy has it):
+### 2f. First switch to the Pi configuration
+
+The SD image has no `admin` user yet, so the first switch goes through the image's
+`nixos` user and builds on the Pi:
+
 ```bash
-scp local.nix nixos@<pi-installer-ip>:/tmp/repo/local.nix
+nix run nixpkgs#nixos-rebuild -- switch --flake path:.#pi \
+  --target-host nixos@<pi-ip> --build-host nixos@<pi-ip> --sudo
 ```
 
-Then install:
-```bash
-nixos-install --flake path:/tmp/repo#pi
-```
+From now on, deploy with `deploy path:.#pi`.
 
 ### 2g. First Pi boot
 
@@ -482,64 +357,19 @@ nixos-install --flake path:/tmp/repo#pi
 - Verify Snapclient: `systemctl status snapclient`
 - TV launcher should appear on HDMI (if monitor attached).
 
-### 2h. Clone the config repo on each machine
-
-Unattended upgrades rebuild from a local copy of this repo at `/etc/nixos`.
-Clone it on both machines now:
-
-```bash
-# On the server
-ssh admin@server
-sudo git clone <your-repo-url> /etc/nixos
-sudo cp /path/to/local.nix /etc/nixos/local.nix   # copy your local settings
-
-# On the Pi
-ssh admin@pi5
-sudo git clone <your-repo-url> /etc/nixos
-sudo cp /path/to/local.nix /etc/nixos/local.nix
-```
-
-Auto-upgrades build from `path:/etc/nixos#<host>`, which includes the gitignored
-`/etc/nixos/local.nix`. Without it every setting is a placeholder and the upgrade
-refuses to switch.
-
-If your repo is **private**, configure git credentials before auto-upgrade
-will be able to pull:
-
-```bash
-# Option A — HTTPS token (simpler)
-sudo git -C /etc/nixos remote set-url origin https://<token>@github.com/user/repo.git
-
-# Option B — SSH deploy key (more secure)
-sudo ssh-keygen -t ed25519 -f /root/.ssh/nixos_deploy -N ""
-# Add /root/.ssh/nixos_deploy.pub as a read-only deploy key in your git host
-sudo git -C /etc/nixos remote set-url origin git@github.com:user/repo.git
-```
-
-If your repo is **public**, no credentials are needed — HTTPS clone works as-is.
-
 ---
 
 ## Phase 3 — Post-install configuration
 
-### 3a. Re-key agenix secrets with host SSH keys
+### 3a. Re-key agenix secrets when a host key changes
 
-Now that both machines are running, collect their SSH host keys and re-encrypt
-all secrets so hosts can decrypt them at activation time:
+Steps 1c and 2e already made both hosts recipients. If a host is reinstalled with a new
+SSH host key, update `secrets/secrets.nix`, then:
 
 ```bash
-# Get host keys
-ssh admin@server cat /etc/ssh/ssh_host_ed25519_key.pub
-ssh admin@pi5    cat /etc/ssh/ssh_host_ed25519_key.pub
-
-# Add both keys to secrets/secrets.nix → server and pi variables.
-# Then re-encrypt all secrets for all recipients:
-cd secrets
-agenix -r
-
-# Rebuild both hosts so they pick up the re-keyed secrets:
-nixos-rebuild switch --flake path:.#server --target-host admin@server
-nixos-rebuild switch --flake path:.#pi     --target-host admin@pi5
+(cd secrets && agenix -r)
+deploy path:.#server
+deploy path:.#pi
 ```
 
 ### 3b. Authentik initial setup
@@ -550,7 +380,7 @@ admin account.
 #### Automated: providers, applications, and outpost
 
 All Authentik providers, applications, and the embedded outpost are configured
-automatically via blueprints (`hosts/server/services/authentik-blueprints.nix`).
+automatically via blueprints (`services/authentik/blueprints.nix`).
 The blueprints are applied by Authentik on every startup — no manual UI work
 needed for the Authentik side.
 
@@ -568,7 +398,7 @@ The script prints the client credentials needed for Home Assistant and Jellyfin
 Deploy to apply the new secrets:
 
 ```bash
-nixos-rebuild switch --flake path:.#server --target-host admin@server
+deploy path:.#server
 ```
 
 After the deploy, Authentik restarts and the blueprints run automatically.
@@ -639,9 +469,7 @@ Follow the OS-specific instructions on the page.
 
 ### 3f. Configure Frigate cameras
 
-Edit `/var/lib/frigate/config/frigate.yml` on the server (or update
-`hosts/server/services/frigate.nix` and rebuild).
-Replace `EXAMPLE_CAMERA_NAME` and camera RTSP URLs.
+Update the cameras in `services/frigate.nix` and deploy.
 
 ### 3g. Set up rclone for Frigate cloud sync
 
@@ -653,15 +481,12 @@ agenix -e secrets/rclone-frigate-config.age < /tmp/rclone.conf
 rm /tmp/rclone.conf
 ```
 
-Update `EXAMPLE_BUCKET` in `hosts/server/services/frigate.nix`.
-
 ### 3h. Grafana initial setup
 
-All secrets were created in Phase 0c. After setting the Authentik OIDC client secret
-in `grafana-env.age` and the client ID in `grafana.nix` (covered in step 3b):
+After setting the Authentik OIDC client secret in `grafana-env.age` (covered in step 3b):
 
 ```bash
-nixos-rebuild switch --flake path:.#server --target-host admin@server
+deploy path:.#server
 ```
 
 Visit `https://grafana.<domain>` — the InfluxDB datasource is provisioned
@@ -672,8 +497,8 @@ automatically. Log in with Authentik or the local `admin` break-glass account.
 Telegraf needs a write-only InfluxDB token (separate from the operator token
 used by Grafana).
 
-1. Log into InfluxDB at `http://<server-ip>:8086` (not exposed via Caddy —
-   use the server IP directly or an SSH tunnel).
+1. Open the InfluxDB UI through an SSH tunnel (it is not exposed via Caddy):
+   `ssh -L 8086:127.0.0.1:8086 admin@<serverIp>`, then `http://localhost:8086`.
 2. **Data → API Tokens → Generate API Token → Custom API Token**
    - Description: `telegraf`
    - Buckets: Write → `metrics`
@@ -686,8 +511,8 @@ used by Grafana).
    ```
 5. Deploy:
    ```bash
-   nixos-rebuild switch --flake path:.#server --target-host admin@server
-   nixos-rebuild switch --flake path:.#pi     --target-host admin@pi5
+   deploy path:.#server
+   deploy path:.#pi
    ```
 6. Verify both agents are running and writing:
    ```bash
@@ -698,7 +523,6 @@ used by Grafana).
    `cpu`, `mem`, `disk` measurements tagged with each hostname.
 
 ### 3j. Vaultwarden initial setup
-
 
 The `vaultwarden-env.age` secret was created in Phase 0c.
 Visit `https://vault.<domain>/admin` to access the admin panel.
@@ -712,15 +536,15 @@ Visit `https://sync.<domain>` (protected by Authentik forward auth).
 2. Note this device's ID (**Actions → Show ID**) — share it with devices you want to sync with.
 3. Add remote devices via **Add Remote Device**.
 4. The default sync folder is `/srv/storage/b/syncthing/`. Add or adjust folders as needed.
-   If you add a folder on Pi storage Drive A instead, update `syncthing.nix` to set
-   `lanbat.nfsDependentServices."syncthing" = [ "a" ]` (or both).
+   If you add a folder on Pi storage Drive A, add `"a"` to `nfs.drives` in
+   `services/syncthing.nix`.
 
 ### 3l. Wyoming voice assistant
 
 > **Hardware required:** a USB microphone (or microphone HAT) and speaker
 > connected to the Pi.
 
-1. Verify all four Wyoming services are running on the server:
+1. Verify the Wyoming services are running on the server:
    ```bash
    systemctl status wyoming-openwakeword
    systemctl status wyoming-faster-whisper-main
@@ -733,7 +557,7 @@ Visit `https://sync.<domain>` (protected by Authentik forward auth).
    ```
    If it fails with an audio error, the default ALSA device may not match your
    hardware.  Run `ssh admin@pi5 arecord -l` to list capture devices and adjust
-   `microphone.command` in `hosts/pi/services/wyoming-satellite.nix`.
+   `microphone.command` in `modules/pi/wyoming-satellite.nix`.
 
 3. In Home Assistant: **Settings → Devices & Services → Add Integration → Wyoming**
    Add each service:
@@ -761,10 +585,9 @@ Visit `https://sync.<domain>` (protected by Authentik forward auth).
 
 ### 3m. Snapcast audio source
 
-
 Snapcast streams whatever is written to `/run/snapserver/main.fifo` on the server.
 Wire an audio player to that pipe — see the comments in
-`hosts/server/services/snapcast.nix` for examples (MPD, librespot, shairport-sync).
+`services/snapcast.nix` for examples (MPD, librespot, shairport-sync).
 
 Until a source is connected, the pipe is silent but Snapclient on the Pi will
 connect and wait. Verify the client is connected at `https://audio.<domain>`.
@@ -773,7 +596,9 @@ connect and wait. Verify the client is connected at `https://audio.<domain>`.
 
 ## Phase 4 — Ongoing
 
-- Backup the Tang key directory: `rsync -a /var/lib/tang/ BACKUP_LOCATION/`
-- Test Pi unlock after server reboot to verify Clevis/Tang works.
+- Deploy changes: `deploy path:.#server` / `deploy path:.#pi`.
+- Update inputs: `nix flake update`, check, deploy, commit `flake.lock`
+  (`docs/operations.md` § Updating). Hosts don't upgrade themselves.
+- Back up the Tang key directory: `docs/runbook.md` § Backing up Tang keys.
+- Test Pi unlock after a server reboot to verify Clevis/Tang works.
 - Pin container image versions when stability matters.
-- Run `nixos-rebuild switch --flake path:.#server` / `path:.#pi` to deploy changes.

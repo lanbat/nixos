@@ -2,7 +2,7 @@
 #
 # Static files for the CA trust landing page at ca.&lt;domain&gt;.
 # The actual CA cert (root.crt) is copied here at runtime by the
-# caddy-export-ca systemd service in hosts/server/services/caddy.nix.
+# caddy-export-ca systemd service in services/caddy.nix.
 {
   pkgs ? import <nixpkgs> { },
 }:

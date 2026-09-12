@@ -10,8 +10,8 @@ See `docs/secure-layers.md` for the full design rationale.
 Services are split into two tiers with different startup behaviour:
 
 **Always-on (start automatically at boot — no action needed)**:
-Caddy, PostgreSQL, Authentik, Home Assistant, Grafana, InfluxDB, Mosquitto,
-Frigate, Snapcast, Wyoming pipeline, SearXNG, Telegraf, Redis (Immich), Homepage.
+Caddy, PostgreSQL, Redis, Authentik, Home Assistant, Zigbee2MQTT, Grafana, InfluxDB,
+Mosquitto, Frigate, Snapcast, Wyoming pipeline, SearXNG, Telegraf, Homepage.
 
 **Workload-gated (locked until you run `unlock-workload`)**:
 Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet.
@@ -26,7 +26,7 @@ ssh admin@server
 sudo unlock-control
 ```
 
-This opens `/dev/sda3`, mounts `/mnt/control`, and starts Tang.
+This opens `/dev/lanbat/control`, mounts `/mnt/control`, and starts Tang.
 After this step: Tang is serving keys on port 7500. The Raspberry Pi will
 auto-unlock its NVMe drives on the next retry (up to 5 minutes).
 
@@ -42,14 +42,14 @@ curl http://127.0.0.1:7500/adv | jq -r '.keys[].alg'
 sudo unlock-workload
 ```
 
-This opens `/dev/sda4`, mounts `/mnt/workload`, activates all bind mounts,
-and starts `workload-online.target` — bringing up PostgreSQL, Authentik,
-Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba, and the rest.
+This opens `/dev/lanbat/workload`, mounts `/mnt/workload`, activates all bind mounts,
+and starts `workload-online.target` — bringing up Nextcloud, Immich, Jellyfin,
+Vaultwarden, Syncthing, Samba, qBittorrent and Bitmagnet.
 
 Verify:
 ```bash
 sudo server-health
-systemctl status nextcloud immich jellyfin
+systemctl status phpfpm-nextcloud podman-immich-server jellyfin
 ```
 
 ### Combined (if you want both at once)
@@ -96,7 +96,9 @@ sudo lock-all       # lock-workload first, then lock-control
 sudo server-health
 ```
 
-Shows LUKS mapper state, mount status, Tang health, and key service states.
+Shows LUKS mapper state, mount status, Tang health, disk usage of the host root, free
+space in the LVM volume group, and key service states. To grow a full volume, see
+`docs/operations.md` § Disk space.
 
 ---
 
@@ -209,8 +211,8 @@ makes the volume unrecoverable even with the correct passphrase.
 
 ```bash
 # On the server (do this once after installation, and after any re-partition):
-sudo cryptsetup luksHeaderBackup /dev/sda3 --header-backup-file server-control-luks-header.img
-sudo cryptsetup luksHeaderBackup /dev/sda4 --header-backup-file server-workload-luks-header.img
+sudo cryptsetup luksHeaderBackup /dev/lanbat/control --header-backup-file server-control-luks-header.img
+sudo cryptsetup luksHeaderBackup /dev/lanbat/workload --header-backup-file server-workload-luks-header.img
 
 # On the Raspberry Pi (do this after Clevis bind):
 sudo cryptsetup luksHeaderBackup /dev/disk/by-id/<drive-a> --header-backup-file pi-storage-a-luks-header.img
@@ -236,7 +238,7 @@ sudo clevis luks bind -d /dev/disk/by-id/<drive> tang '{"url":"http://SERVER_IP:
 # Adjust repo and password to your configuration.
 export RESTIC_REPOSITORY="<host-repo>"
 export RESTIC_PASSWORD_FILE="/run/agenix/restic-host-password"
-restic backup /etc /root /var/lib/nixos /etc/nixos
+restic backup /etc /root /var/lib/nixos
 restic forget --prune --keep-daily 7 --keep-weekly 4 --keep-monthly 6
 ```
 
@@ -328,17 +330,29 @@ Then run a LUKS header backup again to capture the new Clevis metadata.
 
 ## Full server restore order
 
-1. Boot NixOS installer, partition disk (sda1/sda2/sda3/sda4)
-2. Deploy NixOS to sda2 (`nixos-install --flake path:/mnt/etc/nixos/repo#server`)
-3. If control LUKS header was lost: restore from header backup, then format fresh
-   (`cryptsetup luksFormat --type luks2 /dev/sda3`) and rebind Tang later
-4. `cryptsetup luksOpen /dev/sda3 control && mount /dev/mapper/control /mnt/control`
-5. Restore Tang keys from control backup:
+**New or wiped disk:** install as in `docs/deployment-checklist.md` Phase 1 (disko creates
+fresh volumes), then restore the data:
+
+1. `sudo cryptsetup luksOpen /dev/lanbat/control control && sudo mount /dev/mapper/control /mnt/control`
+2. Restore Tang keys from control backup:
    `restic -r <control-repo> restore latest --target /`
-6. `systemctl start control-online.target` — Tang starts
-7. Verify Tang: `curl http://127.0.0.1:7500/adv`
-8. Same for workload: open LUKS, restore from workload backup
-9. `systemctl start workload-online.target` — all services start
+3. `sudo systemctl start control-online.target` — Tang starts
+4. Verify Tang: `curl http://127.0.0.1:7500/adv`
+5. Same for workload: open LUKS, mount, restore from workload backup
+6. `sudo systemctl start workload-online.target` — workload services start
+
+**Host root only, LUKS volumes intact:** don't let disko format the disk. From the
+installer, recreate the root filesystem and install onto the existing layout:
+
+```bash
+ssh nixos@<installer-ip> sudo mkfs.ext4 -F /dev/lanbat/root
+nixos-anywhere --flake path:.#server --target-host nixos@<installer-ip> \
+  --disko-mode mount --extra-files /tmp/server-root
+```
+
+Pass the old SSH host key in `/tmp/server-root/etc/ssh/` if you still have it, so the
+secrets decrypt without re-keying. Then run `unlock-control` and `unlock-workload` as
+usual. If a LUKS header was lost, restore it from the header backup first (see above).
 
 ---
 
