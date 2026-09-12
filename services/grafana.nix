@@ -53,10 +53,31 @@ in
     };
   };
 
+  # Dashboards, users and alert state live in the always-on PostgreSQL. Grafana
+  # logs in as its system user over the socket, so no password is needed.
+  lanbat.postgresql.databases.grafana.instance = "always-on";
+
+  systemd.services.grafana = {
+    after = [ config.lanbat.postgresql.instances.always-on.unit ];
+    requires = [ config.lanbat.postgresql.instances.always-on.unit ];
+  };
+
   services.grafana = {
     enable = true;
 
     settings = {
+      database =
+        let
+          pg = config.lanbat.postgresql.instances.always-on;
+        in
+        {
+          type = "postgres";
+          # A socket directory with the port, which selects the socket file.
+          host = "${pg.socket}:${toString pg.port}";
+          name = "grafana";
+          user = "grafana";
+        };
+
       server = {
         http_addr = "127.0.0.1";
         http_port = config.lanbat.services.grafana.port;

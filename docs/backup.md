@@ -7,7 +7,7 @@
 | Data | Location | Method |
 |---|---|---|
 | Tang private keys | `/var/lib/tang/` | `backup-server.sh` → Pi/b/backups |
-| PostgreSQL databases | server | `pg_dumpall` via `backup-server.sh` |
+| PostgreSQL databases (always-on and workload instances) | server | `pg_dumpall` of each instance via `backup-server.sh` |
 | Authentik state | `/var/lib/authentik/` | `backup-server.sh` |
 | Home Assistant config | `/var/lib/hass/` | `backup-server.sh` |
 | Caddy CA keys | `/var/lib/caddy/` | `backup-server.sh` |

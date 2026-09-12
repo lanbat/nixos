@@ -21,7 +21,7 @@
   LAN clients            │  LV workload — LUKS → /mnt/workload                  │      │
   ──────────────────────►│  ┌─────────────────────────────────────────────────┐ │      │
   (SMB: 445)             │  │ always-on + workload-online.target services     │ │      │
-                         │  │  Caddy (443/80)         PostgreSQL (5432)       │ │      │
+                         │  │  Caddy (443/80)         PostgreSQL (5432/5433)  │ │      │
                          │  │  Authentik (9000)        Redis (6379, 6380)     │ │      │
                          │  │  Home Assistant (8123)   Mosquitto (1883)       │ │      │
                          │  │  Nextcloud (8080)        Samba (445)            │ │      │

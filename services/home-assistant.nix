@@ -65,9 +65,21 @@ in
     };
   };
 
+  # The recorder (history) lives in the always-on PostgreSQL. HA logs in as
+  # its system user over the socket, so no password is needed.
+  lanbat.postgresql.databases.hass.instance = "always-on";
+
+  systemd.services.home-assistant = {
+    after = [ config.lanbat.postgresql.instances.always-on.unit ];
+    requires = [ config.lanbat.postgresql.instances.always-on.unit ];
+  };
+
   services.home-assistant = {
     enable = true;
     openFirewall = false; # Caddy handles exposure.
+
+    # PostgreSQL driver for the recorder.
+    extraPackages = ps: [ ps.psycopg2 ];
 
     # Install extra Python components declaratively.
     customComponents = [
@@ -122,10 +134,14 @@ in
         time_zone = config.lanbat.timezone;
       };
 
-      # Recorder — keep 30 days in SQLite.
+      # Recorder — keep 30 days in the always-on PostgreSQL.
       recorder = {
         purge_keep_days = 30;
-        db_url = "sqlite:////var/lib/hass/home-assistant_v2.db";
+        db_url =
+          let
+            pg = config.lanbat.postgresql.instances.always-on;
+          in
+          "postgresql://@/hass?host=${pg.socket}&port=${toString pg.port}";
       };
 
       # Auth: HA local accounts are the primary method.

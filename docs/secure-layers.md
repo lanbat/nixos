@@ -23,7 +23,7 @@ SERVER — one disk (hosts/server/disk.nix)
 - **Filesystem**: ext4, no encryption
 - **Mount**: `/` (root)
 - **Contains**: NixOS, SSH, networking, firewall, admin scripts, systemd units,
-  always-on service data (PostgreSQL, Authentik, HA, Grafana, InfluxDB, Mosquitto,
+  always-on service data (always-on PostgreSQL, Authentik, HA, Grafana, InfluxDB, Mosquitto,
   Frigate, Caddy TLS certs, container images)
 - **Does NOT contain**: Tang keys, workload-gated service data (Nextcloud, Immich,
   Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet)
@@ -50,7 +50,8 @@ will not start until that target is active.
 - **Mount**: `/mnt/workload` (manual, not at boot)
 - **Unlocked by**: admin passphrase (`unlock-workload`)
 - **Contains**: workload-gated service data (Nextcloud, Immich, Jellyfin,
-  Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet)
+  Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet), including the workload
+  PostgreSQL instance that holds the Nextcloud, Immich and Bitmagnet databases
 
 Bind mounts overlay `/var/lib/<service>` paths with subdirectories of
 `/mnt/workload`. The `workload-online.target` is activated once all bind mounts
@@ -69,7 +70,7 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
 | Service | Data path | Rationale |
 |---|---|---|
 | Caddy | `/var/lib/caddy` | Reverse proxy and TLS — must be up to serve all services, both tiers |
-| PostgreSQL | `/var/lib/postgresql` | Shared database — needed by Authentik, Nextcloud, Bitmagnet |
+| PostgreSQL (always-on instance) | `/var/lib/postgresql-always-on` | Databases of Authentik, Home Assistant and Grafana — needed at boot |
 | Authentik | `/var/lib/authentik` | Identity provider — SSO must be available for all auth flows |
 | Home Assistant | `/var/lib/hass` | Automation and sensor history — availability over confidentiality |
 | Grafana | `/var/lib/grafana` | Dashboards and metrics config — monitoring must be up at boot |
@@ -88,6 +89,7 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
 
 ```
 /mnt/workload/
+  postgresql/     — PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet databases
   nextcloud/      — Nextcloud home (config, apps, data)
   immich/         — Immich thumbnails, encoded video, profiles, ML model cache
   jellyfin/       — Jellyfin library metadata
@@ -140,7 +142,7 @@ boot
 ```
 boot
  └── host root available → SSH + always-on services start automatically
-      │                    (Caddy, PostgreSQL, Authentik, HA, Grafana,
+      │                    (Caddy, always-on PostgreSQL, Authentik, HA, Grafana,
       │                     InfluxDB, Mosquitto, Frigate, Snapcast, Wyoming,
       │                     SearXNG, Telegraf)
       └── [admin] unlock-workload

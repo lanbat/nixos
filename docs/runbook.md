@@ -10,11 +10,12 @@ See `docs/secure-layers.md` for the full design rationale.
 Services are split into two tiers with different startup behaviour:
 
 **Always-on (start automatically at boot — no action needed)**:
-Caddy, PostgreSQL, Redis, Authentik, Home Assistant, Zigbee2MQTT, Grafana, InfluxDB,
+Caddy, PostgreSQL (always-on instance), Redis, Authentik, Home Assistant, Zigbee2MQTT, Grafana, InfluxDB,
 Mosquitto, Frigate, Snapcast, Wyoming pipeline, SearXNG, Telegraf, Homepage.
 
 **Workload-gated (locked until you run `unlock-workload`)**:
-Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet.
+Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet,
+and the PostgreSQL workload instance that holds their databases.
 
 After a reboot: SSH works immediately, always-on services are running, both
 LUKS layers are locked. Unlock in order:
@@ -254,8 +255,10 @@ restic forget --prune --keep-daily 7 --keep-weekly 4 --keep-monthly 6
 ### Workload backup (requires workload-online.target)
 
 ```bash
-# Dump PostgreSQL databases first for consistency.
-sudo -u postgres pg_dumpall > /mnt/workload/postgresql-dumps/all-$(date +%Y%m%d).sql
+# Dump both PostgreSQL instances first for consistency.
+sudo install -d -o postgres -m 0700 /mnt/workload/postgresql-dumps
+sudo -u postgres sh -c 'pg_dumpall > /mnt/workload/postgresql-dumps/workload-$(date +%Y%m%d).sql'
+sudo -u postgres sh -c 'pg_dumpall -h /run/postgresql-always-on -p 5433 > /mnt/workload/postgresql-dumps/always-on-$(date +%Y%m%d).sql'
 
 export RESTIC_REPOSITORY="<workload-repo>"
 export RESTIC_PASSWORD_FILE="/run/agenix/restic-workload-password"

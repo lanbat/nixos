@@ -61,6 +61,7 @@ let
     AUTHENTIK_REDIS__PORT = "6379";
     AUTHENTIK_REDIS__DB = "0";
     AUTHENTIK_POSTGRESQL__HOST = "127.0.0.1";
+    AUTHENTIK_POSTGRESQL__PORT = toString config.lanbat.postgresql.instances.always-on.port;
     AUTHENTIK_POSTGRESQL__USER = "authentik";
     AUTHENTIK_POSTGRESQL__NAME = "authentik";
     AUTHENTIK_ERROR_REPORTING__ENABLED = "false";
@@ -107,7 +108,9 @@ in
     };
   };
 
+  # Always-on instance: logins through Authentik must work before unlock.
   lanbat.postgresql.databases.authentik = {
+    instance = "always-on";
     passwordFile = authentikEnvFile;
     passwordVariable = "AUTHENTIK_POSTGRESQL__PASSWORD";
   };
@@ -190,21 +193,21 @@ in
   # Authentik waits for PostgreSQL and Redis before starting.
   systemd.services."podman-authentik-server" = {
     after = [
-      "postgresql.service"
+      config.lanbat.postgresql.instances.always-on.unit
       "redis-shared.service"
     ];
     requires = [
-      "postgresql.service"
+      config.lanbat.postgresql.instances.always-on.unit
       "redis-shared.service"
     ];
   };
   systemd.services."podman-authentik-worker" = {
     after = [
-      "postgresql.service"
+      config.lanbat.postgresql.instances.always-on.unit
       "redis-shared.service"
     ];
     requires = [
-      "postgresql.service"
+      config.lanbat.postgresql.instances.always-on.unit
       "redis-shared.service"
     ];
   };

@@ -102,6 +102,7 @@
 
       checks.x86_64-linux = {
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };
+        postgresql = import ./tests/postgresql.nix { inherit pkgs; };
         workload-gate = import ./tests/workload-gate.nix { inherit pkgs; };
       }
       // lib.optionalAttrs hasLocal (deploy-rs.lib.x86_64-linux.deployChecks self.deploy);
