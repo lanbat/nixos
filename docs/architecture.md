@@ -6,21 +6,21 @@
                          ┌──────────────────────────────────────────────────────────────┐
                          │                     SERVER                                   │
                          │                                                              │
-                         │  /dev/sda2 — host root (ext4, plain — available at boot)     │
+                         │  LV root — host root (ext4, plain — available at boot)       │
                          │  ┌─────────────────────────────────────────────────────┐    │
                          │  │ SSH (22)  networking  firewall  admin tools          │    │
                          │  │ unlock-control / unlock-workload scripts             │    │
                          │  └────────────────────────┬────────────────────────────┘    │
                          │                           │ manual unlock (passphrase)       │
-                         │  /dev/sda3 — control LUKS → /mnt/control                    │
+                         │  LV control — LUKS → /mnt/control                           │
                          │  ┌─────────────────────────────────────────────────────┐    │
                          │  │ Tang (7500) ──────────────────────────────────────┐ │    │
                          │  │  /mnt/control/tang/ ←→ /var/lib/tang (bind mount) │ │    │
                          │  └───────────────────────────────────────────────────┼─┘    │
                          │                           │ manual unlock (passphrase)│      │
-  LAN clients            │  /dev/sda4 — workload LUKS → /mnt/workload           │      │
+  LAN clients            │  LV workload — LUKS → /mnt/workload                  │      │
   ──────────────────────►│  ┌─────────────────────────────────────────────────┐ │      │
-  (SMB: 445)             │  │ workload-online.target (all services)           │ │      │
+  (SMB: 445)             │  │ always-on + workload-online.target services     │ │      │
                          │  │  Caddy (443/80)         PostgreSQL (5432)       │ │      │
                          │  │  Authentik (9000)        Redis (6379, 6380)     │ │      │
                          │  │  Home Assistant (8123)   Mosquitto (1883)       │ │      │
@@ -141,8 +141,9 @@ This is configured in your router/DNS and is out of scope for this repo.
 
 ## On-demand services
 
-Bitmagnet is started on first HTTP request via the activator proxy
-(`modules/server/on-demand.nix`). It stops after 30 minutes of inactivity.
+Services with `lanbat.services.<name>.onDemand` start on the first HTTP request via
+the activator proxy (`modules/wiring/on-demand.nix`) and stop after `idleMinutes` without
+requests. Bitmagnet is the only one; it stops after 3 days idle.
 
 The activator is a lightweight Python proxy that:
 1. Receives requests meant for Bitmagnet.
@@ -151,10 +152,10 @@ The activator is a lightweight Python proxy that:
 
 ## NFS dependency model
 
-Services that read/write Pi storage are declared in `lanbat.nfsDependentServices`.
-This adds `bindsTo` and `after` systemd dependencies on the NFS mount unit.
+Services that read/write Pi storage set `lanbat.services.<name>.nfs.drives`.
+`modules/wiring/nfs.nix` adds `bindsTo` and `after` dependencies on the NFS mount units.
 If the mount disappears, the service is stopped. When the mount returns, the service restarts.
 
-The `modules/server/nfs-mounts.nix` module uses soft NFS with a 30-second timeout,
+The mounts use soft NFS with a 30-second timeout,
 meaning the kernel gives up on a stalled NFS call after ~90 seconds rather than
 blocking forever.

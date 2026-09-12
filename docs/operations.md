@@ -1,96 +1,101 @@
 # Operations Guide
 
+## Tools
+
+`nix develop` in the repository opens a shell with `deploy` (deploy-rs), `agenix` and
+`nixos-anywhere`.
+
 ## Deploying changes
 
-Always use a `path:` flake reference so Nix includes the gitignored `local.nix`;
-git-based references only see tracked files and would build with placeholder
-settings, which the pre-switch check refuses. See `local.nix.example` for setup.
+Deploy from your workstation with a `path:` flake reference. `local.nix` is gitignored
+and only a `path:` reference includes it; without it the `server` and `pi`
+configurations don't exist.
 
 ```bash
-# Deploy to server
-nixos-rebuild switch --flake path:.#server --target-host admin@server
+deploy path:.#server
+deploy path:.#pi          # builds on the Pi itself
 
-# Deploy to Pi
-nixos-rebuild switch --flake path:.#pi --target-host admin@pi5
-
-# Build locally first to check for errors
+# Build without deploying, to check for errors
 nix build path:.#nixosConfigurations.server.config.system.build.toplevel
-nix build path:.#nixosConfigurations.pi.config.system.build.toplevel
 ```
 
-## Unattended upgrades
+deploy-rs activates the new system, then confirms it over a fresh SSH connection. If
+activation fails or the host becomes unreachable, it rolls back to the previous
+generation on its own.
 
-Both machines run `nixos-upgrade.service` nightly (server ~04:00, Pi ~04:30).
-It pulls the latest commit from `/etc/nixos` and runs `nixos-rebuild switch`.
+A deploy doesn't start workload-gated services while the workload layer is locked.
+
+### Rolling back by hand
 
 ```bash
-# Check the last upgrade on the server
-systemctl status nixos-upgrade.service
-journalctl -u nixos-upgrade.service -n 50
-
-# Check the git pull step
-journalctl -u nixos-upgrade-pull.service -n 20
-
-# On the Pi
-ssh admin@pi5 journalctl -u nixos-upgrade.service -n 50
+ssh admin@server sudo nixos-rebuild switch --rollback
 ```
 
-If a run fails with "Refusing to switch: these settings still have placeholder
-values", the build could not see a complete `/etc/nixos/local.nix` (the file is
-missing, or some values are still `CHANGE_ME`). The pre-switch check stops the
-switch before anything is activated or the boot entry changes, so the host keeps
-running its current generation. The rejected build may still be recorded as the
-newest system profile, so the reboot-pending check below can report a reboot
-that isn't needed. To fix it, fill in the settings the error lists in
-`/etc/nixos/local.nix` (for `fileSystems` entries, replace the template
-`hosts/pi/hardware-configuration.nix` with the host's own), confirm with
-`sudo nix eval path:/etc/nixos#nixosConfigurations.<host>.config.lanbat.placeholderSettings`
-(it should print `[ ]`), then run `sudo systemctl start nixos-upgrade.service` or
-wait for the next night. `NIXOS_NO_CHECK=1` overrides the check; use it only for
-a deliberate one-off switch.
+## Updating
 
-**Server:** upgrades apply immediately but the machine is **not rebooted** —
-a new kernel only takes effect after the next manual reboot.  Check whether a
-reboot is pending:
+Hosts don't upgrade themselves: a host only changes when you deploy. To update nixpkgs
+and the other inputs:
+
 ```bash
-[ "$(readlink /run/booted-system)" = "$(readlink /nix/var/nix/profiles/system)" ] \
+nix flake update
+nix flake check --no-build path:.
+deploy path:.#server
+deploy path:.#pi
+git commit -m "flake.lock: update" flake.lock
+```
+
+New kernels take effect after a reboot. Check whether one is pending:
+
+```bash
+[ "$(readlink /run/booted-system/kernel)" = "$(readlink /run/current-system/kernel)" ] \
   && echo "up to date" || echo "reboot pending"
 ```
 
-**Pi:** upgrades apply immediately and the machine **reboots automatically**
-(between 04:00–06:00) if a reboot is needed.  Clevis/Tang handles LUKS unlock
-automatically.  NFS-dependent services on the server will briefly pause and
-auto-restart as usual.
+After a server reboot, unlock both layers (see `docs/runbook.md`). The Pi unlocks its
+drives on its own once Tang is reachable.
 
-### Disabling auto-upgrade temporarily
+## Disk space (server)
+
+The system disk is one LVM volume group, `lanbat`, with unallocated space held back
+(see `hosts/server/disk.nix`).
 
 ```bash
-# Prevent the next scheduled run (survives until the timer fires again)
-sudo systemctl stop nixos-upgrade.timer
-
-# Re-enable
-sudo systemctl start nixos-upgrade.timer
+sudo server-health        # root and workload usage, free space in the volume group
+sudo vgs lanbat           # VFree: unallocated space
+sudo lvs lanbat
 ```
 
-### Pinning a specific commit
+Grow the host root (online):
+```bash
+sudo lvextend -r -L +50G lanbat/root
+```
 
-If an upgrade breaks something, pin the repo to a known-good commit:
+Grow the workload layer (online, while unlocked):
+```bash
+sudo lvextend -L +200G lanbat/workload
+sudo cryptsetup resize workload       # asks for the workload passphrase
+sudo resize2fs /dev/mapper/workload
+```
+
+What fills the host root: the Nix store (collected weekly, and during builds when free
+space drops below 2 GiB), rootless container images under `/var/lib/containers/<account>`
+(dangling images are pruned weekly by `podman-prune-<account>`), and the state of
+always-on services such as Frigate recordings and InfluxDB.
 
 ```bash
-ssh admin@server
-sudo git -C /etc/nixos checkout <good-commit-hash>
-# Auto-upgrade will now rebuild from this commit until you move HEAD forward.
+sudo du -xsh /nix/store /var/lib/* 2>/dev/null | sort -h | tail
+sudo nix-collect-garbage --delete-older-than 14d
 ```
 
 ## Checking service health
 
 ```bash
 # Overall status
-systemctl status caddy authentik-server authentik-worker
-systemctl status podman-jellyfin podman-qbittorrent podman-frigate
+systemctl status caddy podman-authentik-server podman-authentik-worker
+systemctl status jellyfin podman-qbittorrent podman-frigate
 systemctl status podman-immich-server podman-homepage podman-searxng
-systemctl status postgresql redis-authentik redis-immich
-systemctl status home-assistant mosquitto samba-smbd tang
+systemctl status postgresql redis-shared
+systemctl status home-assistant mosquitto samba-smbd tangd.socket
 systemctl status vaultwarden grafana influxdb2
 
 # NFS mount status
@@ -99,33 +104,26 @@ mountpoint /srv/storage/a /srv/storage/b
 
 # On Pi: storage status
 lsblk -f
-systemctl status nfs-server mnt-storage-a.mount mnt-storage-b.mount
+systemctl status nfs-server storage-a-unlock storage-b-unlock
 ```
 
 ## Updating container images
 
+Pin image tags in the service files and bump them deliberately, then deploy. Containers
+run rootless, so each account has its own image store. To refresh a floating tag such as
+`:latest` by hand:
+
 ```bash
-# Pull latest images
-podman pull ghcr.io/goauthentik/server:2024.12.2
-podman pull ghcr.io/immich-app/immich-server:release
-
-# Rebuild to apply new images
-nixos-rebuild switch --flake path:.#server
-
-# Or pull and restart manually:
-podman pull IMAGE:TAG
-systemctl restart podman-IMAGE
+sudo -u immich XDG_RUNTIME_DIR=/run/user/$(id -u immich) podman pull ghcr.io/immich-app/immich-server:release
+sudo systemctl restart podman-immich-server
 ```
-
-**Best practice:** pin container image tags to specific versions in the service
-`.nix` files. Update the tag deliberately, not with `:latest`.
 
 ## Managing Samba users
 
 Samba uses local password storage (smbpasswd). Users must be Linux users first.
 
 ```bash
-# Add a new user (must have a Linux account in users.nix first)
+# Add a new user (declare the Linux account in hosts/server/default.nix first)
 sudo smbpasswd -a alice        # sets Samba password
 sudo smbpasswd -e alice        # enable if disabled
 
@@ -187,7 +185,7 @@ sudo xfs_quota -x -c "limit -p bsoft=500g bhard=550g surveillance" /mnt/storage-
 
 Bitmagnet starts automatically when you visit `https://bitmagnet.<domain>`.
 You'll see a loading page for ~30 seconds on first access.
-It stops 30 minutes after the last request.
+It stops after 3 days without requests (`onDemand.idleMinutes` in `services/bitmagnet.nix`).
 
 To start/stop manually:
 ```bash
@@ -203,14 +201,11 @@ journalctl -u caddy -f
 journalctl -u home-assistant -f
 journalctl -u podman-frigate -f
 
-# All container logs together
-journalctl -t podman -f
-
 # NFS mount events
 journalctl -u srv-storage-a.mount -f
 
-# System boot log (useful for Clevis unlock debugging)
-journalctl -u storage-a-unlock -u storage-b-unlock -n 50  # on Pi: post-boot Clevis unlock
+# Post-boot Clevis unlock on the Pi
+journalctl -u storage-a-unlock -u storage-b-unlock -n 50
 ```
 
 ## Backup status
@@ -295,13 +290,13 @@ systemctl restart podman-authentik-server podman-authentik-worker
 
 ### Upgrading Authentik
 
-Authentik is pinned to a specific version in `hosts/server/services/authentik.nix`
+Authentik is pinned to a specific version in `services/authentik/default.nix`
 (`authentikVersion`). To upgrade:
 
 1. Check the [Authentik release notes](https://docs.goauthentik.io/docs/releases) —
    Authentik requires sequential upgrades (do not skip major versions).
-2. Update `authentikVersion` in `authentik.nix`.
-3. Rebuild: `nixos-rebuild switch --flake path:.#server --target-host admin@server`
+2. Update `authentikVersion`.
+3. Deploy: `deploy path:.#server`
 
 ### Adding a user
 
@@ -321,14 +316,10 @@ Or via the self-service recovery flow:
 
 ### Adding a new forward-auth service
 
-When adding a new Caddy vhost that uses `authentikFwdAuth`:
-
-1. Create a **Proxy Provider** (Forward auth, single application) with the service's external host.
-2. Create an **Application** linked to that provider.
-3. Edit the **embedded-outpost** and add the new application.
-
-No NixOS rebuild required — Caddy already routes all `authentikFwdAuth` vhosts through
-the embedded outpost.
+1. Set `auth = "forward-auth"` in the service's `lanbat.services.<name>`.
+2. In `services/authentik/blueprints.nix`, add a proxy provider (`mode: forward_single`)
+   and an application for the service, and add the provider to the embedded outpost.
+3. Deploy. Authentik applies the blueprints on startup.
 
 ## Vaultwarden
 

@@ -75,8 +75,8 @@ in
   environment.systemPackages = with pkgs; [
     kodi
     retroarch
-    xorg.xset
-    xorg.xrandr
+    xset
+    xrandr
     openbox
     launcherPkg
 
@@ -104,10 +104,22 @@ in
     });
   '';
 
-  # Audio — PipeWire with PulseAudio compat (required; PulseAudio conflicts
-  # with PipeWire in NixOS 24.11+).  Kodi, RetroArch, and snapclient all use
-  # the PulseAudio compatibility socket.
-  hardware.pulseaudio.enable = false;
+  # The TV user: runs the launcher, Kodi and RetroArch. No sudo.
+  users.users.media = {
+    uid = 1000;
+    group = "media";
+    isNormalUser = true;
+    extraGroups = [
+      "audio"
+      "video"
+      "input"
+    ];
+  };
+
+  # Audio — PipeWire with PulseAudio compat (PulseAudio itself conflicts with
+  # PipeWire). Kodi, RetroArch, and snapclient all use the PulseAudio
+  # compatibility socket.
+  services.pulseaudio.enable = false;
   services.pipewire = {
     enable = true;
     alsa.enable = true;

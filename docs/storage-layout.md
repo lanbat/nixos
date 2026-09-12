@@ -36,9 +36,28 @@ Main Server
     └── b/   →  NFS  →  pi5:/mnt/storage-b
 ```
 
+## Server disk
+
+The server's disk is laid out by `hosts/server/disk.nix` (disko) during installation:
+
+```
+ESP        1 GiB     vfat → /boot
+LVM volume group "lanbat"
+├── root      150 GiB    ext4 → /                          host layer
+├── control   1 GiB      LUKS2 → ext4 → /mnt/control       Tang keys
+├── workload  80% free   LUKS2 → ext4 → /mnt/workload      workload-gated service state
+└── (free)    ~20%       unallocated
+```
+
+The host root holds the Nix store, rootless container images and the state of every
+always-on service, so it grows over time. The unallocated space lets root or workload
+grow online without reinstalling (`docs/operations.md` § Disk space). Nix collects
+garbage weekly and during builds when free space drops below 2 GiB, and each container
+account prunes its dangling images weekly.
+
 ## Server-local state — host root (always available, unencrypted)
 
-These paths live on `/dev/sda2` and are accessible at boot without any unlock.
+These paths live on `/dev/lanbat/root` and are accessible at boot without any unlock.
 
 ```
 /var/lib/
@@ -53,7 +72,7 @@ These paths live on `/dev/sda2` and are accessible at boot without any unlock.
 ├── influxdb2/         InfluxDB data + WAL (BACK THIS UP)
 ├── mosquitto/         Mosquitto broker state
 ├── homepage/          Homepage config (stateless, managed in repo)
-└── containers/        Podman container image storage
+└── containers/<account>/  rootless Podman image storage, one per container account
 
 /var/lib/tang/         ← bind mount from /mnt/control/tang (control LUKS)
                          Tang key pairs (BACK THIS UP — only available when
@@ -68,8 +87,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 ```
 /mnt/workload/
 ├── nextcloud/         Nextcloud app + config (bulk data is on Pi)
-├── immich/
-│   ├── db/            Immich PostgreSQL data (pgvecto.rs)
+├── immich/            (database: the shared PostgreSQL on host root)
 │   ├── thumbs/        Generated thumbnails
 │   ├── encoded-video/ Re-encoded video previews
 │   ├── profile/       User profile photos
@@ -95,7 +113,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Authentik | server-local | server-local (PostgreSQL) | — |
 | Home Assistant | server-local | server-local (SQLite) | — |
 | Nextcloud | server-local | server-local (PostgreSQL) | Pi/b (external storage) |
-| Immich | server-local | server-local (container PG) | Pi/a/photos |
+| Immich | server-local | server-local (PostgreSQL) | Pi/a/photos |
 | Jellyfin | server-local | server-local | Pi/a/media |
 | qBittorrent | server-local | — | Pi/a/downloads |
 | Frigate | server-local | server-local (SQLite) | Pi/a/surveillance |
@@ -143,7 +161,8 @@ To set a per-user limit (e.g. cap user "alice" at 100 GB on Drive B):
 sudo xfs_quota -x -c "limit bsoft=100g bhard=110g alice" /mnt/storage-b
 ```
 
-User IDs must be consistent between the Pi and server (see modules/common/users.nix).
+NFS stores numeric IDs, so a user's UID must be the same on the Pi and the server. Service
+accounts pin theirs in `lanbat.services.<name>.account.uid`.
 
 ### Reporting
 

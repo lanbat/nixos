@@ -29,5 +29,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
-      - name: Evaluate both hosts with placeholder settings
+      - name: Evaluate the example hosts and checks
         run: nix flake check --no-build --all-systems
+
+  vm-test:
+    name: vm-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: system-features = nixos-test benchmark big-parallel kvm
+      - name: Run the wiring tests
+        run: nix build -L .#checks.x86_64-linux.assertions .#checks.x86_64-linux.workload-gate

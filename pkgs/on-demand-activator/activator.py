@@ -7,7 +7,7 @@ Sits in front of a service that should only run when needed.
 - When the real service is down: starts it, returns a loading page.
 - After the service is up: first request that finds it healthy gets proxied.
 
-Usage (via systemd — see modules/server/on-demand.nix):
+Usage (via systemd — see modules/wiring/on-demand.nix):
   python3 activator.py \
     --listen-port 3332 \
     --real-port   3333 \

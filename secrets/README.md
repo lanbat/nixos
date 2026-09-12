@@ -5,26 +5,24 @@ Secrets are managed with [agenix](https://github.com/ryantm/agenix).
 Each secret is an age-encrypted `.age` file in this directory.
 They are decrypted at activation time using the host's SSH host key.
 
+Services declare the secrets they read in `lanbat.services.<name>.secrets`; each entry
+`<secret> = { }` refers to `secrets/<secret>.age` and is decrypted to
+`/run/agenix/<secret>`.
+
 ## Chicken-and-egg: secrets before first install
 
 agenix encrypts secrets to the host SSH key — but the host doesn't exist yet
 before the first install. The solution:
 
-1. Add your **admin (workstation) public key** to `secrets.nix` now.
-2. Encrypt all secrets with only the admin key initially.
-3. After the first boot, get the host SSH key:
-   ```bash
-   ssh admin@server cat /etc/ssh/ssh_host_ed25519_key.pub
-   ssh admin@pi5    cat /etc/ssh/ssh_host_ed25519_key.pub
-   ```
-4. Add the host keys to `secrets.nix`, then re-encrypt:
-   ```bash
-   cd secrets
-   agenix -r
-   ```
-
-Until step 4, only your workstation can decrypt secrets (which is fine —
-agenix decrypts them at activation time using whichever key is available).
+1. Add your **admin (workstation) public key** to `secrets.nix` and encrypt all
+   secrets with it.
+2. **Server:** create its SSH host key on your workstation before installing, add the
+   public key to `secrets.nix`, run `agenix -r`, and pass the key to nixos-anywhere with
+   `--extra-files` (`docs/deployment-checklist.md` step 1c). The server can decrypt its
+   secrets on first boot.
+3. **Pi:** read the host key of the booted SD image
+   (`ssh nixos@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub`), add it to `secrets.nix`
+   and run `agenix -r` before the first switch (step 2e).
 
 ## Setup
 
@@ -45,8 +43,8 @@ pi     = "ssh-ed25519 AAAA...";   # from: ssh admin@pi5    cat /etc/ssh/ssh_host
 admin  = "ssh-ed25519 AAAA...";   # from: cat ~/.ssh/id_ed25519.pub
 ```
 
-The host keys are only available after first install — fill in `admin` first
-and add the host keys in step 3a of the deployment checklist.
+Fill in `admin` first and add the host keys at steps 1c and 2e of the deployment
+checklist.
 
 ### 2. Create all required secrets
 
@@ -144,18 +142,9 @@ agenix -e vaultwarden-env.age
 agenix -e telegraf-token.age
 ```
 
-### 3. Re-key after first install
+### 3. Re-key if host keys change
 
-Once you have the host SSH keys (see chicken-and-egg above):
-
-```bash
-# Update secrets/secrets.nix with the host keys, then:
-agenix -r
-```
-
-### 4. Re-key if host keys change
-
-If you reinstall a machine (new SSH host key), re-key secrets:
+If you reinstall a machine with a new SSH host key, update `secrets/secrets.nix`, then:
 
 ```bash
 agenix -r
@@ -164,7 +153,8 @@ agenix -r
 ## Notes
 
 - The `.age` files are safe to commit to git — they are encrypted.
-- `secrets.nix` should also be committed (it only contains public keys).
+- `secrets.nix` stays local (gitignored); `secrets.nix.example` is the committed
+  template listing every file and its recipients.
 - **Never commit plaintext values.**
 - The `admin` key allows editing secrets from your workstation without
   needing a running host.

@@ -1,130 +1,123 @@
 {
-  description = "lanbat homelab — server + pi5";
+  description = "lanbat homelab — server + Raspberry Pi 5";
 
-  # ---------------------------------------------------------------------------
-  # Inputs
-  # ---------------------------------------------------------------------------
   inputs = {
-    # Stable channel — kept as a reference but the server now uses unstable.
-    # The Pi still uses stable for maximum reliability on embedded hardware.
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    # One nixpkgs for both hosts.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # Unstable channel — server runs on this for up-to-date security fixes
-    # and features (rootless Podman support in oci-containers, latest packages).
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
-
-    # Raspberry Pi hardware quirks (including Pi 5).
+    # Raspberry Pi 5 hardware support.
     nixos-hardware.url = "github:NixOS/nixos-hardware";
 
-    # Secret management via age-encrypted files.
-    # Each host's public key lives in secrets/keys/.
+    # Secrets as age-encrypted files (secrets/).
     agenix = {
       url = "github:ryantm/agenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Declarative disk layout, applied by nixos-anywhere at install time.
+    disko = {
+      url = "github:nix-community/disko/latest";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Deploys from a workstation, with automatic rollback.
+    deploy-rs = {
+      url = "github:serokell/deploy-rs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  # ---------------------------------------------------------------------------
-  # Outputs
-  # ---------------------------------------------------------------------------
   outputs =
     {
       self,
       nixpkgs,
-      nixpkgs-unstable,
       nixos-hardware,
       agenix,
+      disko,
+      deploy-rs,
       ...
     }@inputs:
     let
-      # Expose stable packages as pkgs.stable in every module (for Pi compat).
-      stableOverlay = final: prev: {
-        stable = import nixpkgs {
-          system = prev.system;
-          config.allowUnfree = true;
-        };
-      };
+      inherit (nixpkgs) lib;
 
-      # Legacy alias: pkgs.unstable still works, now points to unstable itself
-      # (a no-op overlay on the unstable base, kept for backwards compat).
-      unstableOverlay = final: prev: {
-        unstable = prev;
-      };
+      # local.nix holds the real settings and is gitignored, so it is only
+      # visible through a path: flake reference (e.g. `deploy path:.#server`).
+      # Without it the real hosts don't exist, and deploying them fails early.
+      hasLocal = builtins.pathExists ./local.nix;
 
-      # Server pkgs: based on unstable for security-forward package set.
-      mkServerPkgs =
-        system:
-        import nixpkgs-unstable {
-          inherit system;
-          config.allowUnfree = true;
-          overlays = [
-            stableOverlay
-            unstableOverlay
-            (import ./overlays)
-          ];
-        };
-
-      # Pi pkgs: based on stable for maximum reliability on embedded hardware.
-      # allowBroken: wyoming-satellite depends on pysilero-vad which is marked
-      # broken in 24.11; allow it until the Pi is upgraded to a newer channel.
-      mkPiPkgs =
-        system:
-        import nixpkgs {
-          inherit system;
-          config.allowUnfree = true;
-          config.allowBroken = true;
-          overlays = [
-            (final: prev: {
-              unstable = import nixpkgs-unstable {
-                system = prev.system;
-                config.allowUnfree = true;
-              };
-            })
-            (import ./overlays)
-          ];
-        };
-
-      # Per-deployment local settings (gitignored, see local.nix.example).
-      # Only present when evaluating through a path: flake ref (e.g. path:.#server);
-      # git-based refs and CI see the placeholder defaults from modules/common/settings.nix.
-      localModules = nixpkgs.lib.optional (builtins.pathExists ./local.nix) ./local.nix;
-    in
-    {
-      nixosConfigurations = {
-        # -----------------------------------------------------------------
-        # Main server (x86_64)
-        # -----------------------------------------------------------------
-        server = nixpkgs-unstable.lib.nixosSystem {
-          system = "x86_64-linux";
-          pkgs = mkServerPkgs "x86_64-linux";
-          specialArgs = {
-            inherit inputs;
-          };
-          modules = [
-            agenix.nixosModules.default
-            ./hosts/server
-          ]
-          ++ localModules;
-        };
-
-        # -----------------------------------------------------------------
-        # Raspberry Pi 5 (aarch64)
-        # -----------------------------------------------------------------
-        pi = nixpkgs.lib.nixosSystem {
-          system = "aarch64-linux";
-          pkgs = mkPiPkgs "aarch64-linux";
+      mkHost =
+        settings: modules:
+        lib.nixosSystem {
           specialArgs = { inherit inputs; };
           modules = [
             agenix.nixosModules.default
-            nixos-hardware.nixosModules.raspberry-pi-5
-            ./hosts/pi
+            { nixpkgs.config.allowUnfree = true; }
+            settings
           ]
-          ++ localModules;
+          ++ modules;
+        };
+
+      mkServer =
+        settings:
+        mkHost settings [
+          disko.nixosModules.disko
+          ./hosts/server
+        ];
+
+      mkPi =
+        settings:
+        mkHost settings [
+          nixos-hardware.nixosModules.raspberry-pi-5
+          ./hosts/pi
+        ];
+
+      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+    in
+    {
+      nixosConfigurations = {
+        example-server = mkServer ./hosts/example-settings.nix;
+        example-pi = mkPi ./hosts/example-settings.nix;
+      }
+      // lib.optionalAttrs hasLocal {
+        server = mkServer ./local.nix;
+        pi = mkPi ./local.nix;
+      };
+
+      deploy.nodes = lib.optionalAttrs hasLocal {
+        server = {
+          hostname = self.nixosConfigurations.server.config.lanbat.serverIp;
+          sshUser = "admin";
+          user = "root";
+          profiles.system.path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.server;
+        };
+        pi = {
+          hostname = self.nixosConfigurations.pi.config.lanbat.piIp;
+          sshUser = "admin";
+          user = "root";
+          # Build on the Pi itself rather than cross-compiling on the workstation.
+          remoteBuild = true;
+          profiles.system.path = deploy-rs.lib.aarch64-linux.activate.nixos self.nixosConfigurations.pi;
         };
       };
 
+      checks.x86_64-linux = {
+        assertions = import ./tests/assertions.nix { inherit lib pkgs; };
+        workload-gate = import ./tests/workload-gate.nix { inherit pkgs; };
+      }
+      // lib.optionalAttrs hasLocal (deploy-rs.lib.x86_64-linux.deployChecks self.deploy);
+
+      # `nix develop` provides the deploy, install and secrets tools.
+      devShells.x86_64-linux.default = pkgs.mkShell {
+        packages = [
+          deploy-rs.packages.x86_64-linux.default
+          agenix.packages.x86_64-linux.default
+          pkgs.nixos-anywhere
+        ];
+      };
+
       # `nix fmt` formats every tracked .nix file; CI runs `nix fmt -- --ci`.
-      formatter.x86_64-linux = nixpkgs-unstable.legacyPackages.x86_64-linux.nixfmt-tree;
-      formatter.aarch64-linux = nixpkgs-unstable.legacyPackages.aarch64-linux.nixfmt-tree;
+      formatter = lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (
+        system: nixpkgs.legacyPackages.${system}.nixfmt-tree
+      );
     };
 }

@@ -37,7 +37,7 @@
 #
 #  2. Add them to secrets/secrets.nix (serverKeys recipients).
 #
-#  3. Add them to age.secrets in hosts/server/default.nix.
+#  3. Declare them with age.secrets in this module.
 #
 #  4. Initialise each restic repository before the first timer fires:
 #       restic -r <host-repo>     init
@@ -57,8 +57,8 @@
 #  Run these commands once initially and after any Clevis re-bind:
 #
 #    # On the server (after installation):
-#    cryptsetup luksHeaderBackup /dev/sda3 --header-backup-file control-luks-header.img
-#    cryptsetup luksHeaderBackup /dev/sda4 --header-backup-file workload-luks-header.img
+#    cryptsetup luksHeaderBackup /dev/lanbat/control --header-backup-file control-luks-header.img
+#    cryptsetup luksHeaderBackup /dev/lanbat/workload --header-backup-file workload-luks-header.img
 #
 #    # On the Raspberry Pi (after Clevis bind):
 #    cryptsetup luksHeaderBackup /dev/disk/by-id/<driveA> --header-backup-file pi-storage-a-luks-header.img
@@ -79,7 +79,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #
 #  Server restore order:
-#   1. Reinstall NixOS on host root (sda2) using the repo + local.nix
+#   1. Reinstall the host root only (docs/runbook.md § Full server rebuild)
 #   2. Restore host backup (etc, SSH keys, systemd units) from Track A
 #   3. Restore control LUKS header if needed; open control LUKS
 #   4. Restore /mnt/control from Track B → Tang keys restored
@@ -211,13 +211,12 @@ in
   #
   # systemd.services = mkResticService {
   #   name         = "host";
-  #   repoPath     = cfg.backups.hostRepo;           # add this option to settings.nix
+  #   repoPath     = cfg.backups.hostRepo;           # add this option to modules/core/settings.nix
   #   passwordFile = config.age.secrets.restic-host-password.path;
   #   paths        = [
   #     "/etc"
   #     "/root"
   #     "/var/lib/nixos"
-  #     "/etc/nixos"   # the cloned config repo
   #   ];
   # };
   # systemd.timers = mkResticTimer "host" "02:00";

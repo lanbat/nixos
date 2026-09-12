@@ -20,80 +20,50 @@ NixOS configuration for a two-machine homelab:
 - [Operations guide](docs/operations.md)
 - [Secrets setup](secrets/README.md)
 
+## How it fits together
+
+Every server service is one file in `services/`. Besides configuring the service,
+the file describes it under `lanbat.services.<name>`: its subdomain and port, who
+authenticates users, whether its data lives on the encrypted workload layer, which
+Pi drives it needs, its container account, secrets and dashboard entry. The
+modules in `modules/wiring/` generate the Caddy vhosts, workload gating, NFS
+dependencies, on-demand activators, accounts, agenix secrets and Homepage entries
+from those descriptions, and evaluation fails on inconsistencies such as port
+clashes. Importing a service file enables it.
+
+```nix
+lanbat.services.jellyfin = {
+  subdomain = "media";
+  port = 8096;
+  apiClients = true;
+  tier = "workload";
+  state = [ "jellyfin" ];
+  units = [ "jellyfin" ];
+  nfs.drives = [ "a" ];
+  account = { uid = 992; extraGroups = [ "media" ]; };
+  dashboard = { group = "Media"; name = "Jellyfin"; description = "Media server"; };
+};
+```
+
 ## Repository structure
 
 ```
-flake.nix                    entry point — two nixosConfigurations
-local.nix.example            template for per-deployment settings (copy to local.nix, gitignored)
-overlays/default.nix         exposes pkgs.unstable
-modules/
-  common/
-    base.nix                 locale, nix settings, base packages
-    users.nix                stable UIDs/GIDs across both machines
-    ssh.nix                  hardened openssh config
-  server/
-    nfs-mounts.nix           /srv/storage/{a,b} NFS mount units
-    nfs-dependent-service.nix  module: declare NFS dependencies for services
-    on-demand.nix            on-demand service activator framework
-  pi/
-    clevis-unlock.nix        post-boot Clevis/Tang unlock (retries until Tang reachable)
-    launcher.nix             TV launcher (X11 + openbox + Python/GTK)
+flake.nix                 hosts, deploy-rs nodes, checks, dev shell
+local.nix.example         template for your settings (copy to local.nix, gitignored)
 hosts/
-  server/
-    default.nix              server host config — imports all services
-    hardware-configuration.nix  the maintainer's hardware — replace with your nixos-generate-config output
-    services/
-      tang.nix               Tang trust anchor (Pi LUKS unlock)
-      caddy.nix              reverse proxy + internal CA
-      authentik.nix          identity / SSO (OCI containers)
-      home-assistant.nix     home automation (NixOS native)
-      nextcloud.nix          file sync (NixOS native)
-      immich.nix             photo library (OCI containers)
-      jellyfin.nix           media server (NixOS native)
-      vaultwarden.nix        password manager (NixOS native)
-      grafana.nix            metrics dashboards (NixOS native)
-      syncthing.nix          file synchronisation (NixOS native)
-      snapcast.nix           multi-room audio server (NixOS native)
-      wyoming.nix            voice assistant pipeline: STT/TTS/wake word (NixOS native)
-      telegraf.nix           metrics agent → InfluxDB (NixOS native)
-      influxdb.nix           time-series database (NixOS native)
-      qbittorrent.nix        torrent client (OCI container)
-      frigate.nix            NVR + cloud sync (OCI container)
-      bitmagnet.nix          DHT search, on-demand (OCI container)
-      searxng.nix            metasearch frontend (OCI container)
-      homepage.nix           service dashboard (OCI container)
-      samba.nix              SMB file server (NixOS native)
-      mosquitto.nix          MQTT broker (NixOS native)
-  pi/
-    default.nix              Pi host config
-    hardware-configuration.nix  TEMPLATE — replace with nixos-generate-config output
-    services/
-      storage.nix            LUKS mounts + directory init
-      nfs-exports.nix        NFS server exports
-      frontend.nix           Kodi/RetroArch hardware config
-      snapclient.nix         Snapcast audio client (NixOS native)
-      wyoming-satellite.nix  Wyoming voice satellite: mic + speaker (NixOS native)
-      telegraf.nix           metrics agent → server InfluxDB (NixOS native)
-pkgs/
-  ca-landing-page/           CA trust distribution page (static HTML)
-  launcher/                  TV launcher Python/GTK3 package
-  on-demand-activator/       On-demand service proxy (Python)
-  scripts/
-    quota-setup.sh           XFS project quota initialization
-    quota-report.sh          XFS quota usage report
-    backup-server.sh         Nightly server → Pi backup
-    trust-ca-linux.sh        CA install helper for Linux
-    trust-ca-macos.sh        CA install helper for macOS
-secrets/
-  README.md                  How to create and manage agenix secrets
-docs/
-  architecture.md            System design and service map
-  deployment-checklist.md    Step-by-step setup guide
-  storage-layout.md          Drive layout, quotas, service storage plan
-  failure-modes.md           What happens when things go wrong
-  security.md                Security model and threat surface
-  backup.md                  Backup strategy and restore procedures
-  operations.md              Day-to-day management
+  example-settings.nix    placeholder settings for the example hosts CI evaluates
+  server/                 default.nix (imports, networking), disk.nix (disko layout), hardware.nix
+  pi/                     default.nix, hardware.nix
+services/                 one file per server service, each describing itself in lanbat.services
+modules/
+  core/                   settings, the service interface, base system, SSH, shared accounts
+  wiring/                 vhosts, workload gating, NFS, on-demand, accounts, secrets, checks
+  server/                 control LUKS layer and Tang gating, backups
+  pi/                     Clevis unlock, storage, NFS exports, TV frontend, audio, voice, metrics
+tests/                    assertion tests and the workload-gate VM test
+pkgs/                     CA landing page, TV launcher, on-demand activator, helper scripts
+secrets/                  agenix-encrypted secrets
+docs/                     design, operations and deployment guides
 ```
 
 ## Services
@@ -110,6 +80,7 @@ Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) fo
 | Frigate | `nvr.<domain>` | Caddy fwd-auth |
 | Grafana | `grafana.<domain>` | OIDC |
 | SearXNG | `search.<domain>` | **none (intentional)** |
+| Zigbee2MQTT | `zigbee.<domain>` | Caddy fwd-auth |
 | CA page | `ca.<domain>` | none |
 | Mosquitto | MQTT port 1883 | local password file |
 | InfluxDB | internal only | token auth |
@@ -133,28 +104,25 @@ Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) fo
 
 | Service | URL | Notes |
 |---|---|---|
-| Bitmagnet | `bitmagnet.<domain>` | Starts on first request, stops after 30 min idle |
+| Bitmagnet | `bitmagnet.<domain>` | Starts on first request, stops after 3 days idle |
 
 ## Deploying
 
 ```bash
-# Server (first time — from installer)
-nixos-install --flake path:.#server
+nix develop               # deploy (deploy-rs), agenix, nixos-anywhere
 
-# Server (updates)
-nixos-rebuild switch --flake path:.#server --target-host admin@server
-
-# Pi
-nixos-rebuild switch --flake path:.#pi --target-host admin@pi5
+# Deploy from your workstation; rolls back if the new system breaks SSH
+deploy path:.#server
+deploy path:.#pi
 ```
 
-Always deploy with a `path:` flake reference. `local.nix` (copied from
-`local.nix.example`) is gitignored, and git-based references only include tracked
-files, so they would build with placeholder settings. A pre-switch check refuses to
-switch while any setting is still a placeholder; list what is missing with
-`nix eval path:.#nixosConfigurations.server.config.lanbat.placeholderSettings`.
-
-See [docs/deployment-checklist.md](docs/deployment-checklist.md) for the full step-by-step guide.
+The real `server` and `pi` configurations only exist when `local.nix` (copied from
+`local.nix.example`) is present, and only a `path:` flake reference includes that
+gitignored file. The server is installed with nixos-anywhere, which partitions its
+disk from `hosts/server/disk.nix`. Hosts don't upgrade themselves: run
+`nix flake update` and deploy. See
+[docs/deployment-checklist.md](docs/deployment-checklist.md) for the full
+step-by-step guide.
 
 ## Design principles
 
@@ -163,7 +131,7 @@ See [docs/deployment-checklist.md](docs/deployment-checklist.md) for the full st
 - **Fail safe** — NFS-dependent services stop when the Pi is unreachable; they restart automatically when storage returns.
 - **No Kubernetes** — systemd + Podman + NixOS modules are sufficient and far simpler.
 - **Minimal containers** — NixOS native services are preferred where modules exist (Nextcloud, Jellyfin, HA, Samba, etc.). Containers are used where native packaging is impractical (Authentik, Immich, Frigate, etc.).
-- **Explicit dependencies** — every service that needs NFS declares it in `lanbat.nfsDependentServices`.
+- **One place per service** — a service's vhost, tier, storage dependencies, account and secrets are declared in its own file and checked at evaluation.
 
 ## Contributing
 
