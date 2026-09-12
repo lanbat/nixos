@@ -9,12 +9,14 @@
 #   3. TV frontend: Kodi and RetroArch via a simple launcher.
 #
 # Heavy compute, databases and containers all live on the server.
+#
+# The Raspberry Pi 5 hardware support (./hardware.nix) is added next to this
+# module in flake.nix, so the VM test (tests/pi.nix) can boot the rest of the
+# configuration without it.
 { config, pkgs, ... }:
 
 {
   imports = [
-    ./hardware.nix
-
     ../../modules/core
 
     ../../modules/pi/clevis-unlock.nix

@@ -78,6 +78,7 @@
             { nixpkgs.config.allowUnfree = true; }
             settings
             ./hosts/pi
+            ./hosts/pi/hardware.nix
           ];
         };
 
@@ -113,9 +114,19 @@
       checks.x86_64-linux = {
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
+        server = import ./tests/server.nix {
+          inherit pkgs;
+          inherit (inputs) agenix disko;
+        };
         workload-gate = import ./tests/workload-gate.nix { inherit pkgs; };
       }
       // lib.optionalAttrs hasLocal (deploy-rs.lib.x86_64-linux.deployChecks self.deploy);
+
+      # Runs on an aarch64 machine with KVM (the Pi itself), with the Pi's nixpkgs.
+      checks.aarch64-linux.pi = import ./tests/pi.nix {
+        pkgs = nixos-raspberrypi.inputs.nixpkgs.legacyPackages.aarch64-linux;
+        inherit (inputs) agenix;
+      };
 
       # `nix develop` provides the deploy, install and secrets tools.
       devShells.x86_64-linux.default = pkgs.mkShell {

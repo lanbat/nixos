@@ -33,6 +33,14 @@ nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql}  # wiring 
 
 The workload-gate and postgresql tests boot VMs and need KVM. CI runs all three on every pull request.
 
+Two slower tests boot the complete host configurations. CI only evaluates them, so run
+them when you change a host, a service's tier or the unlock scripts:
+
+```bash
+nix build -L .#checks.x86_64-linux.server  # KVM, about 10 GB of free memory, 15–45 minutes
+nix build -L .#checks.aarch64-linux.pi     # an aarch64 machine with KVM, such as the Pi (see tests/pi.nix)
+```
+
 ## Pull requests
 
 - Keep each pull request focused on one change.
