@@ -58,6 +58,63 @@ let
     owner = name;
   }) (lib.filterAttrs (_: g: g.gid != null) config.users.groups);
 
+  # Gated units start with workload-online.target. A unit outside the gate that
+  # pulls one in, or needs a workload directory, pulls in the workload mounts
+  # too, and boot then waits for a LUKS device that only unlock-workload opens.
+  workload = lib.filter (s: s.tier == "workload") services;
+  gatedUnits = lib.concatMap (s: s.units) workload;
+  gatedDirs = [ "/mnt/workload" ] ++ map (d: "/var/lib/${d}") (lib.concatMap (s: s.state) workload);
+  onWorkload = path: lib.any (d: path == d || lib.hasPrefix "${d}/" path) gatedDirs;
+  words = v: if lib.isList v then v else lib.splitString " " (toString v);
+
+  gatedPulls = lib.concatLists (
+    lib.mapAttrsToList (
+      name: unit:
+      map (dep: "lanbat: ${name} pulls in the workload-gated ${dep}; add ${name} to that service's units")
+        (
+          lib.intersectLists (map (u: "${u}.service") gatedUnits) (
+            unit.wants ++ unit.requires ++ unit.bindsTo ++ unit.requisite or [ ]
+          )
+        )
+      ++
+        map
+          (
+            path:
+            "lanbat: ${name} needs ${path}, which is on the workload layer; add ${name} to that service's units"
+          )
+          (
+            lib.filter onWorkload (
+              words (unit.unitConfig.RequiresMountsFor or [ ])
+              ++ words (unit.serviceConfig.WorkingDirectory or [ ])
+              ++ map (d: "/var/lib/${d}") (words (unit.serviceConfig.StateDirectory or [ ]))
+            )
+          )
+    ) (removeAttrs config.systemd.services gatedUnits)
+  );
+
+  # A timer, socket or path unit starts the service of the same name, so for a
+  # gated service it has to start with the layer rather than at boot.
+  ungatedTriggers =
+    lib.concatMap
+      (
+        kind:
+        map
+          (
+            name:
+            "lanbat: ${name}.${kind} starts the workload-gated ${name}.service outside the gate; set systemd.${kind}s.${name}.wantedBy to [ \"workload-online.target\" ]"
+          )
+          (
+            lib.filter (
+              name: lib.any (t: t != "workload-online.target") config.systemd."${kind}s".${name}.wantedBy
+            ) (lib.intersectLists gatedUnits (lib.attrNames config.systemd."${kind}s"))
+          )
+      )
+      [
+        "timer"
+        "socket"
+        "path"
+      ];
+
   # Units the wiring attaches to must be defined by some module, or the
   # generated overrides create empty units that fail at runtime.
   referencedUnits = lib.concatMap (
@@ -123,7 +180,9 @@ let
     ++ clashes "secret" secretClaims
     ++ clashes "UID" uidClaims
     ++ clashes "GID" gidClaims
-    ++ map (r: "lanbat: ${r.owner} references unit ${r.unit}, which no module defines") undefinedUnits;
+    ++ map (r: "lanbat: ${r.owner} references unit ${r.unit}, which no module defines") undefinedUnits
+    ++ gatedPulls
+    ++ ungatedTriggers;
 in
 {
   assertions =

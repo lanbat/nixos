@@ -36,6 +36,13 @@ let
 in
 
 {
+  # The timer would start nextcloud-cron, and with it the workload layer, five
+  # minutes after boot. Run it only while the layer is unlocked.
+  systemd.timers.nextcloud-cron = {
+    wantedBy = lib.mkForce [ "workload-online.target" ];
+    partOf = [ "workload-online.target" ];
+  };
+
   lanbat.services.nextcloud = {
     subdomain = "cloud";
     port = 8080;
