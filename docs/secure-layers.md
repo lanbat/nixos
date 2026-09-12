@@ -39,7 +39,8 @@ work. Nothing sensitive is exposed.
 - **Unlocked by**: admin passphrase (`unlock-control`)
 - **Contains**: `/mnt/control/tang/` — Tang key material only
 
-A bind mount makes `/mnt/control/tang` available as `/var/lib/tang`.
+A bind mount makes `/mnt/control/tang` available as `/var/lib/private/tang`, where
+systemd keeps the state of Tang (a DynamicUser service); `/var/lib/tang` links to it.
 Tang's socket unit (`tangd.socket`) is `WantedBy=control-online.target` and
 will not start until that target is active.
 
@@ -129,7 +130,7 @@ boot
  └── host root available
       └── [admin] unlock-control
            └── /mnt/control mounted
-                └── /var/lib/tang bind-mounted
+                └── /var/lib/private/tang bind-mounted
                      └── control-online.target activated
                           └── tangd.socket started
                                └── Tang serving keys

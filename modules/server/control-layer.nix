@@ -13,7 +13,8 @@
 #
 #  Layer 2 — Control LUKS (locked at boot, unlocked manually)
 #    LVM control → LUKS2 → ext4 → /mnt/control
-#    Holds /mnt/control/tang (Tang key material), bind-mounted to /var/lib/tang.
+#    Holds /mnt/control/tang (Tang key material), bind-mounted to
+#    /var/lib/private/tang, where systemd keeps tangd's DynamicUser state.
 #    Tang only starts after this layer is mounted.
 #
 #  Layer 3 — Workload LUKS (locked at boot, unlocked manually)
@@ -68,9 +69,14 @@ in
 
   config = {
     # Mount-point stubs on the host root, closed while the layer is locked.
+    # tangd runs with DynamicUser, so systemd keeps its state in
+    # /var/lib/private/tang and needs /var/lib/tang to be a symlink to it; a
+    # mount on /var/lib/tang itself fails every connection.
     systemd.tmpfiles.rules = [
       "d /mnt/control :0000 :root :root -"
-      "d /var/lib/tang :0000 :root :root -"
+      "d /var/lib/private 0700 root root -"
+      "d /var/lib/private/tang :0000 :root :root -"
+      "L /var/lib/tang - - - - private/tang"
     ];
 
     fileSystems."/mnt/control" = {
@@ -83,8 +89,8 @@ in
       ];
     };
 
-    # Tang's keys live on the control layer and appear at Tang's usual path.
-    fileSystems."/var/lib/tang" = {
+    # Tang's keys live on the control layer and appear where tangd keeps its state.
+    fileSystems."/var/lib/private/tang" = {
       device = "/mnt/control/tang";
       fsType = "none";
       options = [
@@ -99,11 +105,11 @@ in
       description = "Control LUKS layer mounted and Tang available";
       requires = [
         "mnt-control.mount"
-        "var-lib-tang.mount"
+        "var-lib-private-tang.mount"
       ];
       after = [
         "mnt-control.mount"
-        "var-lib-tang.mount"
+        "var-lib-private-tang.mount"
       ];
       # No wantedBy: unlock-control starts it.
     };
@@ -114,13 +120,13 @@ in
       wantedBy = lib.mkForce [ "control-online.target" ];
       after = [ "control-online.target" ];
       partOf = [ "control-online.target" ];
-      unitConfig.ConditionPathIsMountPoint = "/var/lib/tang";
+      unitConfig.ConditionPathIsMountPoint = "/var/lib/private/tang";
     };
 
     systemd.services."tangd@" = {
-      after = [ "var-lib-tang.mount" ];
-      requires = [ "var-lib-tang.mount" ];
-      unitConfig.ConditionPathIsMountPoint = "/var/lib/tang";
+      after = [ "var-lib-private-tang.mount" ];
+      requires = [ "var-lib-private-tang.mount" ];
+      unitConfig.ConditionPathIsMountPoint = "/var/lib/private/tang";
     };
 
     environment.systemPackages = [
@@ -132,6 +138,12 @@ in
           echo "INFO: /dev/mapper/control-luks already exists, skipping luksOpen."
         else
           cryptsetup luksOpen ${config.lanbat.layers.controlDevice} control-luks
+        fi
+        # Servers installed before the move to /var/lib/private/tang have an
+        # empty mount-point stub at /var/lib/tang, where tangd needs a symlink.
+        if [ -d /var/lib/tang ] && [ ! -L /var/lib/tang ] && ! mountpoint -q /var/lib/tang; then
+          rmdir /var/lib/tang
+          ln -s private/tang /var/lib/tang
         fi
         echo "Mounting /mnt/control and activating control-online.target..."
         systemctl start control-online.target
@@ -156,8 +168,8 @@ in
         systemctl stop tangd.socket 2>/dev/null || true
         systemctl stop "tangd@*.service" 2>/dev/null || true
         systemctl stop control-online.target 2>/dev/null || true
-        if mountpoint -q /var/lib/tang; then
-          umount /var/lib/tang
+        if mountpoint -q /var/lib/private/tang; then
+          umount /var/lib/private/tang
         fi
         if mountpoint -q /mnt/control; then
           umount /mnt/control

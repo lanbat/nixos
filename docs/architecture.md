@@ -15,7 +15,7 @@
                          │  LV control — LUKS → /mnt/control                           │
                          │  ┌─────────────────────────────────────────────────────┐    │
                          │  │ Tang (7500) ──────────────────────────────────────┐ │    │
-                         │  │  /mnt/control/tang/ ←→ /var/lib/tang (bind mount) │ │    │
+                         │  │  /mnt/control/tang → /var/lib/private/tang (bind) │ │    │
                          │  └───────────────────────────────────────────────────┼─┘    │
                          │                           │ manual unlock (passphrase)│      │
   LAN clients            │  LV workload — LUKS → /mnt/workload                  │      │

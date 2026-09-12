@@ -74,7 +74,8 @@ These paths live on `/dev/lanbat/root` and are accessible at boot without any un
 ├── homepage/          Homepage config (stateless, managed in repo)
 └── containers/<account>/  rootless Podman image storage, one per container account
 
-/var/lib/tang/         ← bind mount from /mnt/control/tang (control LUKS)
+/var/lib/private/tang/ ← bind mount from /mnt/control/tang (control LUKS);
+                         /var/lib/tang links to it
                          Tang key pairs (BACK THIS UP — only available when
                          control is unlocked)
 ```
