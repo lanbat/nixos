@@ -171,7 +171,9 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "install-caddy-error-pages" ''
-        cp -r ${pkgs.callPackage ../pkgs/service-unavailable-page { inherit domain; }}/. /var/lib/caddy-error-pages/
+        cp -r ${
+          pkgs.callPackage ../pkgs/service-unavailable-page { inherit domain; }
+        }/. /var/lib/caddy-error-pages/
         chmod -R 644 /var/lib/caddy-error-pages/*
         chmod 755 /var/lib/caddy-error-pages
       '';

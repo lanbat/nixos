@@ -21,8 +21,7 @@ let
   authentikPort = config.lanbat.services.authentik.port;
 
   # OAuth callback after login — must hit the outpost, not the backend app.
-  authentikOutpostProxy =
-    "reverse_proxy /outpost.goauthentik.io/* localhost:${toString authentikPort}";
+  authentikOutpostProxy = "reverse_proxy /outpost.goauthentik.io/* localhost:${toString authentikPort}";
 
   authentikFwdAuth = ''
     forward_auth localhost:${toString authentikPort} {

@@ -19,6 +19,11 @@ stdenv.mkDerivation {
   installPhase = ''
     install -Dm755 $src $out/bin/immich-bootstrap
     wrapProgram $out/bin/immich-bootstrap \
-      --prefix PATH : "${lib.makeBinPath [ curl jq ]}"
+      --prefix PATH : "${
+        lib.makeBinPath [
+          curl
+          jq
+        ]
+      }"
   '';
 }

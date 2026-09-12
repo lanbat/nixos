@@ -20,6 +20,12 @@ stdenv.mkDerivation {
   installPhase = ''
     install -Dm755 $src $out/bin/home-assistant-post-setup
     wrapProgram $out/bin/home-assistant-post-setup \
-      --prefix PATH : "${lib.makeBinPath [ jq coreutils openssl ]}"
+      --prefix PATH : "${
+        lib.makeBinPath [
+          jq
+          coreutils
+          openssl
+        ]
+      }"
   '';
 }
