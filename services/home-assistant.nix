@@ -21,7 +21,8 @@
 # user, so entitled Authentik users land in HA without a second login.
 #
 # Companion apps and REST clients bypass forward-auth on /auth/token and /api/*
-# and authenticate with HA long-lived tokens as usual.
+# and authenticate with HA long-lived tokens as usual.  Caddy restores companion
+# OAuth params on /auth/authorize after Authentik strips them (see extraConfig).
 #
 # First-run onboarding is completed automatically by home-assistant-bootstrap
 # (owner account + SSO user mirror).  Break-glass local login remains available
@@ -62,6 +63,24 @@ in
       secrets.hass-bootstrap-env = {
         owner = "hass";
       };
+      # After Authentik forward-auth, /auth/authorize often returns without the
+      # OAuth query string the companion app sent. HA then responds 400 (invalid
+      # redirect URI). Re-add the standard companion OAuth params when missing.
+      caddy.extraConfig = ''
+        @ha_android_auth {
+          path /auth/authorize
+          not query client_id=*
+          header User-Agent *Home Assistant*Android*
+        }
+        redir @ha_android_auth "/auth/authorize?response_type=code&client_id=https://home-assistant.io/android&redirect_uri=homeassistant://auth-callback" 302
+
+        @ha_ios_auth {
+          path /auth/authorize
+          not query client_id=*
+          header User-Agent *Home Assistant*iOS*
+        }
+        redir @ha_ios_auth "/auth/authorize?response_type=code&client_id=https://home-assistant.io/iOS&redirect_uri=homeassistant://auth-callback" 302
+      '';
       caddy.proxyOptions = ''
         # Long-lived websockets for HA's live updates.
         transport http {
