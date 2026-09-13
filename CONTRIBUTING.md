@@ -177,7 +177,7 @@ availability requirements:
   units in `units`. The wiring creates the mode-0000 stubs, bind-mounts
   `/mnt/workload/<dir>` over them, and moves the units under `workload-online.target`.
 - Current members: Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba,
-  qBittorrent, Bitmagnet, PostgreSQL (workload instance)
+  qBittorrent, Bitmagnet, RomM, PostgreSQL (workload instance)
 
 When in doubt, prefer **always-on** for monitoring/automation/infrastructure services
 and **workload-gated** for personal data vaults (passwords, photos, documents, media).
@@ -245,7 +245,7 @@ On the Pi: 2049 (NFS) and 10700 (Wyoming satellite), both restricted to the serv
 
 ### Caddy auth
 - Services with **native OIDC** (Nextcloud, Immich, Grafana): `auth = "app"`.
-- Services with **no auth** of their own (Frigate, qBittorrent, Bitmagnet): `auth = "forward-auth"`.
+- Services with **no auth** of their own (Frigate, qBittorrent, Bitmagnet, RomM): `auth = "forward-auth"`.
 - Services with **their own account system** (Vaultwarden, Jellyfin): `auth = "app"` and
   `apiClients = true` — clients need direct API access.
 - Deliberately open services (SearXNG, Homepage, the CA page): `auth = "none"`.

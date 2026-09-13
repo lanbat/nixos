@@ -107,6 +107,7 @@
 | Frigate | Caddy forward-auth (Authentik) | No native OIDC |
 | qBittorrent | Caddy forward-auth + local app auth | No OIDC |
 | Bitmagnet | Caddy forward-auth (Authentik) | No native OIDC |
+| RomM | Caddy forward-auth (Authentik), then RomM accounts | OIDC not configured |
 | SearXNG | None (intentional) | Public LAN search |
 | Samba | Local smbpasswd (optionally Authentik LDAP) | SMB doesn't speak OIDC |
 | MQTT | Local password file | IoT devices don't speak OIDC |
@@ -132,6 +133,7 @@
 | `nvr.<domain>` | Frigate NVR |
 | `torrent.<domain>` | qBittorrent |
 | `bitmagnet.<domain>` | Bitmagnet (on-demand) |
+| `romm.<domain>` | RomM (on-demand) |
 | `search.<domain>` | SearXNG |
 | `ca.<domain>` | CA cert distribution |
 | `vault.<domain>` | Vaultwarden password manager |
@@ -147,7 +149,7 @@ This is configured in your router/DNS and is out of scope for this repo.
 
 Services with `lanbat.services.<name>.onDemand` start on the first HTTP request via
 the activator proxy (`modules/wiring/on-demand.nix`) and stop after `idleMinutes` without
-requests. Bitmagnet is the only one; it stops after 3 days idle.
+requests. Bitmagnet stops after 3 days idle, RomM after 30 minutes.
 
 The activator is a lightweight Python proxy that:
 1. Receives requests meant for Bitmagnet.

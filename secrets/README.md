@@ -189,3 +189,5 @@ agenix -r
 | `telegraf-token.age` | `TELEGRAF_INFLUXDB_TOKEN=<value>` | Telegraf (server + Pi) |
 | `caddy-ca-root.crt` | PEM root certificate (public) | Caddy internal CA — committed plaintext |
 | `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |
+| `romm-db-pass.age` | `POSTGRES_PASSWORD=<value>` and `DB_PASSWD=<same value>` | RomM database password (PostgreSQL setup and the container) |
+| `romm-env.age` | `ROMM_AUTH_SECRET_KEY=<openssl rand -hex 32>` and metadata provider keys (`IGDB_CLIENT_ID=`, `SCREENSCRAPER_USER=`, …) | RomM container |
