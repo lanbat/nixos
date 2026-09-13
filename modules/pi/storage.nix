@@ -9,14 +9,15 @@
 #  Drive A (/dev/disk/by-id/<piStorageDriveA>):
 #    LUKS2 → XFS (pquota) → /mnt/storage-a
 #    Directories:
-#      /mnt/storage-a/media/         — Jellyfin (movies, TV, music)
-#      /mnt/storage-a/downloads/     — qBittorrent (per-user subdirs)
+#      /mnt/storage-a/media/         — movies, TV, music videos (qBittorrent, Jellyfin)
 #      /mnt/storage-a/photos/        — Immich originals
 #      /mnt/storage-a/surveillance/  — Frigate recordings
 #
 #  Drive B (/dev/disk/by-id/<piStorageDriveB>):
 #    LUKS2 → XFS (pquota) → /mnt/storage-b
 #    Directories:
+#      /mnt/storage-b/media/         — music, documentaries, ROMs, books and the rest
+#      /mnt/storage-b/media/adult/   — private group only (Samba + NFS gated)
 #      /mnt/storage-b/nextcloud/     — Nextcloud external storage
 #      /mnt/storage-b/users/         — per-user SMB home dirs
 #      /mnt/storage-b/shared/        — shared SMB space
@@ -55,31 +56,30 @@
   ...
 }:
 
+let
+  privateGid = config.users.groups.private.gid;
+  mediaGid = config.users.groups.media.gid;
+in
 {
   # ── Storage A initialisation ───────────────────────────────────────────────
-  # Runs once after storage-a is unlocked and mounted.
-  # Creates the top-level directory tree with correct permissions.
-  # Wired before nfs-server.service so NFS always exports a fully-initialised tree.
   systemd.services."storage-a-init" = {
     description = "Initialise storage-a directory tree after unlock";
-    # Require successful unlock (which implies the filesystem is mounted).
     requires = [ "storage-a-unlock.service" ];
     after = [ "storage-a-unlock.service" ];
-    # nfs-server.service wants this init, ensuring exports are ready before NFS starts.
     before = [ "nfs-server.service" ];
     wantedBy = [ "nfs-server.service" ];
 
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      ExecStartPost = "-${pkgs.nfs-utils}/bin/exportfs -ra";
       ExecStart = pkgs.writeShellScript "init-storage-a" ''
         set -e
         base=/mnt/storage-a
-        install -d -m 0755 -o root   -g root    "$base/media"
-        install -d -m 0755 -o root   -g root    "$base/media/movies"
-        install -d -m 0755 -o root   -g root    "$base/media/tv"
-        install -d -m 0755 -o root   -g root    "$base/media/music"
-        install -d -m 0775 -o nobody -g nogroup "$base/downloads"
+        # Media on drive A. qBittorrent saves here as qbt (UID 994), group media.
+        for dir in media media/movies media/tv media/music-videos; do
+          install -d -m 2775 -o 994 -g ${toString mediaGid} "$base/$dir"
+        done
         install -d -m 0755 -o nobody -g nogroup "$base/photos"
         install -d -m 0755 -o nobody -g nogroup "$base/surveillance"
         install -d -m 0755 -o nobody -g nogroup "$base/surveillance/clips"
@@ -100,21 +100,30 @@
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      ExecStartPost = "-${pkgs.nfs-utils}/bin/exportfs -ra";
       ExecStart = pkgs.writeShellScript "init-storage-b" ''
         set -e
         base=/mnt/storage-b
-        install -d -m 0755 -o root   -g root    "$base/nextcloud"
+        # General media on drive B — group media (Jellyfin, qBittorrent, Samba).
+        for dir in media media/music media/documentaries media/roms \
+          media/audiobooks media/books media/gym media/games media/misc; do
+          install -d -m 2775 -o 994 -g ${toString mediaGid} "$base/$dir"
+        done
+        # Adult content is private-group only — not in Jellyfin, hidden from Samba media shares.
+        install -d -m 2770 -o 994 -g ${toString privateGid} "$base/media/adult"
+        chgrp ${toString privateGid} "$base/media/adult" 2>/dev/null || true
+        chmod 2770 "$base/media/adult" 2>/dev/null || true
+        install -d -m 0755 -o root -g root "$base/nextcloud"
         install -d -m 0755 -o nobody -g nogroup "$base/users"
         install -d -m 0775 -o nobody -g nogroup "$base/shared"
-        install -d -m 0700 -o root   -g root    "$base/backups"
+        install -d -m 0700 -o root -g root "$base/backups"
         echo "storage-b directory tree ready."
       '';
     };
   };
 
-  # ── Packages for storage management ───────────────────────────────────────
   environment.systemPackages = with pkgs; [
-    xfsprogs # xfs_quota, xfs_admin
+    xfsprogs
     cryptsetup
     clevis
   ];

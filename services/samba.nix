@@ -124,7 +124,8 @@
 
       # ---- Shared media shares (read-only for all users) ----
       # One per drive: media is split across both (modules/pi/storage.nix).
-      # qBittorrent saves into these folders.
+      # Adult content lives under storage-b/media/adult and is excluded from
+      # Jellyfin libraries and from these shares (see private below).
       media = {
         comment = "Media: movies, TV, music videos";
         path = "/srv/storage/a/media";
@@ -141,18 +142,17 @@
         "read only" = "yes";
         "guest ok" = "no";
         "valid users" = "@media";
-        # Adult video is only in the private share.
         "veto files" = "/adult/";
       };
 
       # ---- Private media (restricted to "private" group) ----
       # Not browseable — does not appear in network discovery.
-      # Only users explicitly added to the "private" group can access it.
+      # Filesystem permissions also deny the media group; only @private can read.
       # Add users: usermod -aG private <username> && smbpasswd -a <username>
       private = {
         comment = "Private";
         path = "/srv/storage/b/media/adult";
-        browseable = "no"; # hidden from share listings
+        browseable = "no";
         "read only" = "yes";
         "guest ok" = "no";
         "valid users" = "@private";

@@ -14,10 +14,8 @@
 #
 # Pi-backed via NFS, media split across both drives by folder:
 #   /srv/storage/a/media/         — movies, TV, music videos
-#   /srv/storage/b/media/         — music, documentaries, books and the rest
-# Add the folders of both drives to the libraries. The Pi creates them
-# (modules/pi/storage.nix), owned by qbt, group media; Jellyfin reads them
-# through its media group.
+#   /srv/storage/b/media/         — music, documentaries, books, etc.
+#   /srv/storage/b/media/adult/   — private group only; excluded from Jellyfin
 #
 # NFS dependency: strong.
 #   Jellyfin should not run if Pi storage is unavailable — it would
@@ -25,8 +23,8 @@
 #   We declare a hard BindsTo dependency so systemd stops Jellyfin when
 #   the mount disappears and restarts it when the mount returns.
 #
-# First-run onboarding is completed automatically by jellyfin-bootstrap
-# (admin account from hass-bootstrap-env.age).  SSO plugin setup remains manual.
+# First-run onboarding, media libraries, plugins, and Authentik SSO are
+# completed automatically by jellyfin-bootstrap.
 {
   config,
   pkgs,
@@ -35,6 +33,7 @@
 }:
 
 let
+  domain = config.lanbat.domain;
   bootstrap = pkgs.callPackage ../pkgs/jellyfin-bootstrap { };
 in
 {
@@ -48,8 +47,6 @@ in
       "jellyfin"
       "jellyfin-bootstrap"
     ];
-    # Created for jellyfin on the workload layer; root-owned, Jellyfin can't
-    # write its data and aborts on start.
     workloadDirs."jellyfin".user = "jellyfin";
     nfs.drives = [
       "a"
@@ -75,13 +72,10 @@ in
     openFirewall = false; # Caddy handles exposure.
   };
 
-  # Transcode dir — put on local fast storage, not NFS.
-  # Set JellyfinFFmpegTranscodingPath in the admin UI or via config below.
   systemd.tmpfiles.rules = [
     "d /var/cache/jellyfin    0750 jellyfin jellyfin -"
   ];
 
-  # Restart on failure so it comes back when NFS is restored.
   systemd.services.jellyfin = {
     serviceConfig = {
       Restart = "on-failure";
@@ -90,7 +84,7 @@ in
   };
 
   systemd.services.jellyfin-bootstrap = {
-    description = "Complete Jellyfin first-run startup wizard";
+    description = "Complete Jellyfin setup (wizard, libraries, plugins, SSO)";
     wantedBy = [ "multi-user.target" ];
     after = [ "jellyfin.service" ];
     wants = [ "jellyfin.service" ];
@@ -106,8 +100,11 @@ in
     script = ''
       set -a
       . ${config.age.secrets.hass-bootstrap-env.path}
+      . ${config.age.secrets.authentik-oidc-secrets.path}
       set +a
       export JELLYFIN_URL="http://127.0.0.1:8096"
+      export EXTERNAL_URL="https://media.${domain}"
+      export AUTH_DOMAIN="${domain}"
       exec jellyfin-bootstrap
     '';
   };

@@ -437,23 +437,17 @@ automatically and registers the Authentik provider.  No further steps needed.
 4. Grant users access to the **Home Assistant** application in Authentik
    (Applications → Home Assistant → Policy / group bindings).
 
-#### Jellyfin — bootstrap and SSO
+#### Jellyfin — automatic setup
 
-`jellyfin-bootstrap` completes the first-run startup wizard automatically on
-deploy, using `OWNER_USERNAME` / `OWNER_PASSWORD` from `hass-bootstrap-env.age`
-(same break-glass credentials as Home Assistant and Immich).  Add media
-libraries under Dashboard → Libraries after deploy if needed.
+`jellyfin-bootstrap` completes first-run onboarding on deploy:
 
-SSO plugin setup (manual):
+- Admin account from `hass-bootstrap-env.age` (same break-glass credentials as HA/Immich)
+- Media libraries on `/srv/storage/a/media/*` and `/srv/storage/b/media/*` (adult excluded)
+- Plugins: Open Subtitles, Trakt, SSO Authentication
+- Authentik OIDC provider (`authentik`) from `authentik-oidc-secrets.age`
 
-1. Dashboard → Plugins → Catalog → **SSO Authentication** → Install. Restart Jellyfin.
-2. Dashboard → SSO-Auth → Add provider with values from `generate-oidc-secrets.sh`:
-   - Provider name: `authentik`
-   - client_id: `jellyfin`
-   - client_secret: (from the script output)
-   - Authorization URL: `https://auth.<domain>/application/o/authorize/`
-   - Token URL: `https://auth.<domain>/application/o/token/`
-   - Userinfo URL: `https://auth.<domain>/application/o/userinfo/`
+Grant users access to the **Jellyfin** application in Authentik.  Adult content
+is only available via the hidden Samba `private` share (`@private` group).
 
 ### 3c. Samba user setup
 
