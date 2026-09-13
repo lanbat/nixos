@@ -69,15 +69,15 @@ in
       caddy.extraConfig = ''
         @ha_android_auth {
           path /auth/authorize
-          not query client_id=*
-          header User-Agent *Home Assistant*Android*
+          header User-Agent "*Home Assistant*Android*"
+          expression `{query.client_id} == ""`
         }
         redir @ha_android_auth "/auth/authorize?response_type=code&client_id=https://home-assistant.io/android&redirect_uri=homeassistant://auth-callback" 302
 
         @ha_ios_auth {
           path /auth/authorize
-          not query client_id=*
-          header User-Agent *Home Assistant*iOS*
+          header User-Agent "*Home Assistant*iOS*"
+          expression `{query.client_id} == ""`
         }
         redir @ha_ios_auth "/auth/authorize?response_type=code&client_id=https://home-assistant.io/iOS&redirect_uri=homeassistant://auth-callback" 302
       '';
