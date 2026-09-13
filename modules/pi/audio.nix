@@ -27,18 +27,25 @@ let
   satellite = config.lanbat.voiceSatellite;
   runtimeDir = "/run/pipewire";
 
-  # Sets the volume of Snapcast's client streams in PipeWire.
+  # Sets the volume of Snapcast's client streams in PipeWire. The process
+  # binary is a property of snapclient's client, not of its stream nodes.
+  # pw-dump and wpctl warn on stderr that a system service gets no realtime
+  # scheduling; that would fill the satellite's journal on every reply.
   snapcastVolume =
     name: volume:
     pkgs.writeShellScript "snapcast-${name}" ''
       export PIPEWIRE_RUNTIME_DIR=${runtimeDir}
-      ids=$(${config.services.pipewire.package}/bin/pw-dump | ${lib.getExe pkgs.jq} -r '
-        .[]
+      ids=$(${config.services.pipewire.package}/bin/pw-dump 2>/dev/null | ${lib.getExe pkgs.jq} -r '
+        [.[]
+          | select(.type == "PipeWire:Interface:Client"
+              and .info.props["application.process.binary"] == "snapclient")
+          | .id] as $clients
+        | .[]
         | select(.type == "PipeWire:Interface:Node"
-            and .info.props["application.process.binary"] == "snapclient")
+            and (.info.props["client.id"] as $client | $clients | index($client)) != null)
         | .id')
       for id in $ids; do
-        ${config.services.pipewire.wireplumber.package}/bin/wpctl set-volume "$id" ${volume}
+        ${config.services.pipewire.wireplumber.package}/bin/wpctl set-volume "$id" ${volume} 2>/dev/null
       done
     '';
   duck = snapcastVolume "duck" "0.25";
