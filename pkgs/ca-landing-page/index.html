@@ -61,7 +61,7 @@
   <!-- Download -->
   <div class="card">
     <h2>Download CA Certificate</h2>
-    <a class="download-btn" href="/root.crt" download="lanbat-ca.crt">
+    <a class="download-btn" href="/lanbat-ca.crt" download="lanbat-ca.crt">
       ⬇ Download lanbat-ca.crt
     </a>
     <p style="color:var(--muted); font-size:.9rem; margin:0">
@@ -112,11 +112,11 @@
       <p>Debian / Ubuntu / NixOS (run as root):</p>
       <pre><code># Remove any previous Lanbat root (same CN → same hash slot)
 rm -f /usr/local/share/ca-certificates/lanbat-ca.crt
-curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o /usr/local/share/ca-certificates/lanbat-ca.crt
+curl -k PLACEHOLDER_CA_ORIGIN/lanbat-ca.crt -o /usr/local/share/ca-certificates/lanbat-ca.crt
 update-ca-certificates</code></pre>
       <p>Fedora / RHEL:</p>
       <pre><code>rm -f /etc/pki/ca-trust/source/anchors/lanbat-ca.crt
-curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o /etc/pki/ca-trust/source/anchors/lanbat-ca.crt
+curl -k PLACEHOLDER_CA_ORIGIN/lanbat-ca.crt -o /etc/pki/ca-trust/source/anchors/lanbat-ca.crt
 update-ca-trust</code></pre>
       <p>On NixOS (add to configuration.nix):</p>
       <pre><code>security.pki.certificateFiles = [ /etc/ssl/certs/lanbat-ca.crt ];</code></pre>
@@ -134,7 +134,7 @@ update-ca-trust</code></pre>
       <p><strong>Terminal</strong> (<code>certutil</code> is in
       <code>libnss3-tools</code> on Debian/Ubuntu):</p>
       <pre><code># Download first, then (replace &lt;profile&gt; with your profile dir):
-curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o ~/lanbat-ca.crt
+curl -k PLACEHOLDER_CA_ORIGIN/lanbat-ca.crt -o ~/lanbat-ca.crt
 
 # Firefox — native package (~/.mozilla/firefox/&lt;profile&gt;/)
 certutil -d sql:~/.mozilla/firefox/&lt;profile&gt; -D -n "Lanbat Root CA" 2>/dev/null || true
@@ -159,7 +159,7 @@ certutil -d sql:~/.pki/nssdb -A -n "Lanbat Root CA" -t "C,," -i ~/lanbat-ca.crt<
         <li>Find the certificate, double-click → Trust → <em>Always Trust</em>.</li>
       </ol>
       <p>Option 2 — Terminal:</p>
-      <pre><code>curl -k PLACEHOLDER_CA_ORIGIN/root.crt -o ~/Downloads/lanbat-ca.crt
+      <pre><code>curl -k PLACEHOLDER_CA_ORIGIN/lanbat-ca.crt -o ~/Downloads/lanbat-ca.crt
 sudo security delete-certificate -c "Lanbat Root CA" /Library/Keychains/System.keychain 2>/dev/null || true
 sudo security add-trusted-cert -d -r trustRoot \
   -k /Library/Keychains/System.keychain ~/Downloads/lanbat-ca.crt</code></pre>
@@ -167,7 +167,7 @@ sudo security add-trusted-cert -d -r trustRoot \
 
     <div id="tab-windows" class="tab-content">
       <p>Run in PowerShell as Administrator:</p>
-      <pre><code>Invoke-WebRequest -Uri PLACEHOLDER_CA_ORIGIN/root.crt `
+      <pre><code>Invoke-WebRequest -Uri PLACEHOLDER_CA_ORIGIN/lanbat-ca.crt `
   -OutFile "$env:TEMP\lanbat-ca.crt" -SkipCertificateCheck
 Get-ChildItem Cert:\LocalMachine\Root |
   Where-Object { $_.Subject -match 'Lanbat Root CA' } |
@@ -240,7 +240,7 @@ Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
 <script>
 (function() {
   var origin = window.location.origin; // e.g. https://ca.<domain>
-  var caUrl  = origin + '/root.crt';
+  var caUrl  = origin + '/lanbat-ca.crt';
   var domain = window.location.hostname.replace(/^ca\./, '');
   var verifyUrl = 'https://home.' + domain + '/';
 

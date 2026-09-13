@@ -141,7 +141,7 @@ agenix -e vaultwarden-env.age
 # cert is secrets/caddy-ca-root.crt (committed). Encrypt the private key:
 #   agenix -e caddy-ca-root-key.age < /path/to/root.key
 # To rotate deliberately: generate a new root, re-encrypt, redeploy, then
-# redistribute ca.<domain>/root.crt to every client.
+# redistribute ca.<domain>/lanbat-ca.crt to every client.
 
 # ---- Telegraf ----
 # Leave empty for now — fill in AFTER deploying InfluxDB and creating a
