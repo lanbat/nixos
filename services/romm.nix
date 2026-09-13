@@ -29,6 +29,9 @@
 
 let
   port = 8098;
+  # gunicorn behind the container's nginx. Its default, 5000, is Frigate's on
+  # the host network.
+  backendPort = 8100;
   workloadDb = config.lanbat.postgresql.instances.workload;
 
   # ES-DE's folder names are RomM's platform names, except atari800. bios is
@@ -63,6 +66,7 @@ in
   lanbat.services.romm = {
     subdomain = "romm";
     inherit port;
+    extraPorts = [ backendPort ];
     auth = "forward-auth";
     tier = "workload";
     state = [ "romm" ];
@@ -107,6 +111,8 @@ in
 
     environment = {
       ROMM_PORT = toString port;
+      # The entrypoint also points nginx's upstream at it.
+      DEV_PORT = toString backendPort;
       ROMM_BASE_URL = "https://romm.${config.lanbat.domain}";
       ROMM_SESSION_SECURE_COOKIE = "true";
       ROMM_DB_DRIVER = "postgresql";
