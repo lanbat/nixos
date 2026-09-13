@@ -110,7 +110,10 @@ in
         description = "Photo library";
         widget = {
           type = "immich";
-          key = "CHANGE_ME_IMMICH_API_KEY";
+          version = 2;
+          key = {
+            _secret = "IMMICH_API_KEY";
+          };
         };
       };
     };

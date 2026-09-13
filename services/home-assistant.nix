@@ -115,7 +115,9 @@ in
         description = "Home automation";
         widget = {
           type = "homeassistant";
-          key = "CHANGE_ME_HA_LONG_LIVED_TOKEN";
+          key = {
+            _secret = "HA_LONG_LIVED_TOKEN";
+          };
         };
       };
     };

@@ -186,6 +186,7 @@ agenix -r
 | `influxdb-admin-token.age` | plaintext token | InfluxDB + Grafana datasource |
 | `grafana-env.age` | `KEY=value` × 4 | Grafana |
 | `vaultwarden-env.age` | `ADMIN_TOKEN=<value>` | Vaultwarden |
+| `homepage-widgets-env.age` | `KEY=value` lines for widget API keys/tokens | Homepage dashboard widgets |
 | `telegraf-token.age` | `TELEGRAF_INFLUXDB_TOKEN=<value>` | Telegraf (server + Pi) |
 | `ha-llm-api-key.age` | plaintext API key | Home Assistant's conversation agent (`lanbat.haLlm`); only with `haLlm` set |
 | `ha-voice-token.age` | Home Assistant long-lived access token, from `generate-ha-voice-token.sh` | Voice satellites (server + Pi), to speak replies on the room's speakers (`lanbat.voiceRooms`); only with `voiceRooms` set |

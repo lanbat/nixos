@@ -103,7 +103,11 @@ in
       widget = {
         type = "nextcloud";
         username = "admin";
-        password = "CHANGE_ME_NEXTCLOUD_ADMIN_PASS";
+        password = {
+          _secret = {
+            file = "nextcloud-admin-pass";
+          };
+        };
       };
     };
   };

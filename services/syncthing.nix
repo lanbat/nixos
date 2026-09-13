@@ -52,6 +52,8 @@ in
       22000 # sync
     ];
     auth = "forward-auth";
+    # Homepage's Syncthing widget calls /rest/* without an Authentik session.
+    caddy.authBypassPaths = [ "/rest/*" ];
     tier = "workload";
     state = [ "syncthing" ];
     units = [
@@ -63,6 +65,12 @@ in
       group = "Files & Sync";
       name = "Syncthing";
       description = "Continuous file sync";
+      widget = {
+        type = "syncthing";
+        key = {
+          _secret = "SYNCTHING_API_KEY";
+        };
+      };
     };
   };
 

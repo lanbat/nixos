@@ -59,14 +59,28 @@ in
     ];
     auth = "forward-auth";
     # The web UI probes /info and opens /ws before Music Assistant's own login.
-    # Those paths must reach MA directly; Authentik still protects the UI shell.
+    # Static assets and API paths must also bypass Authentik or the SPA shows
+    # "Connect" / "Connection Lost" after the shell page loads.
     caddy.authBypassPaths = [
       "/info"
       "/ws"
       "/setup"
       "/auth/*"
       "/api"
+      "/api/*"
+      "/assets/*"
+      "/resources/*"
+      "/favicon.ico"
+      "/manifest.json"
+      "/logo.png"
+      "/sw.js"
+      "/workbox-*"
     ];
+    caddy.proxyOptions = ''
+      transport http {
+        keepalive 24h
+      }
+    '';
     account = {
       uid = 964;
       extraGroups = [ "media" ];

@@ -47,8 +47,14 @@ in
       description = "Metrics dashboards";
       widget = {
         type = "grafana";
+        version = 2;
         username = "admin";
-        password = "CHANGE_ME_GRAFANA_ADMIN_PASS";
+        password = {
+          _secret = {
+            file = "grafana-env";
+            var = "GF_SECURITY_ADMIN_PASSWORD";
+          };
+        };
       };
     };
   };
