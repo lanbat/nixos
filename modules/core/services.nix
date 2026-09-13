@@ -133,6 +133,19 @@ let
             default = "";
             description = "Directives inside the generated reverse_proxy block.";
           };
+          authBypassPaths = mkOption {
+            type = types.listOf types.str;
+            default = [ ];
+            example = [
+              "/info"
+              "/ws"
+            ];
+            description = ''
+              URL paths that bypass Authentik forward-auth and reach the service
+              directly. Used when the app must authenticate or discover itself
+              (Music Assistant probes /info and /ws before its own login screen).
+            '';
+          };
         };
 
         # ── Storage tier (modules/wiring/workload-gate.nix) ───────────────────

@@ -16,9 +16,8 @@
 # dynamically via stream_add_stream — see music_assistant/providers/snapcast/
 # player.py::_get_or_create_stream in the nixpkgs package source.
 #
-# Post-deploy: Settings → Player Providers → Snapcast → enable "Use existing
-# Snapserver", host 127.0.0.1, control port 1705.  Do NOT use MA's built-in
-# snapserver (it would bind the same ports).
+# Post-deploy: `music-assistant-setup` configures base URL, HA integration,
+# Snapcast player provider, local music library, and OAuth self-registration.
 #
 # Local music library
 # -------------------
@@ -59,6 +58,15 @@ in
       8097 # MA stream server (players / imageproxy)
     ];
     auth = "forward-auth";
+    # The web UI probes /info and opens /ws before Music Assistant's own login.
+    # Those paths must reach MA directly; Authentik still protects the UI shell.
+    caddy.authBypassPaths = [
+      "/info"
+      "/ws"
+      "/setup"
+      "/auth/*"
+      "/api"
+    ];
     account = {
       uid = 964;
       extraGroups = [ "media" ];
@@ -138,6 +146,7 @@ in
       export HA_PUBLIC_URL="https://ha.${domain}"
       export HASS_BIN="${config.services.home-assistant.package}/bin/hass"
       export HASS_CONFIG="/var/lib/hass"
+      export MUSIC_LIBRARY="${musicLibrary}"
       # Music Assistant's Snapcast players come from the snapserver (services/snapcast.nix).
       export SNAPSERVER_CONTROL_PORT="${toString config.services.snapserver.settings.tcp-control.port}"
       exec music-assistant-setup

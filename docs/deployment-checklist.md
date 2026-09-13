@@ -664,23 +664,17 @@ Assistant to the snapserver, so every Snapcast client becomes a player.
 ### 3m. Music Assistant
 
 Music Assistant is the music controller; Snapcast remains the distribution layer.
+`music-assistant-setup` runs on deploy and configures the base URL, Home
+Assistant integration, Snapcast player provider, and local music library.
 
-1. Visit `https://music.<domain>` (Authentik forward-auth).
-2. **Snapcast player provider** — Settings → Player Providers → Add → Snapcast:
-   - Enable **Use existing Snapserver**.
-   - Host: `127.0.0.1`, control port: `1705`.
-   - Do **not** use MA's built-in snapserver (it conflicts with the declarative
-     `services.snapserver` on the same ports).
-3. **Local filesystem music provider** — Settings → Music Providers → Add →
-   Local Filesystem:
-   - Path: `/srv/storage/b/media/music` (NFS from Pi; scans fail gracefully
-     while the Pi is down).
-4. **Base URL** — Settings → System → set Base URL to `https://music.<domain>`.
-5. **Home Assistant** — Settings → Devices & Services → Add Integration →
-   Music Assistant → URL `http://127.0.0.1:8095`.
-   - Keep HA's legacy **slimproto** (Squeezebox) integration disabled.
-6. Verify the Pi snapclient appears as a Snapcast player in MA, then play a
-   test track. Confirm sync at `https://audio.<domain>` (Snapcast web UI).
+1. Visit `https://music.<domain>` (Authentik forward-auth, then **Login with
+   Home Assistant** in Music Assistant).
+2. Verify the Pi snapclient appears as a Snapcast player, then play a test
+   track. Confirm sync at `https://audio.<domain>` (Snapcast web UI).
+
+If the UI asks for a server address, redeploy so Caddy bypasses `/info` and
+`/ws` for Music Assistant, then restart setup:
+`systemctl restart music-assistant-setup`.
 
 > The `music.<domain>` subdomain may be consolidated to `audio.<domain>` when
 > Snapcast's own web UI is retired in a later change.

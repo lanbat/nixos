@@ -64,15 +64,29 @@ let
   # Companion apps and REST clients authenticate directly with the app (HA
   # tokens, Immich API keys), so /auth/token, /api/* and the Immich app's
   # server discovery (/.well-known/immich) bypass Authentik when apiClients
-  # is set.
+  # is set.  Per-service caddy.authBypassPaths adds more (Music Assistant
+  # needs /info and /ws so its UI can auto-connect behind the proxy).
+  authBypassPaths =
+    svc:
+    (lib.optionals svc.apiClients [
+      "/auth/token*"
+      "/api/*"
+      "/.well-known/immich"
+    ])
+    ++ svc.caddy.authBypassPaths;
+
   forwardAuthWithApiBypass =
     svc:
+    let
+      paths = authBypassPaths svc;
+      pathMatcher = lib.concatStringsSep " " (map (p: "path ${p}") paths);
+    in
     lib.concatStringsSep "\n" [
       ''
         route {
           ${authentikOutpostProxy}
-          @api_clients path /auth/token* /api/* /.well-known/immich
-          handle @api_clients {
+          @auth_bypass ${pathMatcher}
+          handle @auth_bypass {
             ${reverseProxy svc}
           }
           handle {
@@ -108,7 +122,7 @@ let
         ''
         (handleErrors svc)
         (
-          if svc.auth == "forward-auth" && svc.apiClients then
+          if svc.auth == "forward-auth" && authBypassPaths svc != [ ] then
             forwardAuthWithApiBypass svc
           else if svc.auth == "forward-auth" then
             forwardAuthRoute svc

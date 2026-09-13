@@ -34,6 +34,7 @@ HASS_BIN = os.environ["HASS_BIN"]
 HASS_CONFIG = os.environ.get("HASS_CONFIG", "/var/lib/hass")
 HA_TOKEN_CLIENT_NAME = "Music Assistant"
 MA_TOKEN_NAME = "Home Assistant"
+MUSIC_LIBRARY = os.environ.get("MUSIC_LIBRARY", "/srv/storage/b/media/music")
 
 
 def log(message: str) -> None:
@@ -139,6 +140,40 @@ async def configure_ma_webserver(client: MusicAssistantClient) -> bool:
         return False
     log(f"setting music assistant base_url to {MA_PUBLIC_URL}")
     await client.config.save_core_config("webserver", {"base_url": MA_PUBLIC_URL})
+    return True
+
+
+async def configure_ma_self_registration(client: MusicAssistantClient) -> bool:
+    current = await client.config.get_core_config_value(
+        "webserver", "auth_allow_self_registration"
+    )
+    if current is True:
+        return False
+    log("enabling home assistant oauth self-registration on the music assistant web ui")
+    await client.config.save_core_config(
+        "webserver", {"auth_allow_self_registration": True}
+    )
+    return True
+
+
+async def configure_ma_filesystem_provider(client: MusicAssistantClient) -> bool:
+    values = {"path": MUSIC_LIBRARY}
+    providers = await client.config.get_provider_configs(
+        provider_domain="filesystem_local", include_values=True
+    )
+    if providers:
+        provider = providers[0]
+        current = provider.values or {}
+        if current.get("path") == values["path"]:
+            return False
+        log(f"updating local filesystem music provider path to {MUSIC_LIBRARY}")
+        await client.config.save_provider_config(
+            "filesystem_local", values, instance_id=provider.instance_id
+        )
+        return True
+
+    log(f"adding local filesystem music provider at {MUSIC_LIBRARY}")
+    await client.config.save_provider_config("filesystem_local", values)
     return True
 
 
@@ -477,35 +512,22 @@ async def async_main() -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     os.chmod(STATE_DIR, 0o700)
 
-    if COMPLETE_MARKER.exists() and SNAPCAST_MARKER.exists():
-        log("already complete")
-        return
-
     wait_for_http(f"{MA_URL}/info")
     wait_for_http(f"{HA_INTERNAL_URL}/")
 
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        if COMPLETE_MARKER.exists():
-            # Set up before the Snapcast provider was added: add only that.
-            ma_access_token = await ma_login(session)
-            await with_ma_client(session, ma_access_token, configure_ma_snapcast_provider)
-            mark_done(SNAPCAST_MARKER)
-            log("complete")
-            return
-
         await ensure_ma_admin(session)
-
-        ha_token = await create_ha_token_for_ma(session)
         ma_access_token = await ma_login(session)
 
-        async def configure_ma(client: MusicAssistantClient) -> bool:
-            hass_changed = await configure_ma_hass_provider(client, ha_token)
+        async def reconcile_ma(client: MusicAssistantClient) -> bool:
             web_changed = await configure_ma_webserver(client)
+            reg_changed = await configure_ma_self_registration(client)
             snapcast_changed = await configure_ma_snapcast_provider(client)
-            return hass_changed or web_changed or snapcast_changed
+            library_changed = await configure_ma_filesystem_provider(client)
+            return web_changed or reg_changed or snapcast_changed or library_changed
 
-        changed = await with_ma_client(session, ma_access_token, configure_ma)
+        changed = await with_ma_client(session, ma_access_token, reconcile_ma)
 
         if changed:
             log("restarting music assistant to apply configuration")
@@ -513,6 +535,24 @@ async def async_main() -> None:
             wait_for_http(f"{MA_URL}/info")
             await asyncio.sleep(5)
             ma_access_token = await ma_login(session)
+
+        if COMPLETE_MARKER.exists() and SNAPCAST_MARKER.exists():
+            log("already complete")
+            return
+
+        if COMPLETE_MARKER.exists():
+            # Set up before the Snapcast provider was added: add only that.
+            await with_ma_client(session, ma_access_token, configure_ma_snapcast_provider)
+            mark_done(SNAPCAST_MARKER)
+            log("complete")
+            return
+
+        ha_token = await create_ha_token_for_ma(session)
+
+        async def configure_ma(client: MusicAssistantClient) -> bool:
+            return await configure_ma_hass_provider(client, ha_token)
+
+        await with_ma_client(session, ma_access_token, configure_ma)
 
         ma_token = await create_ma_token_for_ha(session, ma_access_token)
         update_ha_config_entry(ma_token)
