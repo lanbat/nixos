@@ -51,7 +51,40 @@
         # Infinite retention — prune old data manually or per-bucket as needed.
         retention = 0;
       };
+      organizations.homelab = {
+        buckets.metrics.retention = 0;
+        # The write token Telegraf uses on the server and the Pi, with the
+        # value from telegraf-token.age (see influxdb2-telegraf-token below).
+        auths.telegraf = {
+          description = "Telegraf on the server and the Pi";
+          tokenFile = "/run/influxdb2-telegraf-token/token";
+          writeBuckets = [ "metrics" ];
+        };
+      };
     };
+  };
+
+  # telegraf-token.age holds TELEGRAF_INFLUXDB_TOKEN=<token> for Telegraf's
+  # environment; provisioning wants the bare token. The module reads it in
+  # influxdb2's preStart, which runs as the influxdb2 user, so the directory
+  # and file belong to its group.
+  systemd.services.influxdb2-telegraf-token = {
+    description = "Bare Telegraf write token for InfluxDB provisioning";
+    before = [ "influxdb2.service" ];
+    requiredBy = [ "influxdb2.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      Group = "influxdb2";
+      RuntimeDirectory = "influxdb2-telegraf-token";
+      RuntimeDirectoryMode = "0750";
+      UMask = "0027";
+    };
+    script = ''
+      sed -n 's/^TELEGRAF_INFLUXDB_TOKEN=//p' ${config.age.secrets.telegraf-token.path} \
+        > /run/influxdb2-telegraf-token/token
+      test -s /run/influxdb2-telegraf-token/token
+    '';
   };
 
   lanbat.services.influxdb = {
@@ -63,10 +96,12 @@
   };
 
   # The Pi's Telegraf writes metrics here; nobody else on the LAN may connect.
+  # Not loopback: the server's own Telegraf and Grafana connect over it, and
+  # without ! -i lo the rule dropped them too.
   networking.firewall = {
     allowedTCPPorts = [ 8086 ];
     extraCommands = ''
-      iptables -I INPUT -p tcp --dport 8086 ! -s ${config.lanbat.piIp} -j DROP
+      iptables -I INPUT -p tcp --dport 8086 ! -i lo ! -s ${config.lanbat.piIp} -j DROP
     '';
   };
 }

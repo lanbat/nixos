@@ -16,6 +16,7 @@
     serverHostname = "server";
     serverInterface = "eno1";
     piHostname = "pi5";
+    piInterface = "end0";
     nfsIdmapdDomain = "home.lan";
     timezone = "UTC";
     phoneRegion = "GB";
@@ -27,6 +28,15 @@
     serverDisk = "/dev/disk/by-id/example-system-disk";
     piStorageDriveA = "example-storage-a";
     piStorageDriveB = "example-storage-b";
+    piTvFrontend = true;
+    haLlm = {
+      baseUrl = "https://llm.example.com/v1";
+      model = "example-model";
+    };
+    voiceRooms = {
+      server = "Office";
+      pi = "Living Room";
+    };
     adminSshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExampleExample example";
   };
 }

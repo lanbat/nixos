@@ -61,7 +61,7 @@ modules/
   server/                 control LUKS layer and Tang gating, backups
   pi/                     Clevis unlock, storage, NFS exports, TV frontend, audio, voice, metrics
 tests/                    assertion tests and the workload-gate VM test
-pkgs/                     CA landing page, TV launcher, on-demand activator, helper scripts
+pkgs/                     CA landing page, ES-DE and TV sessions, on-demand activator, helper scripts
 secrets/                  agenix-encrypted secrets
 docs/                     design, operations and deployment guides
 ```
@@ -128,7 +128,7 @@ step-by-step guide.
 ## Design principles
 
 - **Server is the brain** — all compute, databases, SSO, and reverse proxy live on the server.
-- **Pi is storage + TV** — encrypted drives, NFS export, Kodi, RetroArch.
+- **Pi is storage + TV** — encrypted drives, NFS export, Kodi and EmulationStation.
 - **Fail safe** — NFS-dependent services stop when the Pi is unreachable; they restart automatically when storage returns.
 - **No Kubernetes** — systemd + Podman + NixOS modules are sufficient and far simpler.
 - **Minimal containers** — NixOS native services are preferred where modules exist (Nextcloud, Jellyfin, HA, Samba, etc.). Containers are used where native packaging is impractical (Authentik, Immich, Frigate, etc.).

@@ -62,6 +62,9 @@ let
 in
 {
   # ── Storage A initialisation ───────────────────────────────────────────────
+  # Runs after storage-a is unlocked and mounted, creates the top-level
+  # directory tree with correct permissions, then refreshes the NFS exports so
+  # the drive is served (modules/pi/nfs-exports.nix exports it once mounted).
   systemd.services."storage-a-init" = {
     description = "Initialise storage-a directory tree after unlock";
     requires = [ "storage-a-unlock.service" ];

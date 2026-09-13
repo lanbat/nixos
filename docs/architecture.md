@@ -28,7 +28,7 @@
                          │  │  Vaultwarden (8222)      Grafana (3030)         │ │      │
                          │  │  InfluxDB (8086)         Music Assistant (8095) │ │      │
                          │  │  Snapserver (1704/1780)  Telegraf               │ │      │
-                         │  │  Wyoming pipeline                             │ │      │
+                         │  │  Wyoming pipeline + satellite (10700)           │ │      │
                          │  │  Jellyfin / Frigate / Immich / qBittorrent      │ │      │
                          │  │  Bitmagnet / Syncthing / Homepage / SearXNG     │ │      │
                          │  └──────────────────────────┬──────────────────────┘ │      │
@@ -45,9 +45,9 @@
                          │  SD card: NixOS OS (boots independently of Tang)            │
                          │                                                              │
                          │  NFS server  ──►  exports /mnt/storage-{a,b}               │
-                         │  TV Launcher (openbox)                                       │
+                         │  TV sessions (tv-switch, controller hotkey)                  │
                          │    ├── Kodi                                                  │
-                         │    └── RetroArch                                             │
+                         │    └── EmulationStation (ES-DE) + RetroArch                  │
                          │  Snapclient ──► server:1704                                  │
                          │  Wyoming Satellite (10700) ◄── HA on server                  │
                          │  Telegraf → server:8086                                      │
@@ -83,7 +83,9 @@
 - Identity and SSO
 - MQTT broker
 - Tang trust anchor
-- Voice assistant pipeline (Wyoming: STT, TTS, wake word)
+- Voice assistant pipeline (Wyoming: wake word, STT, TTS; Home Assistant's
+  conversation agent, backed by an external OpenAI-compatible LLM) and a voice
+  satellite (microphone + internal speaker)
 - Metrics storage (InfluxDB) and dashboards (Grafana)
 - Metrics collection from both machines (Telegraf)
 
@@ -107,6 +109,7 @@
 | Frigate | Caddy forward-auth (Authentik) | No native OIDC |
 | qBittorrent | Caddy forward-auth + local app auth | No OIDC |
 | Bitmagnet | Caddy forward-auth (Authentik) | No native OIDC |
+| RomM | Caddy forward-auth (Authentik), then RomM accounts | OIDC not configured |
 | SearXNG | None (intentional) | Public LAN search |
 | Samba | Local smbpasswd (optionally Authentik LDAP) | SMB doesn't speak OIDC |
 | MQTT | Local password file | IoT devices don't speak OIDC |
@@ -116,8 +119,9 @@
 | Syncthing | Caddy forward-auth (Authentik) | Sync clients use port 22000 directly, not Caddy |
 | Music Assistant | Caddy forward-auth (Authentik) | No native OIDC; stream port (8097) not exposed on firewall |
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming port (1704) is LAN-open |
-| Wyoming satellite | No auth (firewall-restricted to server IP) | Internal protocol; only HA connects |
+| Wyoming satellites | No auth (Pi: firewall-restricted to server IP; server: localhost only) | Internal protocol; only HA connects |
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
+| Conversation LLM (`lanbat.haLlm`) | API key (agenix) | External OpenAI-compatible API; only HA calls it, outbound |
 
 ## Hostname map
 
@@ -132,6 +136,7 @@
 | `nvr.<domain>` | Frigate NVR |
 | `torrent.<domain>` | qBittorrent |
 | `bitmagnet.<domain>` | Bitmagnet (on-demand) |
+| `romm.<domain>` | RomM (on-demand) |
 | `search.<domain>` | SearXNG |
 | `ca.<domain>` | CA cert distribution |
 | `vault.<domain>` | Vaultwarden password manager |
@@ -147,7 +152,7 @@ This is configured in your router/DNS and is out of scope for this repo.
 
 Services with `lanbat.services.<name>.onDemand` start on the first HTTP request via
 the activator proxy (`modules/wiring/on-demand.nix`) and stop after `idleMinutes` without
-requests. Bitmagnet is the only one; it stops after 3 days idle.
+requests. Bitmagnet stops after 3 days idle, RomM after 30 minutes.
 
 The activator is a lightweight Python proxy that:
 1. Receives requests meant for Bitmagnet.

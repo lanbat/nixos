@@ -33,6 +33,14 @@ nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql}  # wiring 
 
 The workload-gate and postgresql tests boot VMs and need KVM. CI runs all three on every pull request.
 
+Two slower tests boot the complete host configurations. CI only evaluates them, so run
+them when you change a host, a service's tier or the unlock scripts:
+
+```bash
+nix build -L .#checks.x86_64-linux.server  # KVM, about 10 GB of free memory, 15–45 minutes
+nix build -L .#checks.aarch64-linux.pi     # an aarch64 machine with KVM, such as the Pi (see tests/pi.nix)
+```
+
 ## Pull requests
 
 - Keep each pull request focused on one change.
@@ -144,6 +152,7 @@ when `local.nix` does, and only a `path:` flake reference includes it
 | `config.lanbat.serverHostname` | Server hostname |
 | `config.lanbat.serverInterface` | Server network interface for the static address |
 | `config.lanbat.piHostname` | NFS mount target / Pi hostname |
+| `config.lanbat.piInterface` | Pi network interface for the static address |
 | `config.lanbat.nfsIdmapdDomain` | NFSv4 ID mapping domain (must match on both hosts) |
 | `config.lanbat.timezone` | System timezone + service TZ env vars |
 | `config.lanbat.phoneRegion` | Phone number formatting (Nextcloud) |
@@ -153,6 +162,9 @@ when `local.nix` does, and only a `path:` flake reference includes it
 | `config.lanbat.serverDisk` | Server system disk, partitioned by `hosts/server/disk.nix` |
 | `config.lanbat.piStorageDriveA` | Pi NVMe drive A by-id filename |
 | `config.lanbat.piStorageDriveB` | Pi NVMe drive B by-id filename |
+| `config.lanbat.piTvFrontend` | Whether the Pi runs the TV frontend (Kodi and EmulationStation) |
+| `config.lanbat.haLlm` | Home Assistant's conversation agent: an OpenAI-compatible API's base URL and model (optional) |
+| `config.lanbat.voiceRooms` | Home Assistant areas of the voice satellites, whose Music Assistant speakers play the replies (optional) |
 | `config.lanbat.adminSshKey` | Admin SSH public key (both hosts) |
 | `config.lanbat.zigbeeVendorId` | Zigbee dongle USB vendor ID |
 | `config.lanbat.zigbeeProductId` | Zigbee dongle USB product ID |
@@ -177,7 +189,7 @@ availability requirements:
   units in `units`. The wiring creates the mode-0000 stubs, bind-mounts
   `/mnt/workload/<dir>` over them, and moves the units under `workload-online.target`.
 - Current members: Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba,
-  qBittorrent, Bitmagnet, PostgreSQL (workload instance)
+  qBittorrent, Bitmagnet, RomM, PostgreSQL (workload instance)
 
 When in doubt, prefer **always-on** for monitoring/automation/infrastructure services
 and **workload-gated** for personal data vaults (passwords, photos, documents, media).
@@ -245,7 +257,7 @@ On the Pi: 2049 (NFS) and 10700 (Wyoming satellite), both restricted to the serv
 
 ### Caddy auth
 - Services with **native OIDC** (Nextcloud, Immich, Grafana): `auth = "app"`.
-- Services with **no auth** of their own (Frigate, qBittorrent, Bitmagnet): `auth = "forward-auth"`.
+- Services with **no auth** of their own (Frigate, qBittorrent, Bitmagnet, RomM): `auth = "forward-auth"`.
 - Services with **their own account system** (Vaultwarden, Jellyfin): `auth = "app"` and
   `apiClients = true` — clients need direct API access.
 - Deliberately open services (SearXNG, Homepage, the CA page): `auth = "none"`.

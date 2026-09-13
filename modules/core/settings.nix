@@ -76,6 +76,12 @@ in
       description = "Hostname of the Raspberry Pi. The server mounts NFS from it.";
     };
 
+    piInterface = mkOption {
+      type = types.str;
+      example = "end0";
+      description = "Network interface of the Raspberry Pi that gets piIp. Find it with: ip -o link";
+    };
+
     nfsIdmapdDomain = mkOption {
       type = types.str;
       example = "home.lan";
@@ -148,6 +154,76 @@ in
       type = types.str;
       example = "nvme-Samsung_SSD_970_EVO_1TB_XYZ456";
       description = "/dev/disk/by-id/ filename (without the prefix) of the Pi's storage drive B.";
+    };
+
+    # ── Raspberry Pi roles ────────────────────────────────────────────────────
+    piTvFrontend = mkOption {
+      type = types.bool;
+      example = false;
+      description = ''
+        Whether the Pi runs the TV frontend (Kodi and EmulationStation
+        sessions, modules/pi/tv.nix) on its HDMI output. Without it the Pi is a
+        headless storage host.
+      '';
+    };
+
+    # ── Services ──────────────────────────────────────────────────────────────
+    # Declared here rather than in the service, because local.nix, which may set
+    # it, is loaded by both hosts. services/immich.nix gives it a default.
+    immich.adminEmail = mkOption {
+      type = types.str;
+      example = "alice@example.com";
+      description = ''
+        Email for the bootstrap Immich admin. Must match the Authentik user's
+        email so the first OAuth login links to this account.
+      '';
+    };
+
+    haLlm = mkOption {
+      type = types.nullOr (
+        types.submodule {
+          options = {
+            baseUrl = mkOption {
+              type = types.strMatching "https?://.+";
+              example = "https://api.runpod.ai/v2/<endpoint-id>/openai/v1";
+              description = "Base URL of the OpenAI-compatible API, ending in /v1.";
+            };
+            model = mkOption {
+              type = types.str;
+              example = "qwen3-8b-ha";
+              description = "Name of the model the API serves.";
+            };
+          };
+        }
+      );
+      # An exception to the no-defaults rule: without an LLM, Home Assistant's
+      # own conversation agent answers.
+      default = null;
+      description = ''
+        The conversation agent of Home Assistant's voice pipeline: an
+        OpenAI-compatible chat completions API, with its API key in
+        secrets/ha-llm-api-key.age. null uses Home Assistant's own agent.
+      '';
+    };
+
+    voiceRooms = {
+      server = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "Office";
+        description = "Home Assistant area of the server's voice satellite.";
+      };
+      pi = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "Living Room";
+        description = ''
+          Home Assistant area of the Pi's voice satellite. A satellite with an
+          area speaks its replies on the area's Music Assistant players, with
+          the token in secrets/ha-voice-token.age; without one, or with no
+          players there, on its own speaker.
+        '';
+      };
     };
 
     # ── Access ────────────────────────────────────────────────────────────────

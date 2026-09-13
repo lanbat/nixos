@@ -25,6 +25,10 @@ STATE_DIR = Path(os.environ.get("STATE_DIR", "/var/lib/music-assistant/.lanbat-s
 COMPLETE_MARKER = STATE_DIR / "complete"
 HA_TOKEN_PATH = STATE_DIR / "ha-token"
 MA_TOKEN_PATH = STATE_DIR / "ma-token"
+# Added later than the rest, so servers set up before still get it.
+SNAPCAST_MARKER = STATE_DIR / "snapcast-provider"
+SNAPSERVER_HOST = os.environ.get("SNAPSERVER_HOST", "127.0.0.1")
+SNAPSERVER_CONTROL_PORT = int(os.environ.get("SNAPSERVER_CONTROL_PORT", "1705"))
 HA_CONFIG_ENTRIES = Path(os.environ.get("HA_CONFIG_ENTRIES", "/var/lib/hass/.storage/core.config_entries"))
 HASS_BIN = os.environ["HASS_BIN"]
 HASS_CONFIG = os.environ.get("HASS_CONFIG", "/var/lib/hass")
@@ -165,6 +169,37 @@ async def configure_ma_hass_provider(
     log("adding home assistant provider to music assistant")
     await client.config.save_provider_config("hass", values)
     return True
+
+
+async def configure_ma_snapcast_provider(client: MusicAssistantClient) -> bool:
+    """Use the host's snapserver, so its Snapcast clients become players."""
+    values = {
+        "snapcast_use_external_server": True,
+        "snapcast_server_host": SNAPSERVER_HOST,
+        "snapcast_server_control_port": SNAPSERVER_CONTROL_PORT,
+    }
+    providers = await client.config.get_provider_configs(
+        provider_domain="snapcast", include_values=True
+    )
+    if providers:
+        provider = providers[0]
+        current = provider.values or {}
+        if all(current.get(key) == value for key, value in values.items()):
+            return False
+        log("updating the snapcast player provider in music assistant")
+        await client.config.save_provider_config(
+            "snapcast", values, instance_id=provider.instance_id
+        )
+        return True
+
+    log("adding the snapcast player provider to music assistant")
+    await client.config.save_provider_config("snapcast", values)
+    return True
+
+
+def mark_done(marker: Path) -> None:
+    marker.write_text("ok\n")
+    os.chmod(marker, 0o600)
 
 
 def clear_ha_ip_bans() -> None:
@@ -442,7 +477,7 @@ async def async_main() -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     os.chmod(STATE_DIR, 0o700)
 
-    if COMPLETE_MARKER.exists():
+    if COMPLETE_MARKER.exists() and SNAPCAST_MARKER.exists():
         log("already complete")
         return
 
@@ -451,6 +486,14 @@ async def async_main() -> None:
 
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
+        if COMPLETE_MARKER.exists():
+            # Set up before the Snapcast provider was added: add only that.
+            ma_access_token = await ma_login(session)
+            await with_ma_client(session, ma_access_token, configure_ma_snapcast_provider)
+            mark_done(SNAPCAST_MARKER)
+            log("complete")
+            return
+
         await ensure_ma_admin(session)
 
         ha_token = await create_ha_token_for_ma(session)
@@ -459,7 +502,8 @@ async def async_main() -> None:
         async def configure_ma(client: MusicAssistantClient) -> bool:
             hass_changed = await configure_ma_hass_provider(client, ha_token)
             web_changed = await configure_ma_webserver(client)
-            return hass_changed or web_changed
+            snapcast_changed = await configure_ma_snapcast_provider(client)
+            return hass_changed or web_changed or snapcast_changed
 
         changed = await with_ma_client(session, ma_access_token, configure_ma)
 
@@ -484,8 +528,8 @@ async def async_main() -> None:
         else:
             log("home assistant oauth login is available on the music assistant web ui")
 
-    COMPLETE_MARKER.write_text("ok\n")
-    os.chmod(COMPLETE_MARKER, 0o600)
+    mark_done(SNAPCAST_MARKER)
+    mark_done(COMPLETE_MARKER)
     log("complete")
 
 

@@ -25,6 +25,7 @@
     serverHostname = "server";
     serverInterface = "CHANGE_ME"; # e.g. "enp1s0"; find with: ip -o link
     piHostname = "pi5"; # or piIp if hostname resolution is unreliable
+    piInterface = "end0"; # the Pi 5's on-board Ethernet; find with: ip -o link
 
     # ── DNS ───────────────────────────────────────────────────────────────────
     domain = "CHANGE_ME"; # e.g. "home.example.com"; *.<domain> must resolve to the server
@@ -42,6 +43,24 @@
     haLongitude = "-0.1278";
     haElevation = 11; # metres
 
+    # ── Home Assistant voice assistant ────────────────────────────────────────
+    # The conversation agent: an OpenAI-compatible chat completions API (vLLM,
+    # a RunPod serverless endpoint, …), with its API key in
+    # secrets/ha-llm-api-key.age. Leave it out for Home Assistant's own agent.
+    haLlm = {
+      baseUrl = "CHANGE_ME"; # e.g. "https://api.runpod.ai/v2/<endpoint-id>/openai/v1"
+      model = "CHANGE_ME"; # the model name the API serves
+    };
+
+    # The voice satellites' rooms, as Home Assistant area names. Replies play on
+    # the Music Assistant speakers in the satellite's room; leave a room out to
+    # play them on that satellite's own speaker. Needs secrets/ha-voice-token.age
+    # and ha-voice-refresh-token.age: bash secrets/generate-ha-voice-token.sh
+    voiceRooms = {
+      server = "CHANGE_ME"; # e.g. "Office"
+      pi = "CHANGE_ME"; # e.g. "Living Room"
+    };
+
     # ── Disks ─────────────────────────────────────────────────────────────────
     # The server's system disk. nixos-anywhere ERASES it and applies
     # hosts/server/disk.nix. From the installer: ls -l /dev/disk/by-id/
@@ -51,6 +70,11 @@
     # On the Pi: ls -l /dev/disk/by-id/ | grep nvme | grep -v part
     piStorageDriveA = "CHANGE_ME"; # e.g. "nvme-Samsung_SSD_970_EVO_1TB_ABC123"
     piStorageDriveB = "CHANGE_ME";
+
+    # ── Raspberry Pi ──────────────────────────────────────────────────────────
+    # The TV frontend (Kodi and EmulationStation) on the Pi's HDMI output.
+    # false gives a headless storage host, and a quicker first install.
+    piTvFrontend = true;
 
     # ── Access ────────────────────────────────────────────────────────────────
     # Your SSH public key (cat ~/.ssh/id_ed25519.pub). deploy-rs logs in with it.

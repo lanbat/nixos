@@ -2,11 +2,14 @@
   description = "lanbat homelab — server + Raspberry Pi 5";
 
   inputs = {
-    # One nixpkgs for both hosts.
+    # nixpkgs of the server. The Pi uses nixos-raspberrypi's own pinned nixpkgs
+    # (see mkPi), because its binary cache only has the Raspberry Pi kernel and
+    # firmware built for that nixpkgs.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # Raspberry Pi 5 hardware support.
-    nixos-hardware.url = "github:NixOS/nixos-hardware";
+    # Raspberry Pi 5 support: vendor kernel, firmware and the firmware-partition
+    # bootloader. Doesn't follow our nixpkgs, to keep its binary cache usable.
+    nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
 
     # Secrets as age-encrypted files (secrets/).
     agenix = {
@@ -31,7 +34,7 @@
     {
       self,
       nixpkgs,
-      nixos-hardware,
+      nixos-raspberrypi,
       agenix,
       disko,
       deploy-rs,
@@ -64,14 +67,40 @@
           ./hosts/server
         ];
 
+      # nixos-raspberrypi's nixosSystem uses its pinned nixpkgs and trusts its
+      # binary cache, so the Pi downloads its kernel instead of compiling it.
       mkPi =
         settings:
-        mkHost settings [
-          nixos-hardware.nixosModules.raspberry-pi-5
-          ./hosts/pi
-        ];
+        nixos-raspberrypi.lib.nixosSystem {
+          specialArgs = { inherit inputs nixos-raspberrypi; };
+          modules = [
+            agenix.nixosModules.default
+            { nixpkgs.config.allowUnfree = true; }
+            settings
+            ./hosts/pi
+            ./hosts/pi/hardware.nix
+          ];
+        };
 
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
+
+      # deploy-rs's library, with nixpkgs' deploy-rs, which is in the binary
+      # cache. The flake input's own package is built from source against our
+      # nixpkgs, and crates.io refuses to serve some of its dependencies.
+      deployLib =
+        system:
+        (import nixpkgs {
+          inherit system;
+          overlays = [
+            deploy-rs.overlays.default
+            (final: prev: {
+              deploy-rs = {
+                inherit (nixpkgs.legacyPackages.${system}) deploy-rs;
+                inherit (prev.deploy-rs) lib;
+              };
+            })
+          ];
+        }).deploy-rs.lib;
     in
     {
       nixosConfigurations = {
@@ -88,7 +117,7 @@
           hostname = self.nixosConfigurations.server.config.lanbat.serverIp;
           sshUser = "admin";
           user = "root";
-          profiles.system.path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.server;
+          profiles.system.path = (deployLib "x86_64-linux").activate.nixos self.nixosConfigurations.server;
         };
         pi = {
           hostname = self.nixosConfigurations.pi.config.lanbat.piIp;
@@ -96,7 +125,7 @@
           user = "root";
           # Build on the Pi itself rather than cross-compiling on the workstation.
           remoteBuild = true;
-          profiles.system.path = deploy-rs.lib.aarch64-linux.activate.nixos self.nixosConfigurations.pi;
+          profiles.system.path = (deployLib "aarch64-linux").activate.nixos self.nixosConfigurations.pi;
         };
       };
 
@@ -104,14 +133,24 @@
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };
         music-assistant = import ./tests/music-assistant.nix { inherit pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
+        server = import ./tests/server.nix {
+          inherit pkgs;
+          inherit (inputs) agenix disko;
+        };
         workload-gate = import ./tests/workload-gate.nix { inherit pkgs; };
       }
-      // lib.optionalAttrs hasLocal (deploy-rs.lib.x86_64-linux.deployChecks self.deploy);
+      // lib.optionalAttrs hasLocal ((deployLib "x86_64-linux").deployChecks self.deploy);
+
+      # Runs on an aarch64 machine with KVM (the Pi itself), with the Pi's nixpkgs.
+      checks.aarch64-linux.pi = import ./tests/pi.nix {
+        pkgs = nixos-raspberrypi.inputs.nixpkgs.legacyPackages.aarch64-linux;
+        inherit (inputs) agenix;
+      };
 
       # `nix develop` provides the deploy, install and secrets tools.
       devShells.x86_64-linux.default = pkgs.mkShell {
         packages = [
-          deploy-rs.packages.x86_64-linux.default
+          pkgs.deploy-rs
           agenix.packages.x86_64-linux.default
           pkgs.nixos-anywhere
         ];

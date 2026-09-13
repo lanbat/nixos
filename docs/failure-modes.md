@@ -7,7 +7,7 @@
    Authentik, HA, Grafana, InfluxDB, Mosquitto, Frigate, Music Assistant, Snapcast, Wyoming, SearXNG, Telegraf.
 3. Admin SSHes in and runs `sudo unlock-control` → Tang starts on port 7500.
 4. Admin runs `sudo unlock-workload` → the PostgreSQL workload instance, Nextcloud, Immich,
-   Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet come up.
+   Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM come up.
 5. Pi boots from SD card. After network is up, `storage-a-unlock` and `storage-b-unlock`
    contact Tang, unlock both NVMe drives (retries every 5 min until Tang is reachable).
 6. `/mnt/storage-a` and `/mnt/storage-b` mount on the Pi. NFS server starts.
@@ -92,7 +92,7 @@ Services that stay up during Pi reboot (always-on tier):
 - SearXNG ✓
 - Music Assistant ✓ (library scans fail while Pi NFS is down; service stays up)
 - Snapserver ✓
-- Wyoming pipeline (STT/TTS/wake word) ✓
+- Wyoming pipeline (STT/TTS/wake word) and the server's voice satellite ✓
 - Telegraf (server) ✓
 - Redis (Immich) ✓
 - Homepage ✓
@@ -106,8 +106,14 @@ Workload-gated services that pause and restart (NFS-dependent):
 - Syncthing ⏸→▶ (synced folder is on Drive B)
 
 Note: the Wyoming satellite on the Pi also goes down during a Pi reboot, so
-voice assistant commands will be unavailable until the Pi is back up.
-The server-side Wyoming pipeline (STT/TTS/wake word) stays running throughout.
+voice commands to it will be unavailable until the Pi is back up.
+The server-side Wyoming pipeline (STT/TTS/wake word) and the server's own
+satellite stay running throughout.
+
+The conversation agent's LLM (`lanbat.haLlm`) runs outside the homelab. While
+it is unreachable, or starting after scaling to zero, commands that Home
+Assistant's local intents understand ("turn on the kitchen light") still work;
+anything else fails or waits for the endpoint.
 
 Pi Telegraf also goes down during a Pi reboot, causing a gap in Pi metrics.
 Server metrics continue uninterrupted.

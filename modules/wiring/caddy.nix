@@ -61,15 +61,17 @@ let
     }
   '';
 
-  # Companion apps and REST clients authenticate directly with HA tokens, so
-  # /auth/token and /api/* bypass Authentik when apiClients is set.
+  # Companion apps and REST clients authenticate directly with the app (HA
+  # tokens, Immich API keys), so /auth/token, /api/* and the Immich app's
+  # server discovery (/.well-known/immich) bypass Authentik when apiClients
+  # is set.
   forwardAuthWithApiBypass =
     svc:
     lib.concatStringsSep "\n" [
       ''
         route {
           ${authentikOutpostProxy}
-          @api_clients path /auth/token* /api/*
+          @api_clients path /auth/token* /api/* /.well-known/immich
           handle @api_clients {
             ${reverseProxy svc}
           }

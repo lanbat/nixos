@@ -31,6 +31,9 @@ wait_for_jellyfin() {
   return 1
 }
 
+# The public endpoint: /System/Info needs a login, so without one the wizard
+# always looked incomplete, and the startup calls then failed with 401 on a
+# set-up server.
 wizard_complete() {
   curl -fsS "${JELLYFIN_URL}/System/Info/Public" | jq -e '.StartupWizardCompleted == true' >/dev/null
 }

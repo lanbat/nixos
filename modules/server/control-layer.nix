@@ -61,10 +61,19 @@ let
     '';
 in
 {
-  options.lanbat.layers.controlDevice = lib.mkOption {
-    type = lib.types.str;
-    example = "/dev/lanbat/control";
-    description = "Block device holding the control LUKS volume. Set by the host's disk layout.";
+  options.lanbat.layers = {
+    controlDevice = lib.mkOption {
+      type = lib.types.str;
+      example = "/dev/lanbat/control";
+      description = "Block device holding the control LUKS volume. Set by the host's disk layout.";
+    };
+
+    controlFileSystems = lib.mkOption {
+      type = lib.types.attrsOf lib.types.anything;
+      internal = true;
+      readOnly = true;
+      description = "The control layer's mounts. Tests pass them to virtualisation.fileSystems.";
+    };
   };
 
   config = {
@@ -79,26 +88,30 @@ in
       "L /var/lib/tang - - - - private/tang"
     ];
 
-    fileSystems."/mnt/control" = {
-      device = "/dev/mapper/control-luks";
-      fsType = "ext4";
-      options = [
-        "noauto"
-        "noatime"
-        "x-systemd.idle-timeout=0"
-      ];
-    };
+    fileSystems = config.lanbat.layers.controlFileSystems;
 
-    # Tang's keys live on the control layer and appear where tangd keeps its state.
-    fileSystems."/var/lib/private/tang" = {
-      device = "/mnt/control/tang";
-      fsType = "none";
-      options = [
-        "bind"
-        "noauto"
-        "x-systemd.requires=mnt-control.mount"
-        "x-systemd.after=mnt-control.mount"
-      ];
+    lanbat.layers.controlFileSystems = {
+      "/mnt/control" = {
+        device = "/dev/mapper/control-luks";
+        fsType = "ext4";
+        options = [
+          "noauto"
+          "noatime"
+          "x-systemd.idle-timeout=0"
+        ];
+      };
+
+      # Tang's keys live on the control layer and appear where tangd keeps its state.
+      "/var/lib/private/tang" = {
+        device = "/mnt/control/tang";
+        fsType = "none";
+        options = [
+          "bind"
+          "noauto"
+          "x-systemd.requires=mnt-control.mount"
+          "x-systemd.after=mnt-control.mount"
+        ];
+      };
     };
 
     systemd.targets.control-online = {
@@ -152,9 +165,12 @@ in
         systemctl status tangd.socket --no-pager --lines=5 || true
         echo
         echo "Tang health check:"
-        curl -sf http://127.0.0.1:7500/adv | ${pkgs.jq}/bin/jq -r '.keys[].alg' \
-          && echo "Tang: OK" \
-          || echo "Tang: not yet responding (may take a moment)"
+        # /adv is a JWS: the keys are inside its base64url payload.
+        if curl -sf http://127.0.0.1:7500/adv | ${pkgs.jq}/bin/jq -e .payload >/dev/null; then
+          echo "Tang: OK"
+        else
+          echo "Tang: not yet responding (may take a moment)"
+        fi
       '')
 
       # lock-control: stop Tang, unmount control, close LUKS.

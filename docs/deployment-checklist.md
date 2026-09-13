@@ -259,29 +259,50 @@ From now on, deploy changes from your workstation with `deploy path:.#server`.
 
 ## Phase 2 — Pi installation
 
-### 2a. Flash NixOS to the SD card (on your workstation)
+### 2a. Flash the Pi 5 installer image (on your workstation)
 
-Download the NixOS AArch64 SD image and flash it to the Pi's microSD card:
+> **The generic NixOS aarch64 SD image from nixos.org does not boot a Raspberry Pi 5.**
+> Use the installer image from [nixos-raspberrypi](https://github.com/nvmd/nixos-raspberrypi),
+> which ships the Raspberry Pi kernel and firmware for the Pi 5.
+
+The project doesn't attach images to its releases. Its "Build Installer Images" CI
+workflow publishes them as build artifacts, kept for a limited time. Download the newest
+Pi 5 image:
 
 ```bash
-# Download the aarch64 SD image from https://nixos.org/download.
-# Replace /dev/sdX with your SD card device (check with lsblk):
-zstdcat nixos-sd-image-*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+id=$(gh api 'repos/nvmd/nixos-raspberrypi/actions/artifacts?name=nixos-installer-rpi5-kernel.img.zst' \
+  --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .id')
+# The endpoint is called /zip, but it returns the .img.zst file itself.
+gh api "repos/nvmd/nixos-raspberrypi/actions/artifacts/$id/zip" > nixos-installer-rpi5-kernel.img.zst
+zstd -t nixos-installer-rpi5-kernel.img.zst     # integrity check
 ```
 
-Insert the SD card into the Pi 5 and power it on, connected to your network.
+If no artifact is left, build the image instead. It needs an aarch64 builder or emulation
+(on Debian: `sudo apt install qemu-user-binfmt`); the kernel and firmware come from the
+project's binary cache:
+
+```bash
+nix --accept-flake-config build github:nvmd/nixos-raspberrypi#installerImages.rpi5
+```
+
+Flash it to the microSD card. **This erases the card**; check the device with `lsblk`
+and unmount any auto-mounted partitions first:
+
+```bash
+zstd -dc nixos-installer-rpi5-kernel.img.zst | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
+```
+
+Insert the card into the Pi 5, connect Ethernet (and a screen for the first boot) and
+power it on. The image grows its root partition to fill the card on first boot.
 
 ### 2b. SSH into the Pi
 
-On the Pi console:
-```bash
-passwd          # temporary password for the nixos user
-ip addr show    # note the IP
-```
+The installer generates random login credentials at boot and shows them on the HDMI
+screen, together with its address. It also announces itself over mDNS. Log in as root
+with those credentials and install your key:
 
-From your workstation:
 ```bash
-ssh-copy-id nixos@<pi-ip>
+ssh-copy-id root@<pi-ip>
 ```
 
 ### 2c. Partition and format storage drives
@@ -328,8 +349,11 @@ sudo clevis luks unlock -d /dev/disk/by-id/DRIVE_A_ID -n storage-a
 ### 2e. Add the Pi's host key to the secrets
 
 ```bash
-ssh nixos@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub
+ssh root@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub
 ```
+
+The installer keeps this key when you switch to your configuration in step 2f, because
+it stays on the card.
 
 Put it in `secrets/secrets.nix` as `pi`, add `pi` to the recipients of
 `telegraf-token.age`, then re-encrypt and commit:
@@ -340,13 +364,31 @@ git add secrets/*.age && git commit -m "secrets: add pi host key"
 
 ### 2f. First switch to the Pi configuration
 
-The SD image has no `admin` user yet, so the first switch goes through the image's
-`nixos` user and builds on the Pi:
+The installer image is a normal, mutable NixOS system on the card, so you switch it to
+your configuration in place rather than reinstalling. It has no `admin` user yet, so the
+first switch logs in as root and builds on the Pi itself (no emulation needed):
 
 ```bash
 nix run nixpkgs#nixos-rebuild -- switch --flake path:.#pi \
-  --target-host nixos@<pi-ip> --build-host nixos@<pi-ip> --sudo
+  --target-host root@<pi-ip> --build-host root@<pi-ip>
 ```
+
+The Pi configuration boots the same way as the installer: `hosts/pi/hardware.nix` imports
+nixos-raspberrypi's Raspberry Pi 5 modules and sets
+`boot.loader.raspberry-pi.bootloader = "kernel"`. The Pi is built with nixos-raspberrypi's
+pinned nixpkgs (see `flake.nix`), so its kernel comes from that project's binary cache.
+
+Set `piInterface` in `local.nix` first (the Pi 5's on-board Ethernet is `end0`). If
+`piIp` differs from the installer's DHCP address, use `boot` instead of `switch` and
+reboot, so the address doesn't change in the middle of the SSH session:
+
+```bash
+nix run nixpkgs#nixos-rebuild -- boot --flake path:.#pi \
+  --target-host root@<pi-ip> --build-host root@<pi-ip>
+ssh root@<pi-ip> reboot
+```
+
+After the reboot, log in as `admin` on `piIp`; the configuration disables root login.
 
 From now on, deploy with `deploy path:.#pi`.
 
@@ -356,7 +398,8 @@ From now on, deploy with `deploy path:.#pi`.
 - Verify: `lsblk` should show storage-a and storage-b as open mappers.
 - Verify NFS: `showmount -e localhost`
 - Verify Snapclient: `systemctl status snapclient`
-- TV launcher should appear on HDMI (if monitor attached).
+- With `piTvFrontend` on, Kodi should appear on HDMI (if a screen is attached). Holding a
+  controller's Guide button for 2 seconds switches to EmulationStation and back.
 
 ---
 
@@ -570,47 +613,53 @@ Visit `https://sync.<domain>` (protected by Authentik forward auth).
 
 ### 3l. Wyoming voice assistant
 
-> **Hardware required:** a USB microphone (or microphone HAT) and speaker
-> connected to the Pi.
+> **Hardware required:** a USB microphone on the server and on the Pi. The
+> default is the PlayStation Eye (`lanbat.voiceSatellite.microphone.usbId` in
+> `modules/core/voice-satellite.nix`). Replies play on the server's internal
+> speaker and on the Pi's HDMI output, where they mix with Snapcast: the music
+> turns down while the assistant listens and answers (`modules/pi/audio.nix`).
 
-1. Verify the Wyoming services are running on the server:
+`home-assistant-post-setup` adds the Wyoming services and both satellites to
+Home Assistant, the conversation agent for `lanbat.haLlm` (API key from
+`ha-llm-api-key.age`), and a preferred **Voice** pipeline: wake word
+`okay_nabu`, faster-whisper, piper, Home Assistant's local intents first, then
+the LLM.
+
+With `lanbat.voiceRooms` set, a satellite hands each reply to Home Assistant,
+which speaks it as an announcement on the Music Assistant players in the
+satellite's room; Music Assistant turns their music down meanwhile. The
+satellite plays a reply itself only when its room has no players, or Home
+Assistant is out of reach. `home-assistant-post-setup` adds the satellites'
+"Voice satellites" user and token, and `music-assistant-setup` connects Music
+Assistant to the snapserver, so every Snapcast client becomes a player.
+
+1. Verify the services on the server and the Pi:
    ```bash
-   systemctl status wyoming-openwakeword
-   systemctl status wyoming-faster-whisper-main
-   systemctl status wyoming-piper-main
+   systemctl status wyoming-openwakeword wyoming-faster-whisper-main wyoming-piper-main wyoming-satellite
+   journalctl -u home-assistant-post-setup
+   ssh admin@<pi-ip> systemctl status wyoming-satellite
    ```
+   A satellite logging "no sound card with USB ID" can't find its microphone:
+   compare `lsusb` with `microphone.usbId`.
 
-2. Verify the satellite is running on the Pi:
+2. For replies on the room's speakers, create the satellites' token before
+   deploying, and commit both files:
    ```bash
-   ssh admin@pi5 systemctl status wyoming-satellite
+   bash secrets/generate-ha-voice-token.sh
    ```
-   If it fails with an audio error, the default ALSA device may not match your
-   hardware.  Run `ssh admin@pi5 arecord -l` to list capture devices and adjust
-   `microphone.command` in `modules/pi/wyoming-satellite.nix`.
+   Then give each speaker its room: **Settings → Devices & services → Music
+   Assistant**, open the player's device and set its area. The players in a
+   satellite's room speak its replies, so a new speaker joins by getting an area.
 
-3. In Home Assistant: **Settings → Devices & Services → Add Integration → Wyoming**
-   Add each service:
-   - Satellite: `<pi-ip>:10700`
-   - Wake word: `127.0.0.1:10300`
-   - Speech-to-text: `127.0.0.1:10301`
-   - Text-to-speech: `127.0.0.1:10302`
+3. Choose what the assistant may control: **Settings → Voice assistants →
+   Expose**. The LLM only sees and controls exposed entities.
 
-4. Create a voice assistant pipeline:
-   **Settings → Voice Assistants → Add Assistant**
-   - Wake word engine: openwakeword → model: `ok_nabu`
-   - Speech-to-text: faster-whisper / main
-   - Text-to-speech: piper / main
-   - Conversation agent: Home Assistant
+4. Test: say **"Okay Nabu"** near either microphone, then ask something.
+   **Settings → Voice assistants → Voice → ⋮ → Debug** shows each run.
 
-5. Assign the pipeline to the Pi satellite:
-   **Settings → Devices & Services → Wyoming → Pi Satellite → Configure**
-   Select the pipeline you just created.
-
-6. Test: say **"Ok nabu"** near the Pi mic, then ask a question.
-   The satellite LED (if any) or the HA logbook will confirm detection.
-
-> **Tip:** faster-whisper and piper download their models on first start.
-> Allow a minute or two for the first pipeline run — subsequent runs are fast.
+> **Tip:** faster-whisper and piper download their models on first start, and
+> an LLM endpoint that scales to zero is slow to answer its first request after
+> being idle. Commands Home Assistant understands itself don't wait for the LLM.
 
 ### 3m. Music Assistant
 
@@ -645,6 +694,18 @@ Verify Snapclient on the Pi: `systemctl status snapclient`. The client should
 appear in both the Snapcast web UI (`https://audio.<domain>`) and Music Assistant.
 
 ---
+
+### 3o. RomM
+
+RomM starts on the first visit to `https://romm.<domain>` (after the Authentik login)
+and stops after 30 minutes idle.
+
+1. On the first visit, RomM's setup wizard creates the admin account.
+2. The library is the Pi's `media/roms` folder on drive B, in ES-DE's layout
+   (`roms/<system>`, the same folders EmulationStation reads). Scan it from
+   Library → Scan.
+3. `config.yml` is seeded on the first start (`/var/lib/romm/config/`); change platform
+   bindings and exclusions from RomM's settings.
 
 ## Phase 4 — Ongoing
 

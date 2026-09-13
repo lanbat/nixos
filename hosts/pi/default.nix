@@ -6,26 +6,28 @@
 #   1. Encrypted storage appliance: two LUKS drives unlocked automatically
 #      via Clevis/Tang on the server.
 #   2. NFS export of both drives to the server.
-#   3. TV frontend: Kodi and RetroArch via a simple launcher.
+#   3. TV frontend: Kodi and EmulationStation sessions, when
+#      lanbat.piTvFrontend is set (modules/pi/tv.nix).
 #
 # Heavy compute, databases and containers all live on the server.
+#
+# The Raspberry Pi 5 hardware support (./hardware.nix) is added next to this
+# module in flake.nix, so the VM test (tests/pi.nix) can boot the rest of the
+# configuration without it.
 { config, pkgs, ... }:
 
 {
   imports = [
-    ./hardware.nix
-
     ../../modules/core
 
+    ../../modules/pi/audio.nix
     ../../modules/pi/clevis-unlock.nix
-    ../../modules/pi/frontend.nix
-    ../../modules/pi/launcher.nix
     ../../modules/pi/nfs-exports.nix
     ../../modules/pi/snapclient.nix
     ../../modules/pi/storage.nix
     ../../modules/pi/user-quotas.nix
     ../../modules/pi/telegraf.nix
-    ../../modules/pi/wyoming-satellite.nix
+    ../../modules/pi/tv.nix
   ];
 
   networking.hostName = config.lanbat.piHostname;
@@ -36,7 +38,7 @@
   networking = {
     useNetworkd = true;
     # Static IP: the server's NFS mounts and firewall rules need a stable address.
-    interfaces.eth0 = {
+    interfaces.${config.lanbat.piInterface} = {
       useDHCP = false;
       ipv4.addresses = [
         {
@@ -47,7 +49,7 @@
     };
     defaultGateway = {
       address = config.lanbat.gatewayIp;
-      interface = "eth0";
+      interface = config.lanbat.piInterface;
     };
     nameservers = [ config.lanbat.gatewayIp ];
   };
@@ -68,6 +70,21 @@
       iptables -I INPUT -p udp --dport 2049  ! -s ${config.lanbat.serverIp} -j DROP
       iptables -I INPUT -p tcp --dport 10700 ! -s ${config.lanbat.serverIp} -j DROP
     '';
+  };
+
+  # Voice satellite for the server's Home Assistant (modules/core/voice-satellite.nix):
+  # the PlayStation Eye's microphones, replies on the TV through PipeWire
+  # (modules/pi/audio.nix).
+  lanbat.voiceSatellite = {
+    enable = true;
+    name = "Pi Satellite";
+    uri = "tcp://0.0.0.0:10700";
+    room = config.lanbat.voiceRooms.pi;
+    # Through Caddy, which lets /api/* past Authentik for Home Assistant.
+    homeAssistant = {
+      url = "https://ha.${config.lanbat.domain}";
+      caFile = ../../secrets/caddy-ca-root.crt;
+    };
   };
 
   services.timesyncd.enable = true;

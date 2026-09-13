@@ -21,7 +21,7 @@ before the first install. The solution:
    `--extra-files` (`docs/deployment-checklist.md` step 1c). The server can decrypt its
    secrets on first boot.
 3. **Pi:** read the host key of the booted SD image
-   (`ssh nixos@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub`), add it to `secrets.nix`
+   (`ssh root@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub`), add it to `secrets.nix`
    and run `agenix -r` before the first switch (step 2e).
 
 ## Setup
@@ -141,7 +141,7 @@ agenix -e vaultwarden-env.age
 # cert is secrets/caddy-ca-root.crt (committed). Encrypt the private key:
 #   agenix -e caddy-ca-root-key.age < /path/to/root.key
 # To rotate deliberately: generate a new root, re-encrypt, redeploy, then
-# redistribute ca.<domain>/root.crt to every client.
+# redistribute ca.<domain>/lanbat-ca.crt to every client.
 
 # ---- Telegraf ----
 # Leave empty for now — fill in AFTER deploying InfluxDB and creating a
@@ -187,5 +187,10 @@ agenix -r
 | `grafana-env.age` | `KEY=value` × 4 | Grafana |
 | `vaultwarden-env.age` | `ADMIN_TOKEN=<value>` | Vaultwarden |
 | `telegraf-token.age` | `TELEGRAF_INFLUXDB_TOKEN=<value>` | Telegraf (server + Pi) |
+| `ha-llm-api-key.age` | plaintext API key | Home Assistant's conversation agent (`lanbat.haLlm`); only with `haLlm` set |
+| `ha-voice-token.age` | Home Assistant long-lived access token, from `generate-ha-voice-token.sh` | Voice satellites (server + Pi), to speak replies on the room's speakers (`lanbat.voiceRooms`); only with `voiceRooms` set |
+| `ha-voice-refresh-token.age` | `VOICE_TOKEN_ID=`, `VOICE_TOKEN_JWT_KEY=`, `VOICE_TOKEN_CREATED=`, from `generate-ha-voice-token.sh` | `home-assistant-post-setup`, which adds the token and its "Voice satellites" user to Home Assistant |
 | `caddy-ca-root.crt` | PEM root certificate (public) | Caddy internal CA — committed plaintext |
 | `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |
+| `romm-db-pass.age` | `POSTGRES_PASSWORD=<value>` and `DB_PASSWD=<same value>` | RomM database password (PostgreSQL setup and the container) |
+| `romm-env.age` | `ROMM_AUTH_SECRET_KEY=<openssl rand -hex 32>` and metadata provider keys (`IGDB_CLIENT_ID=`, `SCREENSCRAPER_USER=`, …) | RomM container |

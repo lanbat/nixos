@@ -28,6 +28,14 @@
 # (owner account + SSO user mirror).  Break-glass local login remains available
 # on localhost.
 #
+# Voice
+# -----
+# home-assistant-post-setup adds the Wyoming services and satellites
+# (services/wyoming.nix) and makes a "Voice" pipeline the preferred one:
+# openWakeWord, faster-whisper, piper, and as the conversation agent the LLM
+# in lanbat.haLlm, or Home Assistant's own agent without one. Local intents
+# are tried first, so simple commands don't wait for the LLM.
+#
 # Always-on: yes — HA should survive Pi NFS loss.
 {
   config,
@@ -41,6 +49,12 @@ let
   authHeaderComponent = pkgs.callPackage ../pkgs/home-assistant-auth-header { };
   bootstrap = pkgs.callPackage ../pkgs/home-assistant-bootstrap { };
   postSetup = pkgs.callPackage ../pkgs/home-assistant-post-setup { };
+  llm = config.lanbat.haLlm;
+  llmComponent = pkgs.callPackage ../pkgs/home-assistant-extended-openai-conversation { };
+  satellite = config.lanbat.voiceSatellite;
+  piper = config.services.wyoming.piper.servers.main;
+  # A satellite with a room hands its replies to the voice_reply script.
+  voiceRooms = lib.any (room: room != null) (lib.attrValues config.lanbat.voiceRooms);
 in
 {
   options.lanbat.homeAssistant = {
@@ -60,8 +74,16 @@ in
       port = 8123;
       auth = "forward-auth";
       apiClients = true; # companion apps — /auth/token and /api/* bypass forward-auth
-      secrets.hass-bootstrap-env = {
-        owner = "hass";
+      secrets = {
+        hass-bootstrap-env.owner = "hass";
+      }
+      // lib.optionalAttrs (llm != null) {
+        # The API key of the conversation agent's LLM.
+        ha-llm-api-key.owner = "hass";
+      }
+      // lib.optionalAttrs voiceRooms {
+        # The record of the voice satellites' token, for home-assistant-post-setup.
+        ha-voice-refresh-token.owner = "root";
       };
       # After Authentik forward-auth, /auth/authorize often returns without the
       # OAuth query string the companion app sent. HA then responds 400 (invalid
@@ -141,7 +163,7 @@ in
     };
 
     systemd.services.home-assistant-post-setup = {
-      description = "Configure Home Assistant integrations (MQTT, Frigate, Wyoming, Music Assistant)";
+      description = "Configure Home Assistant integrations (MQTT, Frigate, Wyoming, Music Assistant, voice)";
       wantedBy = [ "multi-user.target" ];
       after = [
         "home-assistant.service"
@@ -168,6 +190,20 @@ in
         export FRIGATE_URL="http://127.0.0.1:5000/"
         export MUSIC_ASSISTANT_URL="http://127.0.0.1:8095"
         export PI_HOST="${config.lanbat.piIp}"
+        ${lib.optionalString satellite.enable ''
+          export LOCAL_SATELLITE_PORT="${lib.last (lib.splitString ":" satellite.uri)}"
+        ''}
+        export PIPELINE_STT_LANGUAGE="${config.services.wyoming.faster-whisper.servers.main.language}"
+        export PIPELINE_TTS_LANGUAGE="${lib.head (lib.splitString "-" piper.voice)}"
+        export PIPELINE_TTS_VOICE="${piper.voice}"
+        ${lib.optionalString (llm != null) ''
+          export LLM_BASE_URL="${llm.baseUrl}"
+          export LLM_MODEL="${llm.model}"
+          export LLM_API_KEY_FILE="${config.age.secrets.ha-llm-api-key.path}"
+        ''}
+        ${lib.optionalString voiceRooms ''
+          export VOICE_TOKEN_RECORD_FILE="${config.age.secrets.ha-voice-refresh-token.path}"
+        ''}
         exec home-assistant-post-setup
       '';
     };
@@ -188,7 +224,9 @@ in
         (authHeaderComponent.overridePythonAttrs (_: {
           doCheck = false;
         }))
-      ];
+      ]
+      # The conversation agent for the LLM in lanbat.haLlm.
+      ++ lib.optional (llm != null) llmComponent;
 
       extraComponents = [
         "default_config"
@@ -212,6 +250,11 @@ in
         "wyoming"
         "music_assistant"
         "qbittorrent"
+      ]
+      # extended_openai_conversation depends on these.
+      ++ lib.optionals (llm != null) [
+        "rest"
+        "scrape"
       ];
 
       config = {
@@ -234,6 +277,66 @@ in
           unit_system = "metric";
           time_zone = config.lanbat.timezone;
           external_url = "https://ha.${domain}";
+        };
+
+        # Voice replies in a room (modules/core/voice-satellite.nix). A satellite
+        # with a room calls voice_reply with its reply; voice_reply starts the
+        # announcement on the room's Music Assistant players and returns how
+        # many there are, so the satellite knows whether to play it itself.
+        script = {
+          voice_reply = {
+            alias = "Voice reply in a room";
+            mode = "parallel";
+            fields = {
+              message.description = "The reply to speak.";
+              room.description = "Name of the area the voice satellite is in.";
+            };
+            sequence = [
+              {
+                variables.players = "{{ area_entities(room) | select('in', integration_entities('music_assistant')) | select('match', 'media_player[.]') | reject('is_state', ['unavailable', 'unknown']) | list }}";
+              }
+              {
+                "if" = "{{ players | count > 0 }}";
+                "then" = [
+                  {
+                    action = "script.turn_on";
+                    target.entity_id = "script.voice_reply_announce";
+                    data.variables = {
+                      players = "{{ players }}";
+                      message = "{{ message }}";
+                    };
+                  }
+                ];
+              }
+              { variables.result.players = "{{ players | count }}"; }
+              {
+                stop = "Reply handed to the room";
+                response_variable = "result";
+              }
+            ];
+          };
+
+          voice_reply_announce = {
+            alias = "Voice reply announcement";
+            mode = "queued";
+            fields = {
+              players.description = "Music Assistant players to announce on.";
+              message.description = "The reply to speak.";
+            };
+            sequence = [
+              {
+                # An announcement: Music Assistant turns the music down meanwhile.
+                action = "tts.speak";
+                target.entity_id = "tts.piper";
+                data = {
+                  media_player_entity_id = "{{ players }}";
+                  message = "{{ message }}";
+                  language = lib.head (lib.splitString "-" piper.voice);
+                  options.voice = piper.voice;
+                };
+              }
+            ];
+          };
         };
 
         # Authentik forward-auth → header-based login (users must exist in HA).
