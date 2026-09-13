@@ -24,7 +24,7 @@ wait_for_jellyfin() {
 }
 
 wizard_complete() {
-  curl -fsS "${JELLYFIN_URL}/System/Info" | jq -e '.StartupWizardCompleted == true' >/dev/null
+  curl -fsS "${JELLYFIN_URL}/System/Info/Public" | jq -e '.StartupWizardCompleted == true' >/dev/null
 }
 
 run_startup_wizard() {
