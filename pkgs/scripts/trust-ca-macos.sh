@@ -5,7 +5,7 @@
 # Run as a regular user with sudo available.
 set -euo pipefail
 
-CA_URL="https://ca.@DOMAIN@/root.crt"
+CA_URL="https://ca.@DOMAIN@/lanbat-ca.crt"
 CERT_FILE=/tmp/lanbat-ca.crt
 
 echo "Downloading homelab CA (ignoring cert errors for initial download)..."

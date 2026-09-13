@@ -50,13 +50,15 @@ in
       root * /var/lib/ca-landing
       file_server
 
-      handle /root.crt {
+      # caddy-export-ca writes the certificate as root.crt; old links to
+      # /root.crt redirect to the download name.
+      redir /root.crt /lanbat-ca.crt permanent
+
+      handle /lanbat-ca.crt {
+        rewrite * /root.crt
         header Content-Type "application/x-pem-file"
         header Content-Disposition "attachment; filename=lanbat-ca.crt"
-        file_server {
-          root /etc/caddy
-          index ca-root.crt
-        }
+        file_server
       }
     '';
   };
