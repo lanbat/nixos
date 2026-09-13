@@ -480,7 +480,14 @@ automatically and registers the Authentik provider.  No further steps needed.
 4. Grant users access to the **Home Assistant** application in Authentik
    (Applications → Home Assistant → Policy / group bindings).
 
-#### Jellyfin — manual UI setup
+#### Jellyfin — bootstrap and SSO
+
+`jellyfin-bootstrap` completes the first-run startup wizard automatically on
+deploy, using `OWNER_USERNAME` / `OWNER_PASSWORD` from `hass-bootstrap-env.age`
+(same break-glass credentials as Home Assistant and Immich).  Add media
+libraries under Dashboard → Libraries after deploy if needed.
+
+SSO plugin setup (manual):
 
 1. Dashboard → Plugins → Catalog → **SSO Authentication** → Install. Restart Jellyfin.
 2. Dashboard → SSO-Auth → Add provider with values from `generate-oidc-secrets.sh`:

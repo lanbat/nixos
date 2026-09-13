@@ -24,6 +24,9 @@
 #   write error states into its database and display a broken library.
 #   We declare a hard BindsTo dependency so systemd stops Jellyfin when
 #   the mount disappears and restarts it when the mount returns.
+#
+# First-run onboarding is completed automatically by jellyfin-bootstrap
+# (admin account from hass-bootstrap-env.age).  SSO plugin setup remains manual.
 {
   config,
   pkgs,
@@ -31,6 +34,9 @@
   ...
 }:
 
+let
+  bootstrap = pkgs.callPackage ../pkgs/jellyfin-bootstrap { };
+in
 {
   lanbat.services.jellyfin = {
     subdomain = "media";
@@ -38,7 +44,10 @@
     apiClients = true; # TV and mobile apps
     tier = "workload";
     state = [ "jellyfin" ];
-    units = [ "jellyfin" ];
+    units = [
+      "jellyfin"
+      "jellyfin-bootstrap"
+    ];
     # Created for jellyfin on the workload layer; root-owned, Jellyfin can't
     # write its data and aborts on start.
     workloadDirs."jellyfin".user = "jellyfin";
@@ -78,5 +87,28 @@
       Restart = "on-failure";
       RestartSec = "15s";
     };
+  };
+
+  systemd.services.jellyfin-bootstrap = {
+    description = "Complete Jellyfin first-run startup wizard";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "jellyfin.service" ];
+    wants = [ "jellyfin.service" ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "root";
+    };
+
+    path = [ bootstrap ];
+
+    script = ''
+      set -a
+      . ${config.age.secrets.hass-bootstrap-env.path}
+      set +a
+      export JELLYFIN_URL="http://127.0.0.1:8096"
+      exec jellyfin-bootstrap
+    '';
   };
 }
