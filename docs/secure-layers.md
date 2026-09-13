@@ -26,7 +26,7 @@ SERVER — one disk (hosts/server/disk.nix)
   always-on service data (always-on PostgreSQL, Authentik, HA, Grafana, InfluxDB, Mosquitto,
   Frigate, Caddy TLS certs, container images)
 - **Does NOT contain**: Tang keys, workload-gated service data (Nextcloud, Immich,
-  Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet)
+  Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM)
 
 After a reboot, this layer is immediately accessible. SSH works. Admin tools
 work. Nothing sensitive is exposed.
@@ -51,8 +51,8 @@ will not start until that target is active.
 - **Mount**: `/mnt/workload` (manual, not at boot)
 - **Unlocked by**: admin passphrase (`unlock-workload`)
 - **Contains**: workload-gated service data (Nextcloud, Immich, Jellyfin,
-  Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet), including the workload
-  PostgreSQL instance that holds the Nextcloud, Immich and Bitmagnet databases
+  Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM), including the workload
+  PostgreSQL instance that holds the Nextcloud, Immich, Bitmagnet and RomM databases
 
 Bind mounts overlay `/var/lib/<service>` paths with subdirectories of
 `/mnt/workload`. The `workload-online.target` is activated once all bind mounts
@@ -91,7 +91,7 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
 
 ```
 /mnt/workload/
-  postgresql/     — PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet databases
+  postgresql/     — PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet, RomM databases
   nextcloud/      — Nextcloud home (config, apps, data)
   immich/         — Immich thumbnails, encoded video, profiles, ML model cache
   jellyfin/       — Jellyfin library metadata
@@ -99,6 +99,7 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
   syncthing/      — Syncthing configuration and block index
   qbittorrent/    — qBittorrent config and session state
   bitmagnet/      — Bitmagnet torrent index
+  romm/           — RomM config, artwork, saves and states
   samba/          — Samba configuration and state
 ```
 
@@ -154,7 +155,7 @@ boot
                      └── workload-online.target activated
                           └── gated services start
                                (Nextcloud, Immich, Jellyfin, Vaultwarden,
-                                Syncthing, Samba, qBittorrent, Bitmagnet)
+                                Syncthing, Samba, qBittorrent, Bitmagnet, RomM)
 ```
 
 ## Raspberry Pi unlock model

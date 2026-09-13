@@ -178,6 +178,29 @@ let
           provider: !KeyOf provider-bitmagnet
           policy_engine_mode: any
 
+      # ── RomM ────────────────────────────────────────────────────────────────
+      - model: authentik_providers_proxy.proxyprovider
+        id: provider-romm
+        state: present
+        identifiers:
+          name: "RomM"
+        attrs:
+          name: "RomM"
+          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+          mode: forward_single
+          external_host: "https://romm.${domain}"
+
+      - model: authentik_core.application
+        state: present
+        identifiers:
+          slug: romm
+        attrs:
+          name: "RomM"
+          slug: romm
+          provider: !KeyOf provider-romm
+          policy_engine_mode: any
+
       # ── Syncthing ───────────────────────────────────────────────────────────
       - model: authentik_providers_proxy.proxyprovider
         id: provider-syncthing
@@ -288,6 +311,7 @@ let
             - !KeyOf provider-frigate
             - !KeyOf provider-qbittorrent
             - !KeyOf provider-bitmagnet
+            - !KeyOf provider-romm
             - !KeyOf provider-syncthing
             - !KeyOf provider-music-assistant
             - !KeyOf provider-snapcast

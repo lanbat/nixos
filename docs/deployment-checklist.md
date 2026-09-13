@@ -645,6 +645,18 @@ appear in both the Snapcast web UI (`https://audio.<domain>`) and Music Assistan
 
 ---
 
+### 3o. RomM
+
+RomM starts on the first visit to `https://romm.<domain>` (after the Authentik login)
+and stops after 30 minutes idle.
+
+1. On the first visit, RomM's setup wizard creates the admin account.
+2. The library is the Pi's `media/roms` folder on drive B, in ES-DE's layout
+   (`roms/<system>`, the same folders EmulationStation reads). Scan it from
+   Library → Scan.
+3. `config.yml` is seeded on the first start (`/var/lib/romm/config/`); change platform
+   bindings and exclusions from RomM's settings.
+
 ## Phase 4 — Ongoing
 
 - Deploy changes: `deploy path:.#server` / `deploy path:.#pi`.

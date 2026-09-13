@@ -93,7 +93,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 
 ```
 /mnt/workload/
-├── postgresql/        PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet
+├── postgresql/        PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet, RomM
 ├── nextcloud/         Nextcloud app + config (bulk data is on Pi)
 ├── immich/
 │   ├── thumbs/        Generated thumbnails
@@ -103,6 +103,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 ├── jellyfin/          Jellyfin metadata and configuration
 ├── qbittorrent/       qBittorrent config + fast-resume data
 ├── bitmagnet/         Bitmagnet config
+├── romm/              RomM config, artwork, saves and states
 ├── vaultwarden/       Vaultwarden SQLite DB + attachments (BACK THIS UP)
 ├── syncthing/         Syncthing config + SQLite index (BACK THIS UP)
 │                      (actual synced files are on Pi/b/syncthing)
@@ -122,10 +123,11 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Home Assistant | server-local | always-on PostgreSQL | — |
 | Nextcloud | server-local | workload PostgreSQL | Pi/b (external storage) |
 | Immich | server-local | workload PostgreSQL | Pi/a/photos |
-| Jellyfin | server-local | server-local | Pi/a/media |
-| qBittorrent | server-local | — | Pi/a/downloads |
+| Jellyfin | server-local | server-local | Pi/a/media + Pi/b/media |
+| qBittorrent | server-local | — | Pi/a/media + Pi/b/media (by category) |
 | Frigate | server-local | server-local (SQLite) | Pi/a/surveillance |
 | Bitmagnet | server-local | workload PostgreSQL | — |
+| RomM | server-local | workload PostgreSQL | Pi/b/media/roms (ROM library) |
 | SearXNG | server-local | — | — |
 | Homepage | server-local | — | — |
 | Samba | (via nss) | — | Pi/a + Pi/b |
@@ -134,7 +136,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Grafana | server-local | always-on PostgreSQL | — |
 | InfluxDB | server-local | server-local | — |
 | Syncthing | server-local | server-local (SQLite index) | Pi/b/syncthing |
-| Music Assistant | server-local | server-local (embedded) | Pi/a/media/music (NFS, read-only) |
+| Music Assistant | server-local | server-local (embedded) | Pi/b/media/music (NFS, read-only) |
 | Snapcast | — | — | — (streams created dynamically by MA) |
 | Wyoming (server) | — | — | — (models re-downloaded on first start) |
 | Wyoming satellite (Pi) | — | — | — (stateless) |
