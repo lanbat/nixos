@@ -112,6 +112,10 @@ in
       user = "wyoming-satellite";
       group = "wyoming-satellite";
       microphone.command = "${micCommand}";
+      # Home Assistant detects the wake word, so the satellite streams all the
+      # time. Its own VAD can't run here anyway: pysilero-vad takes 512-sample
+      # chunks only, and the webrtc processing re-chunks the audio.
+      vad.enable = false;
       # piper's replies are 22.05 kHz mono.
       sound.command = "${alsa}/bin/aplay -D ${cfg.speaker} -r 22050 -c 1 -f S16_LE -t raw -q";
     };
