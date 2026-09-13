@@ -33,6 +33,33 @@
 
 let
   domain = config.lanbat.domain;
+  humanUsers = config.lanbat.humanUsers;
+  userStorage = config.lanbat.userStorage;
+
+  effectiveQuota =
+    user:
+    let
+      override = humanUsers.${user}.quota;
+    in
+    if override != null then override else userStorage.defaultQuota;
+
+  # Nextcloud expects values like "100 GB".
+  toNextcloudQuota =
+    size:
+    let
+      upper = lib.toUpper size;
+      parts = builtins.match "([0-9]+)([KMGT])" upper;
+      unitWord =
+        {
+          K = "KB";
+          M = "MB";
+          G = "GB";
+          T = "TB";
+        }
+        .${builtins.elemAt parts 1}
+        or "B";
+    in
+    if parts == null then size else "${builtins.elemAt parts 0} ${unitWord}";
 in
 
 {
@@ -58,6 +85,7 @@ in
       "nextcloud-setup"
       "nextcloud-update-db"
       "nextcloud-cron"
+      "nextcloud-user-quotas"
     ];
     # The setup script requires config/ to be owned by nextcloud on first run.
     workloadDirs = {
@@ -178,6 +206,47 @@ in
     };
   };
 
+  # Sync Nextcloud per-user quotas with the unified storage limits declared in
+  # human-users.nix. The filesystem quota on the Pi is the hard enforcement
+  # point; this keeps the Nextcloud UI and upload checks aligned.
+  systemd.services."nextcloud-user-quotas" = {
+    description = "Sync Nextcloud user quotas with lanbat.userStorage";
+    after = [
+      "nextcloud-setup.service"
+      "nextcloud-oidc-setup.service"
+    ];
+    wantedBy = [ "multi-user.target" ];
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "nextcloud";
+      ExecStart = pkgs.writeShellScript "nextcloud-user-quotas" (
+        ''
+          set -euo pipefail
+          OCC="${config.services.nextcloud.occ}/bin/nextcloud-occ"
+        ''
+        + lib.concatStrings (
+          lib.mapAttrsToList (
+            user: _:
+            let
+              quota = toNextcloudQuota (effectiveQuota user).hard;
+            in
+            ''
+              if $OCC user:info ${user} >/dev/null 2>&1; then
+                current=$($OCC user:setting ${user} files quota 2>/dev/null || true)
+                if [[ "$current" != "${quota}" ]]; then
+                  echo "Setting Nextcloud quota for ${user} to ${quota}"
+                  $OCC user:setting ${user} files quota "${quota}"
+                fi
+              fi
+            ''
+          ) humanUsers
+        )
+      );
+    };
+  };
+
   # Configure nginx to listen on the internal port so Caddy can own :80/:443.
   services.nginx.virtualHosts."cloud.${domain}" = {
     listen = [
@@ -189,10 +258,6 @@ in
     ];
   };
 
-  # External storage paths (created when NFS is mounted).
-  systemd.tmpfiles.rules = [
-    "d /srv/storage/b/nextcloud          0750 nextcloud nextcloud -"
-    "d /srv/storage/b/nextcloud/external 0750 nextcloud nextcloud -"
-    "d /srv/storage/b/nextcloud/users    0750 nextcloud nextcloud -"
-  ];
+  # Per-user cloud/ directories are created by human-users.nix. Mount them as
+  # Nextcloud external storage (Local) at users/<user>/cloud for bulk files.
 }

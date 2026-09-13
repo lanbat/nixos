@@ -171,16 +171,33 @@ sudo rm /var/lib/tang/.OLDKEYID.jwk
 # SSH to Pi
 ssh admin@pi5
 
-# Project quotas (per-directory)
-sudo xfs_quota -x -c "report -pb -h" /mnt/storage-a
-sudo xfs_quota -x -c "report -pb -h" /mnt/storage-b
+# All project quotas (includes per-user user-<name> projects)
+quota-report
 
-# User quotas
-sudo xfs_quota -x -c "report -ub -h" /mnt/storage-a
+# Per-user quotas only
+quota-report-users
 
-# Set a project limit (example: cap surveillance at 500 GB)
+# Set a shared project limit (example: cap surveillance at 500 GB)
 sudo xfs_quota -x -c "limit -p bsoft=500g bhard=550g surveillance" /mnt/storage-a
 ```
+
+## Adding a user with storage quota
+
+1. Add the user in Authentik (Directory → Users).
+2. Declare them in your Nix config:
+
+```nix
+lanbat.humanUsers.alice = {
+  uid = 1002;
+  groups = [ "media" ];
+  # optional: quota = { soft = "200G"; hard = "220G"; };
+};
+```
+
+3. Deploy both hosts (`deploy path:.#server` and `deploy path:.#pi`).
+4. On the server, create the Samba password: `sudo smbpasswd -a alice`
+5. In Nextcloud, mount `users/alice/cloud` as external storage (Local) after alice's first OIDC login.
+6. In Immich, add an external library at `user-storage/alice/photos` for alice after her first login.
 
 ## Accessing Bitmagnet (on-demand)
 

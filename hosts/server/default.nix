@@ -112,11 +112,6 @@
     "d /var/lib/homelab 0755 root root -"
   ];
 
-  users.users.admin.extraGroups = [
-    "media"
-    "private"
-  ];
-
   # Helper scripts (the domain is substituted at build time).
   environment.systemPackages = [
     (pkgs.callPackage ../../pkgs/scripts { inherit (config.lanbat) domain; })

@@ -18,14 +18,7 @@
     private.gid = 987; # restricted private shares; add users explicitly
   };
 
-  # The admin logs in with the SSH key only and has no password, so sudo must
-  # not ask for one. deploy-rs also relies on this.
-  users.users.admin = {
-    isNormalUser = true;
-    uid = 1001;
-    extraGroups = [ "wheel" ];
-    openssh.authorizedKeys.keys = [ config.lanbat.adminSshKey ];
-  };
+  # Human users (admin, …) are declared in human-users.nix.
 
   security.sudo.wheelNeedsPassword = false;
 }

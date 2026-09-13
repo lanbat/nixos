@@ -13,6 +13,10 @@ echo "===== Drive B: /mnt/storage-b ====="
 xfs_quota -x -c "report -pb -h" /mnt/storage-b 2>/dev/null || echo "(not mounted)"
 
 echo ""
+echo "===== Per-user quotas (Drive B) ====="
+xfs_quota -x -c "report -pb -h" /mnt/storage-b 2>/dev/null | grep -E '^user-' || echo "(none configured)"
+
+echo ""
 echo "===== Drive A usage (df) ====="
 df -h /mnt/storage-a 2>/dev/null || true
 

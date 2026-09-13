@@ -12,7 +12,7 @@ Raspberry Pi 5
 │   │   ├── movies/
 │   │   ├── tv/
 │   │   └── music-videos/
-│   ├── /mnt/storage-a/photos/             ← Immich originals / uploads
+│   ├── /mnt/storage-a/photos/             ← legacy; Immich uses users/<user>/photos/
 │   └── /mnt/storage-a/surveillance/       ← Frigate recordings
 │       ├── clips/
 │       └── exports/
@@ -21,9 +21,13 @@ Raspberry Pi 5
     ├── /mnt/storage-b/media/              ← the rest of the media, as on drive A
     │   ├── music/  documentaries/  adult/  roms/
     │   └── audiobooks/  books/  gym/  games/  misc/
-    ├── /mnt/storage-b/nextcloud/          ← Nextcloud external storage
-    ├── /mnt/storage-b/users/              ← per-user SMB home dirs
+    ├── /mnt/storage-b/nextcloud/          ← legacy Nextcloud bulk path
+    ├── /mnt/storage-b/users/              ← unified per-user storage (XFS project quotas)
     │   ├── admin/
+    │   │   ├── files/                   ← Samba home
+    │   │   ├── cloud/                   ← Nextcloud external storage
+    │   │   ├── sync/                    ← Syncthing
+    │   │   └── photos/                  ← Immich external library
     │   └── ...
     ├── /mnt/storage-b/shared/             ← shared SMB space
     └── /mnt/storage-b/backups/            ← server backup target
@@ -93,7 +97,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 
 ```
 /mnt/workload/
-├── postgresql/        PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet
+├── postgresql/        PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet, RomM
 ├── nextcloud/         Nextcloud app + config (bulk data is on Pi)
 ├── immich/
 │   ├── thumbs/        Generated thumbnails
@@ -103,6 +107,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 ├── jellyfin/          Jellyfin metadata and configuration
 ├── qbittorrent/       qBittorrent config + fast-resume data
 ├── bitmagnet/         Bitmagnet config
+├── romm/              RomM config, artwork, saves and states
 ├── vaultwarden/       Vaultwarden SQLite DB + attachments (BACK THIS UP)
 ├── syncthing/         Syncthing config + SQLite index (BACK THIS UP)
 │                      (actual synced files are on Pi/b/syncthing)
@@ -122,10 +127,11 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Home Assistant | server-local | always-on PostgreSQL | — |
 | Nextcloud | server-local | workload PostgreSQL | Pi/b (external storage) |
 | Immich | server-local | workload PostgreSQL | Pi/a/photos |
-| Jellyfin | server-local | server-local | Pi/a/media |
-| qBittorrent | server-local | — | Pi/a/downloads |
+| Jellyfin | server-local | server-local | Pi/a/media + Pi/b/media |
+| qBittorrent | server-local | — | Pi/a/media + Pi/b/media (by category) |
 | Frigate | server-local | server-local (SQLite) | Pi/a/surveillance |
 | Bitmagnet | server-local | workload PostgreSQL | — |
+| RomM | server-local | workload PostgreSQL | Pi/b/media/roms (ROM library) |
 | SearXNG | server-local | — | — |
 | Homepage | server-local | — | — |
 | Samba | (via nss) | — | Pi/a + Pi/b |
@@ -134,7 +140,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Grafana | server-local | always-on PostgreSQL | — |
 | InfluxDB | server-local | server-local | — |
 | Syncthing | server-local | server-local (SQLite index) | Pi/b/syncthing |
-| Music Assistant | server-local | server-local (embedded) | Pi/a/media/music (NFS, read-only) |
+| Music Assistant | server-local | server-local (embedded) | Pi/b/media/music (NFS, read-only) |
 | Snapcast | — | — | — (streams created dynamically by MA) |
 | Wyoming (server) | — | — | — (models re-downloaded on first start) |
 | Wyoming satellite (Pi) | — | — | — (stateless) |
@@ -157,21 +163,32 @@ Run `quota-setup.sh` on the Pi after first format (see docs/deployment-checklist
 | photos | 102 | /mnt/storage-a/photos | A | no limit |
 | surveillance | 103 | /mnt/storage-a/surveillance | A | 500 GB soft, 550 GB hard |
 | nextcloud | 200 | /mnt/storage-b/nextcloud | B | 500 GB soft, 550 GB hard |
-| users | 201 | /mnt/storage-b/users | B | no limit |
 | shared | 202 | /mnt/storage-b/shared | B | 200 GB soft, 220 GB hard |
+| user-* | 300+ | /mnt/storage-b/users/<user> | B | per-user (see human-users.nix) |
 | backups | 203 | /mnt/storage-b/backups | B | 300 GB soft, 350 GB hard |
 
-### Per-user quotas
+### Per-user unified quotas
 
-XFS also supports user and group quotas alongside project quotas (pquota enables all three).
-To set a per-user limit (e.g. cap user "alice" at 100 GB on Drive B):
+Human user storage is declared in `lanbat.humanUsers` (see `modules/core/human-users.nix`).
+Each user gets one XFS **project quota** on their entire directory tree under
+`/mnt/storage-b/users/<username>/`, covering Samba, Nextcloud, Syncthing and Immich data.
 
-```bash
-sudo xfs_quota -x -c "limit bsoft=100g bhard=110g alice" /mnt/storage-b
+Default quota: `lanbat.userStorage.defaultQuota` (100 GB soft / 110 GB hard).
+Override per user with `lanbat.humanUsers.<name>.quota`.
+
+```nix
+lanbat.humanUsers.alice = {
+  uid = 1002;
+  groups = [ "media" ];
+  quota = { soft = "200G"; hard = "220G"; };
+};
 ```
 
-NFS stores numeric IDs, so a user's UID must be the same on the Pi and the server. Service
-accounts pin theirs in `lanbat.services.<name>.account.uid`.
+Quotas are applied automatically on the Pi by `user-storage-quotas.service` after
+storage-b unlocks. Nextcloud app quotas are synced by `nextcloud-user-quotas.service`
+on the server.
+
+Authentik handles identity only — it does not manage storage quotas.
 
 ### Reporting
 

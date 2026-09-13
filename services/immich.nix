@@ -12,8 +12,8 @@
 #   /var/lib/immich/profile/      — user profile pictures
 #   Redis (services.redis.servers.immich)
 #
-# Pi-backed via NFS (/srv/storage/a):
-#   /srv/storage/a/photos/        — originals / uploads (bulk)
+# Pi-backed via NFS (/srv/storage/b/users/<user>/photos/):
+#   Per-user photo libraries via Immich external libraries (unified quota).
 #
 # NFS dependency: partial.
 #   - If Pi is down: Immich is still up, new uploads fail, existing
@@ -53,17 +53,9 @@ let
   lanbatCaRootMount = "/etc/ssl/lanbat/ca-root.crt";
 in
 {
-  options.lanbat.immich = {
-    adminEmail = lib.mkOption {
-      type = lib.types.str;
-      description = ''
-        Email for the bootstrap Immich admin.  Must match the Authentik user's
-        email so the first OAuth login links to this account.
-      '';
-    };
-  };
-
   config = {
+    # The option is declared in modules/core/settings.nix, since local.nix is
+    # shared by both hosts.
     lanbat.immich.adminEmail = lib.mkDefault (
       "${lib.elemAt config.lanbat.homeAssistant.ssoUsers 0}@${config.lanbat.rootDomain}"
     );
@@ -90,13 +82,14 @@ in
             "immich/encoded-video"
             "immich/profile"
             "immich/model-cache"
+            "immich/upload"
           ]
           (_: {
             user = "immich";
           });
-      # Only the server container reads the originals on Pi storage.
+      # User photo libraries live under the unified per-user storage tree.
       nfs = {
-        drives = [ "a" ];
+        drives = [ "b" ];
         units = [ "podman-immich-server" ];
       };
       account = {
@@ -162,7 +155,8 @@ in
         config.age.secrets.immich-oidc-env.path
       ];
       volumes = [
-        "/srv/storage/a/photos:/usr/src/app/upload"
+        "/var/lib/immich/upload:/usr/src/app/upload"
+        "${config.lanbat.userStorage.mountOnServer}:/usr/src/app/user-storage"
         "/var/lib/immich/thumbs:/usr/src/app/thumbs"
         "/var/lib/immich/encoded-video:/usr/src/app/encoded-video"
         "/var/lib/immich/profile:/usr/src/app/profile"
@@ -261,9 +255,8 @@ in
       '';
     };
 
-    # Ensure the photo path exists when NFS is mounted.
     systemd.tmpfiles.rules = [
-      "d /srv/storage/a/photos 0750 immich immich -"
+      "d /var/lib/immich/upload 0750 immich immich -"
       "d /run/immich 0750 immich immich -"
     ];
   };

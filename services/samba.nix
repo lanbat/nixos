@@ -119,13 +119,12 @@
         "create mask" = "0700";
         "directory mask" = "0700";
         "valid users" = "%S";
-        path = "/srv/storage/b/users/%S";
+        path = "${config.lanbat.userStorage.mountOnServer}/%S/files";
       };
 
       # ---- Shared media shares (read-only for all users) ----
       # One per drive: media is split across both (modules/pi/storage.nix).
-      # Adult content lives under storage-b/media/adult and is excluded from
-      # Jellyfin libraries and from these shares (see private below).
+      # qBittorrent saves into these folders.
       media = {
         comment = "Media: movies, TV, music videos";
         path = "/srv/storage/a/media";
@@ -142,17 +141,18 @@
         "read only" = "yes";
         "guest ok" = "no";
         "valid users" = "@media";
+        # Adult video is only in the private share.
         "veto files" = "/adult/";
       };
 
       # ---- Private media (restricted to "private" group) ----
       # Not browseable — does not appear in network discovery.
-      # Filesystem permissions also deny the media group; only @private can read.
+      # Only users explicitly added to the "private" group can access it.
       # Add users: usermod -aG private <username> && smbpasswd -a <username>
       private = {
         comment = "Private";
         path = "/srv/storage/b/media/adult";
-        browseable = "no";
+        browseable = "no"; # hidden from share listings
         "read only" = "yes";
         "guest ok" = "no";
         "valid users" = "@private";
@@ -190,11 +190,9 @@
     };
   };
 
-  # Pre-create user home dirs on Pi storage (add users as needed).
+  # User home dirs are created by human-users.nix (files/ subdir per user).
   systemd.tmpfiles.rules = [
-    "d /srv/storage/b/users                  0755 root  root    -"
-    "d /srv/storage/b/users/admin            0700 admin admin   -"
-    "d /srv/storage/b/shared                 0775 root  media   -"
+    "d /srv/storage/b/shared 0775 root media -"
   ];
 
   # Note: add Samba users manually after deploying:
