@@ -179,6 +179,33 @@ in
       '';
     };
 
+    haLlm = mkOption {
+      type = types.nullOr (
+        types.submodule {
+          options = {
+            baseUrl = mkOption {
+              type = types.strMatching "https?://.+";
+              example = "https://api.runpod.ai/v2/<endpoint-id>/openai/v1";
+              description = "Base URL of the OpenAI-compatible API, ending in /v1.";
+            };
+            model = mkOption {
+              type = types.str;
+              example = "qwen3-8b-ha";
+              description = "Name of the model the API serves.";
+            };
+          };
+        }
+      );
+      # An exception to the no-defaults rule: without an LLM, Home Assistant's
+      # own conversation agent answers.
+      default = null;
+      description = ''
+        The conversation agent of Home Assistant's voice pipeline: an
+        OpenAI-compatible chat completions API, with its API key in
+        secrets/ha-llm-api-key.age. null uses Home Assistant's own agent.
+      '';
+    };
+
     # ── Access ────────────────────────────────────────────────────────────────
     adminSshKey = mkOption {
       type = types.strMatching "(ssh-|ecdsa-|sk-).+";

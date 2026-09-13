@@ -15,6 +15,26 @@ MQTT_PASSWORD="${MQTT_PASSWORD:?MQTT_PASSWORD is required}"
 FRIGATE_URL="${FRIGATE_URL:-http://127.0.0.1:5000/}"
 MUSIC_ASSISTANT_URL="${MUSIC_ASSISTANT_URL:-http://127.0.0.1:8095}"
 PI_HOST="${PI_HOST:?PI_HOST is required}"
+# This server's own satellite, when it has one.
+LOCAL_SATELLITE_PORT="${LOCAL_SATELLITE_PORT:-}"
+
+# The conversation agent: an OpenAI-compatible chat completions API through
+# the extended_openai_conversation component. Unset: Home Assistant's own agent.
+LLM_BASE_URL="${LLM_BASE_URL:-}"
+LLM_MODEL="${LLM_MODEL:-}"
+LLM_API_KEY_FILE="${LLM_API_KEY_FILE:-}"
+LLM_DOMAIN="extended_openai_conversation"
+LLM_TITLE="Voice LLM"
+# Home Assistant names the agent's entity after the title.
+LLM_ENTITY="conversation.voice_llm"
+
+PIPELINES="${HASS_CONFIG}/.storage/assist_pipeline.pipelines"
+PIPELINE_NAME="Voice"
+PIPELINE_LANGUAGE="${PIPELINE_LANGUAGE:-en}"
+PIPELINE_STT_LANGUAGE="${PIPELINE_STT_LANGUAGE:-en}"
+PIPELINE_TTS_LANGUAGE="${PIPELINE_TTS_LANGUAGE:-en_GB}"
+PIPELINE_TTS_VOICE="${PIPELINE_TTS_VOICE:-en_GB-alba-medium}"
+PIPELINE_WAKE_WORD="${PIPELINE_WAKE_WORD:-okay_nabu}"
 
 log() {
   echo "home-assistant-post-setup: $*"
@@ -46,19 +66,23 @@ add_entry() {
   local title="$2"
   local data_json="$3"
   local version="${4:-1}"
+  local subentries_json="${5:-[]}"
   local now entry_id tmp
   now="$(now_utc)"
   entry_id="$(new_entry_id)"
   tmp="$(mktemp)"
+  # The JSON goes in through file descriptors rather than arguments, so
+  # credentials in it stay out of the process list.
   jq --arg now "$now" \
     --arg id "$entry_id" \
     --arg domain "$domain" \
     --arg title "$title" \
-    --argjson data "$data_json" \
+    --slurpfile data <(printf '%s' "$data_json") \
+    --slurpfile subentries <(printf '%s' "$subentries_json") \
     --argjson version "$version" \
     '.data.entries += [{
       created_at: $now,
-      data: $data,
+      data: $data[0],
       disabled_by: null,
       discovery_keys: {},
       domain: $domain,
@@ -69,7 +93,7 @@ add_entry() {
       pref_disable_new_entities: false,
       pref_disable_polling: false,
       source: "user",
-      subentries: [],
+      subentries: $subentries[0],
       title: $title,
       unique_id: null,
       version: $version
@@ -148,6 +172,144 @@ ensure_wyoming() {
   mark_done "$state_key"
 }
 
+llm_enabled() {
+  [[ -n "$LLM_BASE_URL" && -n "$LLM_MODEL" && -s "$LLM_API_KEY_FILE" ]]
+}
+
+# The agent's replies are spoken: short, plain, and acting on requests without
+# asking for confirmation first.
+llm_prompt() {
+  cat <<'PROMPT'
+You are the voice assistant of this home, running in Home Assistant. Your answers are spoken aloud: reply in one or two short, plain sentences, without lists, markdown or emoji.
+
+Current time: {{ now() }}
+
+Devices you can see and control:
+```csv
+entity_id,name,state,aliases
+{% for entity in exposed_entities -%}
+{{ entity.entity_id }},{{ entity.name }},{{ entity.state }},{{ entity.aliases | join('/') }}
+{% endfor -%}
+```
+
+Answer questions about the home from the device states above. When asked to change something, call execute_services straight away, without asking for confirmation, then say briefly what you did. If a request is ambiguous, ask one short question.
+PROMPT
+}
+
+# True when the agent's entry is missing, or its key, URL or model is out of date.
+llm_needed() {
+  llm_enabled || return 1
+  jq -e --rawfile key "$LLM_API_KEY_FILE" --arg url "$LLM_BASE_URL" --arg model "$LLM_MODEL" \
+    --arg domain "$LLM_DOMAIN" --arg title "$LLM_TITLE" '
+    [.data.entries[] | select(.domain == $domain and .title == $title)] as $entries
+    | ($entries | length) == 1
+      and $entries[0].data.api_key == ($key | rtrimstr("\n"))
+      and $entries[0].data.base_url == $url
+      and any($entries[0].subentries[]; .subentry_type == "conversation" and .data.chat_model == $model)
+  ' "$CONFIG_ENTRIES" >/dev/null && return 1
+  return 0
+}
+
+ensure_llm() {
+  llm_needed || return 0
+  local tmp
+  if jq -e --arg domain "$LLM_DOMAIN" --arg title "$LLM_TITLE" \
+    '.data.entries[] | select(.domain == $domain and .title == $title)' "$CONFIG_ENTRIES" >/dev/null; then
+    log "updating the conversation agent (${LLM_BASE_URL}, ${LLM_MODEL})"
+    tmp="$(mktemp)"
+    jq --rawfile key "$LLM_API_KEY_FILE" --arg url "$LLM_BASE_URL" --arg model "$LLM_MODEL" \
+      --arg domain "$LLM_DOMAIN" --arg title "$LLM_TITLE" --arg now "$(now_utc)" '
+      .data.entries |= map(
+        if .domain == $domain and .title == $title then
+          .data.api_key = ($key | rtrimstr("\n"))
+          | .data.base_url = $url
+          | .modified_at = $now
+          | .subentries |= map(if .subentry_type == "conversation" then .data.chat_model = $model else . end)
+        else . end)
+    ' "$CONFIG_ENTRIES" > "$tmp"
+    install -o hass -g hass -m 0600 "$tmp" "$CONFIG_ENTRIES"
+    rm "$tmp"
+    return 0
+  fi
+  log "adding the conversation agent (${LLM_BASE_URL}, ${LLM_MODEL})"
+  # skip_authentication: otherwise the component lists the API's models while
+  # Home Assistant starts, which waits on an endpoint that scales to zero.
+  add_entry "$LLM_DOMAIN" "$LLM_TITLE" "$(jq -n --rawfile key "$LLM_API_KEY_FILE" \
+    --arg url "$LLM_BASE_URL" --arg title "$LLM_TITLE" '{
+      name: $title,
+      api_key: ($key | rtrimstr("\n")),
+      base_url: $url,
+      skip_authentication: true,
+      api_provider: "openai"
+    }')" 2 "$(jq -n --arg id "$(new_entry_id)" --arg title "$LLM_TITLE" \
+    --arg model "$LLM_MODEL" --arg prompt "$(llm_prompt)" '[{
+      subentry_id: $id,
+      subentry_type: "conversation",
+      title: $title,
+      unique_id: null,
+      data: {
+        prompt: $prompt,
+        chat_model: $model,
+        max_tokens: 150,
+        top_p: 1,
+        temperature: 0.5,
+        max_function_calls_per_conversation: 1,
+        attach_username: false,
+        use_tools: true,
+        context_threshold: 13000,
+        context_truncate_strategy: "clear"
+      }
+    }]')"
+}
+
+pipeline_json() {
+  local conversation="conversation.home_assistant"
+  if llm_enabled; then conversation="$LLM_ENTITY"; fi
+  jq -n --arg name "$PIPELINE_NAME" --arg conversation "$conversation" \
+    --arg language "$PIPELINE_LANGUAGE" --arg stt_language "$PIPELINE_STT_LANGUAGE" \
+    --arg tts_language "$PIPELINE_TTS_LANGUAGE" --arg tts_voice "$PIPELINE_TTS_VOICE" \
+    --arg wake_word "$PIPELINE_WAKE_WORD" '{
+      name: $name,
+      language: $language,
+      conversation_engine: $conversation,
+      conversation_language: $language,
+      stt_engine: "stt.faster_whisper",
+      stt_language: $stt_language,
+      tts_engine: "tts.piper",
+      tts_language: $tts_language,
+      tts_voice: $tts_voice,
+      wake_word_entity: "wake_word.openwakeword",
+      wake_word_id: $wake_word,
+      prefer_local_intents: true
+    }'
+}
+
+# The pipeline is written again only when this definition changes, so edits
+# made to it in Home Assistant last until then.
+pipeline_state_key() {
+  echo "pipeline-$(pipeline_json | sha256sum | cut -c1-16)"
+}
+
+ensure_pipeline() {
+  local key id tmp
+  key="$(pipeline_state_key)"
+  if state_done "$key"; then return 0; fi
+  if [[ ! -f "$PIPELINES" ]]; then
+    jq -n '{version: 1, minor_version: 2, key: "assist_pipeline.pipelines", data: {items: [], preferred_item: null}}' > "$PIPELINES"
+  fi
+  id="$(jq -r --arg name "$PIPELINE_NAME" 'first(.data.items[] | select(.name == $name) | .id) // empty' "$PIPELINES")"
+  [[ -n "$id" ]] || id="$(openssl rand -hex 13)"
+  log "setting the preferred assist pipeline ${PIPELINE_NAME}"
+  tmp="$(mktemp)"
+  jq --arg id "$id" --slurpfile pipeline <(pipeline_json) '
+    .data.items = [.data.items[] | select(.id != $id)] + [$pipeline[0] + {id: $id}]
+    | .data.preferred_item = $id
+  ' "$PIPELINES" > "$tmp"
+  install -o hass -g hass -m 0600 "$tmp" "$PIPELINES"
+  rm "$tmp"
+  mark_done "$key"
+}
+
 area_id() {
   openssl rand -hex 16
 }
@@ -208,6 +370,9 @@ if ! state_done areas && [[ -f "$AREA_REGISTRY" ]]; then needs_work=true; fi
 for svc in openwakeword faster-whisper piper satellite; do
   wyoming_needed "$svc" && needs_work=true
 done
+if [[ -n "$LOCAL_SATELLITE_PORT" ]] && wyoming_needed server-satellite; then needs_work=true; fi
+if llm_needed; then needs_work=true; fi
+if ! state_done "$(pipeline_state_key)"; then needs_work=true; fi
 
 if [[ "$needs_work" != true ]]; then
   log "post-setup already complete"
@@ -224,6 +389,11 @@ ensure_wyoming "openwakeword" "127.0.0.1" 10300
 ensure_wyoming "faster-whisper" "127.0.0.1" 10301
 ensure_wyoming "piper" "127.0.0.1" 10302
 ensure_wyoming "satellite" "$PI_HOST" 10700
+if [[ -n "$LOCAL_SATELLITE_PORT" ]]; then
+  ensure_wyoming "server-satellite" "127.0.0.1" "$LOCAL_SATELLITE_PORT"
+fi
+ensure_llm
+ensure_pipeline
 ensure_areas
 
 systemctl start home-assistant.service

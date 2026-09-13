@@ -163,6 +163,7 @@ when `local.nix` does, and only a `path:` flake reference includes it
 | `config.lanbat.piStorageDriveA` | Pi NVMe drive A by-id filename |
 | `config.lanbat.piStorageDriveB` | Pi NVMe drive B by-id filename |
 | `config.lanbat.piTvFrontend` | Whether the Pi runs the TV frontend (Kodi and EmulationStation) |
+| `config.lanbat.haLlm` | Home Assistant's conversation agent: an OpenAI-compatible API's base URL and model (optional) |
 | `config.lanbat.adminSshKey` | Admin SSH public key (both hosts) |
 | `config.lanbat.zigbeeVendorId` | Zigbee dongle USB vendor ID |
 | `config.lanbat.zigbeeProductId` | Zigbee dongle USB product ID |
