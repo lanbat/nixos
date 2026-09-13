@@ -78,6 +78,12 @@
     enable = true;
     name = "Pi Satellite";
     uri = "tcp://0.0.0.0:10700";
+    room = config.lanbat.voiceRooms.pi;
+    # Through Caddy, which lets /api/* past Authentik for Home Assistant.
+    homeAssistant = {
+      url = "https://ha.${config.lanbat.domain}";
+      caFile = ../../secrets/caddy-ca-root.crt;
+    };
   };
 
   services.timesyncd.enable = true;

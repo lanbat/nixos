@@ -100,5 +100,7 @@
     speaker = "plughw:CARD=PCH,DEV=0";
     # The codec's Master control starts muted.
     mixer = [ "-c PCH sset Master 80% unmute" ];
+    room = config.lanbat.voiceRooms.server;
+    homeAssistant.url = "http://127.0.0.1:8123";
   };
 }

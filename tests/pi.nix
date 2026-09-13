@@ -46,6 +46,7 @@ pkgs.testers.runNixOSTest {
       lanbat.piTvFrontend = lib.mkForce false;
 
       lanbat.testSecrets.telegraf-token = "TELEGRAF_INFLUXDB_TOKEN=test-influx-token\n";
+      lanbat.testSecrets.ha-voice-token = "test-voice-token";
     };
 
   testScript = ''

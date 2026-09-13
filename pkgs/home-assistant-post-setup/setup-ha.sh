@@ -36,6 +36,15 @@ PIPELINE_TTS_LANGUAGE="${PIPELINE_TTS_LANGUAGE:-en_GB}"
 PIPELINE_TTS_VOICE="${PIPELINE_TTS_VOICE:-en_GB-alba-medium}"
 PIPELINE_WAKE_WORD="${PIPELINE_WAKE_WORD:-okay_nabu}"
 
+# The voice satellites' token (lanbat.voiceRooms): a long-lived access token of
+# a "Voice satellites" user. ha-voice-refresh-token.age holds its record (ID,
+# signing key, creation time); the satellites hold the token itself.
+VOICE_TOKEN_RECORD_FILE="${VOICE_TOKEN_RECORD_FILE:-}"
+AUTH_STORE="${HASS_CONFIG}/.storage/auth"
+VOICE_USER_NAME="Voice satellites"
+# Turns the record's KEY=value lines into an object, inside jq.
+VOICE_RECORD_JQ='$record | split("\n") | map(select(test("^[A-Z_]+=")) | capture("^(?<key>[A-Z_]+)=(?<value>.*)$")) | from_entries'
+
 log() {
   echo "home-assistant-post-setup: $*"
 }
@@ -310,6 +319,66 @@ ensure_pipeline() {
   mark_done "$key"
 }
 
+# True when the token's record is missing from Home Assistant or out of date.
+# The record goes to jq as a file, so its signing key stays out of the process
+# list.
+voice_token_needed() {
+  [[ -n "$VOICE_TOKEN_RECORD_FILE" && -s "$VOICE_TOKEN_RECORD_FILE" && -f "$AUTH_STORE" ]] || return 1
+  jq -e --rawfile record "$VOICE_TOKEN_RECORD_FILE" "
+    ($VOICE_RECORD_JQ) as \$r
+    | [.data.refresh_tokens[] | select(.id == \$r.VOICE_TOKEN_ID and .jwt_key == \$r.VOICE_TOKEN_JWT_KEY)] as \$tokens
+    | (\$tokens | length) == 1
+      and ([.data.users[] | select(.id == \$tokens[0].user_id and .is_active)] | length) == 1
+  " "$AUTH_STORE" >/dev/null && return 1
+  return 0
+}
+
+# Adds the "Voice satellites" user (a regular, non-admin user without a login)
+# and its long-lived token, replacing an earlier token of that user.
+ensure_voice_token() {
+  voice_token_needed || return 0
+  log "adding the voice satellites' user and token"
+  local tmp refresh
+  tmp="$(mktemp)"
+  refresh="$(mktemp)"
+  openssl rand -hex 64 | tr -d '\n' > "$refresh"
+  jq --rawfile record "$VOICE_TOKEN_RECORD_FILE" --rawfile refresh "$refresh" \
+    --arg name "$VOICE_USER_NAME" --arg new_user_id "$(openssl rand -hex 16)" "
+    ($VOICE_RECORD_JQ) as \$r
+    | (first(.data.users[] | select(.name == \$name and (.is_owner | not))) // null) as \$existing
+    | (if \$existing == null then \$new_user_id else \$existing.id end) as \$user_id
+    | .data.users = (if \$existing == null then .data.users + [{
+        id: \$user_id,
+        group_ids: [\"system-users\"],
+        is_owner: false,
+        is_active: true,
+        name: \$name,
+        system_generated: false,
+        local_only: false
+      }] else .data.users end)
+    | .data.refresh_tokens = [.data.refresh_tokens[]
+        | select(.id != \$r.VOICE_TOKEN_ID and .client_name != \$name)] + [{
+        id: \$r.VOICE_TOKEN_ID,
+        user_id: \$user_id,
+        client_id: null,
+        client_name: \$name,
+        client_icon: null,
+        token_type: \"long_lived_access_token\",
+        created_at: (\$r.VOICE_TOKEN_CREATED | tonumber | todate | sub(\"Z$\"; \"+00:00\")),
+        access_token_expiration: 315360000.0,
+        token: \$refresh,
+        jwt_key: \$r.VOICE_TOKEN_JWT_KEY,
+        last_used_at: null,
+        last_used_ip: null,
+        expire_at: null,
+        credential_id: null,
+        version: null
+      }]
+  " "$AUTH_STORE" > "$tmp"
+  install -o hass -g hass -m 0600 "$tmp" "$AUTH_STORE"
+  rm "$tmp" "$refresh"
+}
+
 area_id() {
   openssl rand -hex 16
 }
@@ -373,6 +442,7 @@ done
 if [[ -n "$LOCAL_SATELLITE_PORT" ]] && wyoming_needed server-satellite; then needs_work=true; fi
 if llm_needed; then needs_work=true; fi
 if ! state_done "$(pipeline_state_key)"; then needs_work=true; fi
+if voice_token_needed; then needs_work=true; fi
 
 if [[ "$needs_work" != true ]]; then
   log "post-setup already complete"
@@ -394,6 +464,7 @@ if [[ -n "$LOCAL_SATELLITE_PORT" ]]; then
 fi
 ensure_llm
 ensure_pipeline
+ensure_voice_token
 ensure_areas
 
 systemctl start home-assistant.service
