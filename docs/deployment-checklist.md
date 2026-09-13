@@ -259,29 +259,50 @@ From now on, deploy changes from your workstation with `deploy path:.#server`.
 
 ## Phase 2 — Pi installation
 
-### 2a. Flash NixOS to the SD card (on your workstation)
+### 2a. Flash the Pi 5 installer image (on your workstation)
 
-Download the NixOS AArch64 SD image and flash it to the Pi's microSD card:
+> **The generic NixOS aarch64 SD image from nixos.org does not boot a Raspberry Pi 5.**
+> Use the installer image from [nixos-raspberrypi](https://github.com/nvmd/nixos-raspberrypi),
+> which ships the Raspberry Pi kernel and firmware for the Pi 5.
+
+The project doesn't attach images to its releases. Its "Build Installer Images" CI
+workflow publishes them as build artifacts, kept for a limited time. Download the newest
+Pi 5 image:
 
 ```bash
-# Download the aarch64 SD image from https://nixos.org/download.
-# Replace /dev/sdX with your SD card device (check with lsblk):
-zstdcat nixos-sd-image-*.img.zst | sudo dd of=/dev/sdX bs=4M status=progress conv=fsync
+id=$(gh api 'repos/nvmd/nixos-raspberrypi/actions/artifacts?name=nixos-installer-rpi5-kernel.img.zst' \
+  --jq '[.artifacts[] | select(.expired == false)] | sort_by(.created_at) | last | .id')
+# The endpoint is called /zip, but it returns the .img.zst file itself.
+gh api "repos/nvmd/nixos-raspberrypi/actions/artifacts/$id/zip" > nixos-installer-rpi5-kernel.img.zst
+zstd -t nixos-installer-rpi5-kernel.img.zst     # integrity check
 ```
 
-Insert the SD card into the Pi 5 and power it on, connected to your network.
+If no artifact is left, build the image instead. It needs an aarch64 builder or emulation
+(on Debian: `sudo apt install qemu-user-binfmt`); the kernel and firmware come from the
+project's binary cache:
+
+```bash
+nix --accept-flake-config build github:nvmd/nixos-raspberrypi#installerImages.rpi5
+```
+
+Flash it to the microSD card. **This erases the card**; check the device with `lsblk`
+and unmount any auto-mounted partitions first:
+
+```bash
+zstd -dc nixos-installer-rpi5-kernel.img.zst | sudo dd of=/dev/sdX bs=4M conv=fsync status=progress
+```
+
+Insert the card into the Pi 5, connect Ethernet (and a screen for the first boot) and
+power it on. The image grows its root partition to fill the card on first boot.
 
 ### 2b. SSH into the Pi
 
-On the Pi console:
-```bash
-passwd          # temporary password for the nixos user
-ip addr show    # note the IP
-```
+The installer generates random login credentials at boot and shows them on the HDMI
+screen, together with its address. It also announces itself over mDNS. Log in as root
+with those credentials and install your key:
 
-From your workstation:
 ```bash
-ssh-copy-id nixos@<pi-ip>
+ssh-copy-id root@<pi-ip>
 ```
 
 ### 2c. Partition and format storage drives
@@ -328,8 +349,11 @@ sudo clevis luks unlock -d /dev/disk/by-id/DRIVE_A_ID -n storage-a
 ### 2e. Add the Pi's host key to the secrets
 
 ```bash
-ssh nixos@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub
+ssh root@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub
 ```
+
+The installer keeps this key when you switch to your configuration in step 2f, because
+it stays on the card.
 
 Put it in `secrets/secrets.nix` as `pi`, add `pi` to the recipients of
 `telegraf-token.age`, then re-encrypt and commit:
@@ -340,13 +364,31 @@ git add secrets/*.age && git commit -m "secrets: add pi host key"
 
 ### 2f. First switch to the Pi configuration
 
-The SD image has no `admin` user yet, so the first switch goes through the image's
-`nixos` user and builds on the Pi:
+The installer image is a normal, mutable NixOS system on the card, so you switch it to
+your configuration in place rather than reinstalling. It has no `admin` user yet, so the
+first switch logs in as root and builds on the Pi itself (no emulation needed):
 
 ```bash
 nix run nixpkgs#nixos-rebuild -- switch --flake path:.#pi \
-  --target-host nixos@<pi-ip> --build-host nixos@<pi-ip> --sudo
+  --target-host root@<pi-ip> --build-host root@<pi-ip>
 ```
+
+The Pi configuration boots the same way as the installer: `hosts/pi/hardware.nix` imports
+nixos-raspberrypi's Raspberry Pi 5 modules and sets
+`boot.loader.raspberry-pi.bootloader = "kernel"`. The Pi is built with nixos-raspberrypi's
+pinned nixpkgs (see `flake.nix`), so its kernel comes from that project's binary cache.
+
+Set `piInterface` in `local.nix` first (the Pi 5's on-board Ethernet is `end0`). If
+`piIp` differs from the installer's DHCP address, use `boot` instead of `switch` and
+reboot, so the address doesn't change in the middle of the SSH session:
+
+```bash
+nix run nixpkgs#nixos-rebuild -- boot --flake path:.#pi \
+  --target-host root@<pi-ip> --build-host root@<pi-ip>
+ssh root@<pi-ip> reboot
+```
+
+After the reboot, log in as `admin` on `piIp`; the configuration disables root login.
 
 From now on, deploy with `deploy path:.#pi`.
 
@@ -356,7 +398,8 @@ From now on, deploy with `deploy path:.#pi`.
 - Verify: `lsblk` should show storage-a and storage-b as open mappers.
 - Verify NFS: `showmount -e localhost`
 - Verify Snapclient: `systemctl status snapclient`
-- TV launcher should appear on HDMI (if monitor attached).
+- With `piTvFrontend` on, Kodi should appear on HDMI (if a screen is attached). Holding a
+  controller's Guide button for 2 seconds switches to EmulationStation and back.
 
 ---
 

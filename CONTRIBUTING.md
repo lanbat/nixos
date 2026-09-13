@@ -33,6 +33,14 @@ nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql}  # wiring 
 
 The workload-gate and postgresql tests boot VMs and need KVM. CI runs all three on every pull request.
 
+Two slower tests boot the complete host configurations. CI only evaluates them, so run
+them when you change a host, a service's tier or the unlock scripts:
+
+```bash
+nix build -L .#checks.x86_64-linux.server  # KVM, about 10 GB of free memory, 15–45 minutes
+nix build -L .#checks.aarch64-linux.pi     # an aarch64 machine with KVM, such as the Pi (see tests/pi.nix)
+```
+
 ## Pull requests
 
 - Keep each pull request focused on one change.
@@ -144,6 +152,7 @@ when `local.nix` does, and only a `path:` flake reference includes it
 | `config.lanbat.serverHostname` | Server hostname |
 | `config.lanbat.serverInterface` | Server network interface for the static address |
 | `config.lanbat.piHostname` | NFS mount target / Pi hostname |
+| `config.lanbat.piInterface` | Pi network interface for the static address |
 | `config.lanbat.nfsIdmapdDomain` | NFSv4 ID mapping domain (must match on both hosts) |
 | `config.lanbat.timezone` | System timezone + service TZ env vars |
 | `config.lanbat.phoneRegion` | Phone number formatting (Nextcloud) |
@@ -153,6 +162,7 @@ when `local.nix` does, and only a `path:` flake reference includes it
 | `config.lanbat.serverDisk` | Server system disk, partitioned by `hosts/server/disk.nix` |
 | `config.lanbat.piStorageDriveA` | Pi NVMe drive A by-id filename |
 | `config.lanbat.piStorageDriveB` | Pi NVMe drive B by-id filename |
+| `config.lanbat.piTvFrontend` | Whether the Pi runs the TV frontend (Kodi and EmulationStation) |
 | `config.lanbat.adminSshKey` | Admin SSH public key (both hosts) |
 | `config.lanbat.zigbeeVendorId` | Zigbee dongle USB vendor ID |
 | `config.lanbat.zigbeeProductId` | Zigbee dongle USB product ID |

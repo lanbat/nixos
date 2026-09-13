@@ -6,24 +6,26 @@
 #   1. Encrypted storage appliance: two LUKS drives unlocked automatically
 #      via Clevis/Tang on the server.
 #   2. NFS export of both drives to the server.
-#   3. TV frontend: Kodi and RetroArch via a simple launcher.
+#   3. TV frontend: Kodi and EmulationStation sessions, when
+#      lanbat.piTvFrontend is set (modules/pi/tv.nix).
 #
 # Heavy compute, databases and containers all live on the server.
+#
+# The Raspberry Pi 5 hardware support (./hardware.nix) is added next to this
+# module in flake.nix, so the VM test (tests/pi.nix) can boot the rest of the
+# configuration without it.
 { config, pkgs, ... }:
 
 {
   imports = [
-    ./hardware.nix
-
     ../../modules/core
 
     ../../modules/pi/clevis-unlock.nix
-    ../../modules/pi/frontend.nix
-    ../../modules/pi/launcher.nix
     ../../modules/pi/nfs-exports.nix
     ../../modules/pi/snapclient.nix
     ../../modules/pi/storage.nix
     ../../modules/pi/telegraf.nix
+    ../../modules/pi/tv.nix
     ../../modules/pi/wyoming-satellite.nix
   ];
 
@@ -35,7 +37,7 @@
   networking = {
     useNetworkd = true;
     # Static IP: the server's NFS mounts and firewall rules need a stable address.
-    interfaces.eth0 = {
+    interfaces.${config.lanbat.piInterface} = {
       useDHCP = false;
       ipv4.addresses = [
         {
@@ -46,7 +48,7 @@
     };
     defaultGateway = {
       address = config.lanbat.gatewayIp;
-      interface = "eth0";
+      interface = config.lanbat.piInterface;
     };
     nameservers = [ config.lanbat.gatewayIp ];
   };

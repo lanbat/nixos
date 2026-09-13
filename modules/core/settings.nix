@@ -76,6 +76,12 @@ in
       description = "Hostname of the Raspberry Pi. The server mounts NFS from it.";
     };
 
+    piInterface = mkOption {
+      type = types.str;
+      example = "end0";
+      description = "Network interface of the Raspberry Pi that gets piIp. Find it with: ip -o link";
+    };
+
     nfsIdmapdDomain = mkOption {
       type = types.str;
       example = "home.lan";
@@ -148,6 +154,17 @@ in
       type = types.str;
       example = "nvme-Samsung_SSD_970_EVO_1TB_XYZ456";
       description = "/dev/disk/by-id/ filename (without the prefix) of the Pi's storage drive B.";
+    };
+
+    # ── Raspberry Pi roles ────────────────────────────────────────────────────
+    piTvFrontend = mkOption {
+      type = types.bool;
+      example = false;
+      description = ''
+        Whether the Pi runs the TV frontend (Kodi and EmulationStation
+        sessions, modules/pi/tv.nix) on its HDMI output. Without it the Pi is a
+        headless storage host.
+      '';
     };
 
     # ── Services ──────────────────────────────────────────────────────────────

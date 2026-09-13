@@ -21,7 +21,7 @@ before the first install. The solution:
    `--extra-files` (`docs/deployment-checklist.md` step 1c). The server can decrypt its
    secrets on first boot.
 3. **Pi:** read the host key of the booted SD image
-   (`ssh nixos@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub`), add it to `secrets.nix`
+   (`ssh root@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub`), add it to `secrets.nix`
    and run `agenix -r` before the first switch (step 2e).
 
 ## Setup

@@ -88,6 +88,16 @@ let
   # Arguments: $1 = by-id path, $2 = mapper name, $3 = mount point.
   unlockScript = pkgs.writeShellScript "clevis-unlock-drive" ''
     set -euo pipefail
+    # clevis-decrypt-tang calls curl and jose from PATH, which a systemd
+    # service doesn't provide.
+    export PATH=${
+      lib.makeBinPath [
+        pkgs.curl
+        pkgs.jose
+        pkgs.cryptsetup
+        pkgs.util-linux
+      ]
+    }:$PATH
     DRIVE_ID="$1"
     MAPPER="$2"
     MOUNTPOINT="$3"
@@ -172,14 +182,7 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
 
-      # Retry every 5 minutes on failure (Tang unreachable).
-      # systemd.unit man page: Restart=on-failure works for oneshot services.
-      Restart = "on-failure";
-      RestartSec = "5min";
-      # Limit restart storm (e.g. Tang is permanently gone):
-      # After StartLimitBurst failures in StartLimitIntervalSec, stop retrying.
-      StartLimitBurst = 288; # 288 × 5min = 24 hours of retries
-      StartLimitIntervalSec = "25h";
+      # Retried by storage-a-unlock.timer (see below).
 
       ExecStart = "${unlockScript} ${cfg.piStorageDriveA} storage-a /mnt/storage-a";
       ExecStop = "${stopScript} storage-a /mnt/storage-a";
@@ -200,15 +203,26 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
-      Restart = "on-failure";
-      RestartSec = "5min";
-      StartLimitBurst = 288;
-      StartLimitIntervalSec = "25h";
+      # Retried by storage-b-unlock.timer (see below).
 
       ExecStart = "${unlockScript} ${cfg.piStorageDriveB} storage-b /mnt/storage-b";
       ExecStop = "${stopScript} storage-b /mnt/storage-b";
     };
   };
+
+  # ── Retries ────────────────────────────────────────────────────────────────
+  # A failed unlock (Tang unreachable, drive not bound yet) is retried every
+  # 5 minutes until it succeeds. This is a timer rather than
+  # Restart=on-failure: a restarting oneshot keeps its start job queued, which
+  # holds up multi-user.target at boot and `nixos-rebuild switch` until the
+  # drive unlocks.
+  systemd.timers = lib.genAttrs [ "storage-a-unlock" "storage-b-unlock" ] (_: {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnActiveSec = "5min";
+      OnUnitInactiveSec = "5min";
+    };
+  });
 
   # ── No initramfs changes needed ────────────────────────────────────────────
   # The NVMe drives are not the boot device. Initramfs networking is not

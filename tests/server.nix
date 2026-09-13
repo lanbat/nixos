@@ -1,0 +1,200 @@
+# tests/server.nix
+#
+# VM test of the whole server configuration (hosts/server) with the example
+# settings and test-only secrets:
+#   - it boots with both LUKS layers locked, and the always-on services start,
+#   - Grafana is served through Caddy with the internal CA,
+#   - Home Assistant records its history in the always-on PostgreSQL,
+#   - unlock-control brings up Tang,
+#   - unlock-workload brings up the workload PostgreSQL on the encrypted layer,
+#   - lock-workload stops the workload layer and leaves the always-on side up.
+#
+# Container images can't be pulled without network access, so the container
+# services aren't checked. Run with: nix build -L .#checks.x86_64-linux.server
+{
+  pkgs,
+  agenix,
+  disko,
+}:
+
+pkgs.testers.runNixOSTest {
+  name = "server";
+
+  node.pkgsReadOnly = false;
+
+  nodes.server =
+    { config, lib, ... }:
+    {
+      imports = [
+        agenix.nixosModules.default
+        disko.nixosModules.disko
+        ../hosts/server
+        ../hosts/example-settings.nix
+        ./lib/test-secrets.nix
+      ];
+
+      nixpkgs.config.allowUnfree = true;
+
+      virtualisation = {
+        memorySize = 8192;
+        cores = 4;
+        diskSize = 8192;
+        # /dev/vdb: control volume, /dev/vdc: workload volume.
+        emptyDiskImages = [
+          64
+          2048
+        ];
+        # Test VMs replace fileSystems with virtualisation.fileSystems.
+        fileSystems = config.lanbat.layers.controlFileSystems // config.lanbat.layers.workloadFileSystems;
+      };
+
+      lanbat.layers = {
+        controlDevice = lib.mkForce "/dev/vdb";
+        workloadDevice = lib.mkForce "/dev/vdc";
+      };
+
+      # The test VM can't pull container images, and a container that keeps
+      # restarting keeps its start job, and multi-user.target, pending forever.
+      systemd.services = lib.mapAttrs' (
+        name: _: lib.nameValuePair "podman-${name}" { wantedBy = lib.mkForce [ ]; }
+      ) config.virtualisation.oci-containers.containers;
+
+      lanbat.testSecrets = {
+        authentik-env = ''
+          AUTHENTIK_POSTGRESQL__PASSWORD=test-db-password
+          AUTHENTIK_SECRET_KEY=test-secret-key-0123456789abcdef0123456789abcdef
+        '';
+        authentik-oidc-secrets = ''
+          AUTHENTIK_GRAFANA_CLIENT_SECRET=test
+          AUTHENTIK_NEXTCLOUD_CLIENT_SECRET=test
+          AUTHENTIK_IMMICH_CLIENT_SECRET=test
+          AUTHENTIK_HA_CLIENT_SECRET=test
+          AUTHENTIK_JELLYFIN_CLIENT_SECRET=test
+        '';
+        nextcloud-admin-pass = "test-admin-password";
+        nextcloud-oidc-env = ''
+          NEXTCLOUD_OIDC_CLIENT_ID=nextcloud
+          NEXTCLOUD_OIDC_CLIENT_SECRET=test
+        '';
+        immich-db-password = "POSTGRES_PASSWORD=test-db-password\n";
+        immich-oidc-env = ''
+          IMMICH_OAUTH_CLIENT_ID=immich
+          IMMICH_OAUTH_CLIENT_SECRET=test
+        '';
+        bitmagnet-db-pass = "POSTGRES_PASSWORD=test-db-password\n";
+        frigate-rtsp-env = ''
+          FRIGATE_RTSP_USER=test
+          FRIGATE_RTSP_PASSWORD=test
+        '';
+        rclone-frigate-config = "[remote]\ntype = local\n";
+        mosquitto-ha-pass = "test-mqtt-password";
+        mosquitto-frigate-pass = "test-mqtt-password";
+        mosquitto-z2m-pass = "test-mqtt-password";
+        influxdb-admin-password = "test-influx-password";
+        influxdb-admin-token = "test-influx-token-0123456789";
+        grafana-env = ''
+          GF_SECURITY_SECRET_KEY=test-grafana-secret-key
+          GF_SECURITY_ADMIN_PASSWORD=test-admin-password
+          GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=test
+          INFLUXDB_TOKEN=test-influx-token-0123456789
+        '';
+        vaultwarden-env = ''
+          ADMIN_TOKEN=test
+          SSO_CLIENT_SECRET=test
+        '';
+        telegraf-token = "TELEGRAF_INFLUXDB_TOKEN=test-influx-token-0123456789\n";
+      };
+    };
+
+  testScript = ''
+    import time
+
+    server.start()
+
+    # Log the pending jobs while boot is incomplete, so a unit that holds up
+    # multi-user.target shows in the log instead of a bare timeout.
+    for _ in range(30):
+        if server.execute("systemctl is-active multi-user.target")[0] == 0:
+            break
+        print(server.execute("systemctl list-jobs --no-pager | head -30")[1])
+        time.sleep(30)
+    else:
+        raise Exception("multi-user.target wasn't reached within 15 minutes")
+
+    def psql(port, db, query):
+        return (
+            f"sudo -u postgres psql -h /run/postgresql{'-always-on' if port == 5433 else '''} "
+            f"-p {port} -d {db} -tAc \"{query}\""
+        )
+
+    with subtest("boots with both layers locked"):
+        server.fail("systemctl is-active control-online.target")
+        server.fail("systemctl is-active workload-online.target")
+        server.fail("systemctl is-active postgresql.service")
+        server.succeed('test "$(stat -c %a /var/lib/nextcloud)" = 0')
+
+    with subtest("always-on services start"):
+        for unit in [
+            "sshd.service",
+            "caddy.service",
+            "postgresql-always-on-setup.service",
+            "redis-shared.service",
+            "mosquitto.service",
+            "influxdb2.service",
+            "grafana.service",
+        ]:
+            server.wait_for_unit(unit)
+
+    with subtest("Grafana is served through Caddy with the internal CA"):
+        server.wait_until_succeeds(
+            "curl -sfk --resolve grafana.home.example.com:443:127.0.0.1 "
+            "https://grafana.home.example.com/api/health | grep -q ok",
+            timeout=300,
+        )
+
+    with subtest("Home Assistant records history in the always-on PostgreSQL"):
+        server.wait_for_unit("home-assistant.service", timeout=900)
+        server.wait_until_succeeds(
+            psql(5433, "hass", "SELECT 1 FROM information_schema.tables WHERE table_name = 'states'") + " | grep -q 1",
+            timeout=900,
+        )
+
+    with subtest("create the LUKS volumes"):
+        server.succeed(
+            "printf test | cryptsetup luksFormat --batch-mode --pbkdf pbkdf2 --pbkdf-force-iterations 1000 /dev/vdb",
+            "printf test | cryptsetup luksOpen /dev/vdb control-luks",
+            "mkfs.ext4 -q /dev/mapper/control-luks",
+            "mount /dev/mapper/control-luks /mnt/control",
+            "install -d -m 0700 /mnt/control/tang",
+            "umount /mnt/control",
+            "cryptsetup luksClose control-luks",
+            "printf test | cryptsetup luksFormat --batch-mode --pbkdf pbkdf2 --pbkdf-force-iterations 1000 /dev/vdc",
+            "printf test | cryptsetup luksOpen /dev/vdc workload-luks",
+            "mkfs.ext4 -q /dev/mapper/workload-luks",
+            "cryptsetup luksClose workload-luks",
+        )
+
+    with subtest("unlock-control brings up Tang with its keys on the control layer"):
+        # Servers installed before the move to /var/lib/private/tang have an
+        # empty stub directory at /var/lib/tang; unlock-control replaces it.
+        server.succeed("rm /var/lib/tang", "install -d -m 0 /var/lib/tang")
+        server.succeed("printf test | unlock-control")
+        server.wait_for_unit("control-online.target")
+        server.wait_until_succeeds("curl -sf http://127.0.0.1:7500/adv | grep -q payload", timeout=120)
+        server.succeed("test -L /var/lib/tang", 'test -n "$(ls /mnt/control/tang)"')
+
+    with subtest("unlock-workload brings up the workload PostgreSQL"):
+        server.succeed("printf test | unlock-workload")
+        server.wait_for_unit("workload-online.target")
+        server.wait_for_unit("postgresql.service")
+        server.wait_for_unit("postgresql-immich-init.service")
+        server.succeed("findmnt -n -o SOURCE /var/lib/postgresql | grep -q workload-luks")
+        server.succeed(psql(5432, "immich", "SELECT extname FROM pg_extension WHERE extname = 'vchord'") + " | grep -q vchord")
+
+    with subtest("lock-workload stops only the workload layer"):
+        server.succeed("printf 'y\\n' | lock-workload")
+        server.fail("systemctl is-active postgresql.service")
+        server.fail("test -e /dev/mapper/workload-luks")
+        server.succeed("systemctl is-active postgresql-always-on.service grafana.service caddy.service")
+  '';
+}
