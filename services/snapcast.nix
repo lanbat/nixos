@@ -40,6 +40,20 @@
       1705 # control
     ];
     auth = "forward-auth";
+    # Snapweb loads static assets and opens a WebSocket to /jsonrpc after the
+    # shell page loads. Those requests must reach snapserver without another
+    # Authentik round-trip or the UI looks dead (302 on assets/ws).
+    caddy.authBypassPaths = [
+      "/jsonrpc"
+      "/assets/*"
+      "/logo.svg"
+      "/favicon.ico"
+      "/apple-touch-icon*"
+      "/sw.js"
+      "/workbox-*"
+      "/registerSW.js"
+      "/manifest.webmanifest"
+    ];
     dashboard = {
       group = "Utilities";
       name = "Snapcast";
