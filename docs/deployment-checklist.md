@@ -615,7 +615,8 @@ Visit `https://sync.<domain>` (protected by Authentik forward auth).
 > **Hardware required:** a USB microphone on the server and on the Pi. The
 > default is the PlayStation Eye (`lanbat.voiceSatellite.microphone.usbId` in
 > `modules/core/voice-satellite.nix`). Replies play on the server's internal
-> speaker and on the Pi's HDMI output.
+> speaker and on the Pi's HDMI output, where they mix with Snapcast: the music
+> turns down while the assistant listens and answers (`modules/pi/audio.nix`).
 
 `home-assistant-post-setup` adds the Wyoming services and both satellites to
 Home Assistant, the conversation agent for `lanbat.haLlm` (API key from

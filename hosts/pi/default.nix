@@ -20,6 +20,7 @@
   imports = [
     ../../modules/core
 
+    ../../modules/pi/audio.nix
     ../../modules/pi/clevis-unlock.nix
     ../../modules/pi/nfs-exports.nix
     ../../modules/pi/snapclient.nix
@@ -71,12 +72,12 @@
   };
 
   # Voice satellite for the server's Home Assistant (modules/core/voice-satellite.nix):
-  # the PlayStation Eye's microphones, replies on the TV.
+  # the PlayStation Eye's microphones, replies on the TV through PipeWire
+  # (modules/pi/audio.nix).
   lanbat.voiceSatellite = {
     enable = true;
     name = "Pi Satellite";
     uri = "tcp://0.0.0.0:10700";
-    speaker = "default:CARD=vc4hdmi0";
   };
 
   services.timesyncd.enable = true;

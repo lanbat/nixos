@@ -162,7 +162,7 @@ let
       ExecStart = command;
       User = "media";
       # A logind session on tty1 gives the session the display and input
-      # devices, and starts the user's PipeWire.
+      # devices. Audio goes to the system-wide PipeWire (modules/pi/audio.nix).
       PAMName = "login";
       TTYPath = "/dev/tty1";
       TTYReset = true;
@@ -186,6 +186,7 @@ in
       group = "media";
       extraGroups = [
         "audio"
+        "pipewire"
         "video"
         "input"
         "render"
@@ -199,13 +200,6 @@ in
     };
     hardware.xpadneo.enable = true;
     boot.kernelModules = [ "joydev" ];
-
-    services.pulseaudio.enable = false;
-    services.pipewire = {
-      enable = true;
-      alsa.enable = true;
-      pulse.enable = true;
-    };
 
     environment.systemPackages = [
       kodi

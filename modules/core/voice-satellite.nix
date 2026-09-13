@@ -14,9 +14,9 @@
 #
 # Speaker
 # -------
-# Replies play straight to an ALSA device. While another program holds the
-# same device (Snapcast's client while music plays, or the TV frontend's
-# PipeWire), a reply can't play.
+# Replies play to an ALSA device. A hardware device plays nothing else at the
+# same time; the Pi plays replies through its PipeWire instead, which mixes
+# them with Snapcast and the TV (modules/pi/audio.nix).
 {
   config,
   lib,
