@@ -54,6 +54,11 @@ in
     alsa.enable = true;
     pulse.enable = true;
 
+    # WirePlumber starts new outputs at 40%; the TV's own volume is the control.
+    wireplumber.extraConfig."50-full-output-volume"."wireplumber.settings" = {
+      "device.routes.default-sink-volume" = 1.0;
+    };
+
     wireplumber.extraConfig."51-voice-satellite-microphone" = lib.mkIf satellite.enable {
       "monitor.alsa.rules" = [
         {
