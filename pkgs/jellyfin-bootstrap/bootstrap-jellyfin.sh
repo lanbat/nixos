@@ -117,7 +117,7 @@ add_library() {
 
   log "adding library ${name} -> ${path}"
   api_call -X POST \
-    "${JELLYFIN_URL}/Library/VirtualFolders?collectionType=${collection_type}&name=$(jq -rn --arg v "$name" '$v|@uri')&refreshLibrary=false" \
+    "${JELLYFIN_URL}/Library/VirtualFolders?collectionType=${collection_type}&name=$(jq -rn --arg v "$name" '$v|@uri')&refreshLibrary=true" \
     -H 'Content-Type: application/json' \
     -d "$(jq -n --arg path "$path" '{LibraryOptions: {PathInfos: [{Path: $path}]}}')" \
     -o /dev/null
@@ -131,6 +131,12 @@ setup_libraries() {
   add_library movies "Documentaries" "/srv/storage/b/media/documentaries"
   add_library books "Audiobooks" "/srv/storage/b/media/audiobooks"
   add_library books "Books" "/srv/storage/b/media/books"
+}
+
+refresh_all_libraries() {
+  log "triggering full library scan"
+  api_call -X POST "${JELLYFIN_URL}/Library/Refresh" -o /dev/null || \
+    log "library refresh request failed (may already be scanning)"
 }
 
 uri_encode() {
@@ -290,18 +296,52 @@ harden_adult_permissions() {
   chmod 2770 "$adult" 2>/dev/null || true
 }
 
+repair_media_permissions() {
+  local path
+  local media_paths=(
+    /srv/storage/a/media
+    /srv/storage/a/media/movies
+    /srv/storage/a/media/tv
+    /srv/storage/a/media/music-videos
+    /srv/storage/b/media
+    /srv/storage/b/media/music
+    /srv/storage/b/media/documentaries
+    /srv/storage/b/media/roms
+    /srv/storage/b/media/audiobooks
+    /srv/storage/b/media/books
+    /srv/storage/b/media/gym
+    /srv/storage/b/media/games
+    /srv/storage/b/media/misc
+    /srv/storage/b/media/incomplete
+  )
+
+  for path in "${media_paths[@]}"; do
+    [[ -d "$path" ]] || continue
+    if [[ "$(stat -c '%U:%G' "$path")" != "qbt:media" ]] || [[ "$(stat -c '%a' "$path")" != "2775" ]]; then
+      log "repairing ${path} ownership and mode (expected qbt:media 2775)"
+      chown qbt:media "$path" 2>/dev/null || true
+      chmod 2775 "$path" 2>/dev/null || true
+    fi
+  done
+}
+
 run_configuration() {
+  repair_media_permissions
   harden_adult_permissions
   api_auth
   setup_libraries
   setup_plugins
   setup_sso
   setup_branding
+  api_auth
+  refresh_all_libraries
 }
 
 wait_for_jellyfin
 
 if [[ -f "$CONFIG_STATE_FILE" ]] && wizard_complete && configuration_complete 2>/dev/null; then
+  repair_media_permissions
+  harden_adult_permissions
   log "configuration already complete"
   exit 0
 fi

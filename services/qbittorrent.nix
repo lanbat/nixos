@@ -63,10 +63,9 @@
     image = "lscr.io/linuxserver/qbittorrent:latest";
 
     environment = {
-      # PUID/PGID=0: linuxserver entrypoint stays as root inside the container.
-      # In rootless mode, container root maps to the host "qbt" user (UID 994).
-      PUID = "0";
-      PGID = "0";
+      # Match the host qbt account so NFS media dirs (qbt:media, mode 2775) are writable.
+      PUID = toString config.lanbat.services.qbittorrent.account.uid;
+      PGID = toString config.users.groups.media.gid;
       TZ = config.lanbat.timezone;
       WEBUI_PORT = "8090";
     };

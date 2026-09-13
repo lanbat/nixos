@@ -106,7 +106,7 @@ in
         base=/mnt/storage-b
         # General media on drive B — group media (Jellyfin, qBittorrent, Samba).
         for dir in media media/music media/documentaries media/roms \
-          media/audiobooks media/books media/gym media/games media/misc; do
+          media/audiobooks media/books media/gym media/games media/misc media/incomplete; do
           install -d -m 2775 -o 994 -g ${toString mediaGid} "$base/$dir"
         done
         # Adult content is private-group only — not in Jellyfin, hidden from Samba media shares.
