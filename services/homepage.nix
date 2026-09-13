@@ -96,24 +96,22 @@ let
     );
 
   manifest = {
-    groups = lib.filter (group: inGroup group != [ ]) (
-      map (
-        group:
-        {
-          name = group;
-          entries = map (
-            svc:
-            {
-              name = svc.dashboard.name;
-              href = url svc;
-              description = svc.dashboard.description;
-              icon = svc.dashboard.icon;
-              widget = if svc.dashboard.widget != null then widgetEntry svc else null;
-            }
-          ) (inGroup group);
-        }
-      ) groups
-    );
+    groups = map (
+      group:
+      {
+        name = group;
+        entries = map (
+          svc:
+          {
+            name = svc.dashboard.name;
+            href = url svc;
+            description = svc.dashboard.description;
+            icon = svc.dashboard.icon;
+            widget = if svc.dashboard.widget != null then widgetEntry svc else null;
+          }
+        ) (inGroup group);
+      }
+    ) (lib.filter (group: inGroup group != [ ]) groups);
   };
 
   manifestJson = pkgs.writeText "homepage-manifest.json" (builtins.toJSON manifest);
