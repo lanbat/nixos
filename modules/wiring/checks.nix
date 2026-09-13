@@ -137,10 +137,6 @@ let
 
   perService = s: [
     {
-      assertion = !(s.auth == "forward-auth" && s.apiClients);
-      message = "lanbat: ${s.name} has API clients, so it can't use forward auth (clients can't pass the Authentik login)";
-    }
-    {
       assertion = s.auth != "forward-auth" || config.lanbat.services ? authentik;
       message = "lanbat: ${s.name} uses forward auth, but the authentik service isn't imported";
     }

@@ -41,8 +41,84 @@ visible, so it is treated as lower-sensitivity data.
 
 ### LAN trust model
 - The internal network is treated as **partially trusted** — not zero-trust.
-- All web services are HTTPS via Caddy's internal CA.
+- All web services are HTTPS via Caddy's internal CA. The root CA key is pinned
+  in agenix (`secrets/caddy-ca-root-key.age`) and the public cert in the repo
+  (`secrets/caddy-ca-root.crt`), so a host-root reinstall does not mint a new
+  root. Client devices must still install that root once (see `ca.<domain>`).
 - Services that handle sensitive data (Authentik, Nextcloud, Immich) use OIDC.
+
+### Internal CA trust on client devices
+
+Clients trust the homelab by installing the root certificate from
+`https://ca.<domain>/root.crt` (same file as `secrets/caddy-ca-root.crt` in the
+repo). The CA landing page at `ca.<domain>` has OS-specific install steps.
+
+**Debian/Ubuntu system store:** if the root was regenerated before pinning, an
+old `Lanbat Root CA` may still be in `/usr/local/share/ca-certificates/`.
+Because every generation shares the same CN, OpenSSL assigns the same subject
+hash (`6fbdfd37`) — `update-ca-certificates` can keep trusting the stale key
+unless you **remove** the old file first, then install the current cert:
+
+```bash
+sudo rm -f /usr/local/share/ca-certificates/lanbat-ca.crt   # or any prior Lanbat root
+curl -k https://ca.<domain>/root.crt -o /usr/local/share/ca-certificates/lanbat-ca.crt
+sudo update-ca-certificates
+```
+
+**Browsers (Firefox, Chrome/Chromium):** these use NSS databases, not only the
+system store. Installing via `update-ca-certificates` is not enough for them.
+Remove old entries and add the current root with `certutil`, for example:
+
+```bash
+# Firefox — repeat per profile under ~/.mozilla/firefox/*/
+certutil -d sql:~/.mozilla/firefox/<profile> -D -n "Lanbat Root CA" 2>/dev/null || true
+certutil -d sql:~/.mozilla/firefox/<profile> -A -n "Lanbat Root CA" -t "C,," \
+  -i /path/to/lanbat-ca.crt
+
+# Chrome/Chromium on Linux
+certutil -d sql:~/.pki/nssdb -D -n "Lanbat Root CA" 2>/dev/null || true
+certutil -d sql:~/.pki/nssdb -A -n "Lanbat Root CA" -t "C,," -i /path/to/lanbat-ca.crt
+```
+
+After a **deliberate root rotation**, every client must have the **old** root
+removed from system and NSS stores — not just the new one added. Leftover roots
+with the same CN but a different key cause errors such as "Peer's certificate
+has an invalid signature".
+
+### TLS chain troubleshooting
+
+**Symptom:** a browser or app reports an untrusted certificate or "invalid
+signature" on a homelab HTTPS URL, while `curl` from a correctly configured
+workstation succeeds.
+
+**Check whether the server chain is actually wrong** (from a machine with the
+repo, substituting a real service hostname for `<host>`):
+
+```bash
+openssl s_client -connect <host>:443 -servername <host> -showcerts </dev/null 2>/dev/null \
+  | openssl verify -CAfile secrets/caddy-ca-root.crt
+```
+
+If this prints `OK`, the served intermediate already chains to the pinned root
+and **no server-side cleanup is needed** — fix the client's trust stores (see
+above). This is the usual cause after earlier root regenerations left multiple
+`Lanbat Root CA` entries on the device.
+
+**If verify fails**, a cached intermediate under `/var/lib/caddy/` may have been
+signed by a previous root. On the server:
+
+```bash
+sudo systemctl stop caddy
+sudo rm -f \
+  /var/lib/caddy/.local/share/caddy/pki/authorities/local/intermediate.crt \
+  /var/lib/caddy/.local/share/caddy/pki/authorities/local/intermediate.key \
+  /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt \
+  /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.key
+sudo systemctl start caddy
+```
+
+Re-run the `openssl verify` check; once it succeeds, clients that already trust
+the pinned root need no further change.
 - Services that are admin-only (Frigate, qBittorrent, Bitmagnet) are behind Authentik forward auth.
 - SearXNG is intentionally unauthenticated (it's a search proxy, not a private service).
 

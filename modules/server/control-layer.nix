@@ -165,9 +165,12 @@ in
         systemctl status tangd.socket --no-pager --lines=5 || true
         echo
         echo "Tang health check:"
-        curl -sf http://127.0.0.1:7500/adv | ${pkgs.jq}/bin/jq -r '.keys[].alg' \
-          && echo "Tang: OK" \
-          || echo "Tang: not yet responding (may take a moment)"
+        # /adv is a JWS: the keys are inside its base64url payload.
+        if curl -sf http://127.0.0.1:7500/adv | ${pkgs.jq}/bin/jq -e .payload >/dev/null; then
+          echo "Tang: OK"
+        else
+          echo "Tang: not yet responding (may take a moment)"
+        fi
       '')
 
       # lock-control: stop Tang, unmount control, close LUKS.

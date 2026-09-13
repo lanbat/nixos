@@ -84,16 +84,9 @@
 
       # ADMIN_TOKEN and SSO_CLIENT_SECRET are set via environmentFile below.
 
-      # SSO via Authentik OIDC — adds a login button in the web vault without
-      # breaking mobile/desktop client API access (they still use email+password).
-      SSO_ENABLED = true;
-      # Allow both SSO and email+password login.
-      SSO_ONLY = false;
-      SSO_CLIENT_ID = "vaultwarden";
-      # Discovery URL for the Authentik application slug "vaultwarden".
-      SSO_AUTHORITY = "https://auth.${config.lanbat.domain}/application/o/vaultwarden/";
-      # Allow SSO to create/link accounts even though SIGNUPS_ALLOWED = false.
-      SSO_SIGNUPS_MATCH_EMAIL = true;
+      # SSO via Authentik OIDC — enable once vaultwarden-env.age includes
+      # SSO_CLIENT_SECRET and an Authentik OIDC app exists for vaultwarden.
+      SSO_ENABLED = false;
     };
 
     # Inject the admin token from an agenix-managed secret file.

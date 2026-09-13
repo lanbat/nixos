@@ -26,7 +26,7 @@ SERVER — one disk (hosts/server/disk.nix)
   always-on service data (always-on PostgreSQL, Authentik, HA, Grafana, InfluxDB, Mosquitto,
   Frigate, Caddy TLS certs, container images)
 - **Does NOT contain**: Tang keys, workload-gated service data (Nextcloud, Immich,
-  Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet)
+  Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM)
 
 After a reboot, this layer is immediately accessible. SSH works. Admin tools
 work. Nothing sensitive is exposed.
@@ -51,8 +51,8 @@ will not start until that target is active.
 - **Mount**: `/mnt/workload` (manual, not at boot)
 - **Unlocked by**: admin passphrase (`unlock-workload`)
 - **Contains**: workload-gated service data (Nextcloud, Immich, Jellyfin,
-  Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet), including the workload
-  PostgreSQL instance that holds the Nextcloud, Immich and Bitmagnet databases
+  Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM), including the workload
+  PostgreSQL instance that holds the Nextcloud, Immich, Bitmagnet and RomM databases
 
 Bind mounts overlay `/var/lib/<service>` paths with subdirectories of
 `/mnt/workload`. The `workload-online.target` is activated once all bind mounts
@@ -78,7 +78,8 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
 | InfluxDB | `/var/lib/influxdb2` | Time-series data — metrics collection starts immediately after boot |
 | Mosquitto | `/var/lib/mosquitto` | MQTT broker — IoT devices reconnect at boot |
 | Frigate | `/var/lib/frigate` | NVR event database — surveillance must not wait for unlock |
-| Snapcast | — | Audio streaming — ephemeral, no persistent state |
+| Music Assistant | `/var/lib/music-assistant` | Music controller — provider config, playlists, player state |
+| Snapcast | — | Audio distribution — streams created dynamically by MA |
 | Wyoming pipeline | — | STT/TTS/wake word — model files managed by NixOS module |
 | SearXNG | — | Search proxy — stateless |
 | Telegraf | — | Metrics collector — stateless |
@@ -90,7 +91,7 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
 
 ```
 /mnt/workload/
-  postgresql/     — PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet databases
+  postgresql/     — PostgreSQL workload instance: Nextcloud, Immich, Bitmagnet, RomM databases
   nextcloud/      — Nextcloud home (config, apps, data)
   immich/         — Immich thumbnails, encoded video, profiles, ML model cache
   jellyfin/       — Jellyfin library metadata
@@ -98,6 +99,7 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
   syncthing/      — Syncthing configuration and block index
   qbittorrent/    — qBittorrent config and session state
   bitmagnet/      — Bitmagnet torrent index
+  romm/           — RomM config, artwork, saves and states
   samba/          — Samba configuration and state
 ```
 
@@ -144,7 +146,8 @@ boot
 boot
  └── host root available → SSH + always-on services start automatically
       │                    (Caddy, always-on PostgreSQL, Authentik, HA, Grafana,
-      │                     InfluxDB, Mosquitto, Frigate, Snapcast, Wyoming,
+      │                     InfluxDB, Mosquitto, Frigate, Music Assistant,
+      │                     Snapcast, Wyoming,
       │                     SearXNG, Telegraf)
       └── [admin] unlock-workload
            └── /mnt/workload mounted
@@ -152,7 +155,7 @@ boot
                      └── workload-online.target activated
                           └── gated services start
                                (Nextcloud, Immich, Jellyfin, Vaultwarden,
-                                Syncthing, Samba, qBittorrent, Bitmagnet)
+                                Syncthing, Samba, qBittorrent, Bitmagnet, RomM)
 ```
 
 ## Raspberry Pi unlock model

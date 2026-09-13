@@ -83,6 +83,24 @@
         };
 
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
+
+      # deploy-rs's library, with nixpkgs' deploy-rs, which is in the binary
+      # cache. The flake input's own package is built from source against our
+      # nixpkgs, and crates.io refuses to serve some of its dependencies.
+      deployLib =
+        system:
+        (import nixpkgs {
+          inherit system;
+          overlays = [
+            deploy-rs.overlays.default
+            (final: prev: {
+              deploy-rs = {
+                inherit (nixpkgs.legacyPackages.${system}) deploy-rs;
+                inherit (prev.deploy-rs) lib;
+              };
+            })
+          ];
+        }).deploy-rs.lib;
     in
     {
       nixosConfigurations = {
@@ -99,7 +117,7 @@
           hostname = self.nixosConfigurations.server.config.lanbat.serverIp;
           sshUser = "admin";
           user = "root";
-          profiles.system.path = deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.server;
+          profiles.system.path = (deployLib "x86_64-linux").activate.nixos self.nixosConfigurations.server;
         };
         pi = {
           hostname = self.nixosConfigurations.pi.config.lanbat.piIp;
@@ -107,12 +125,13 @@
           user = "root";
           # Build on the Pi itself rather than cross-compiling on the workstation.
           remoteBuild = true;
-          profiles.system.path = deploy-rs.lib.aarch64-linux.activate.nixos self.nixosConfigurations.pi;
+          profiles.system.path = (deployLib "aarch64-linux").activate.nixos self.nixosConfigurations.pi;
         };
       };
 
       checks.x86_64-linux = {
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };
+        music-assistant = import ./tests/music-assistant.nix { inherit pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
         server = import ./tests/server.nix {
           inherit pkgs;
@@ -120,7 +139,7 @@
         };
         workload-gate = import ./tests/workload-gate.nix { inherit pkgs; };
       }
-      // lib.optionalAttrs hasLocal (deploy-rs.lib.x86_64-linux.deployChecks self.deploy);
+      // lib.optionalAttrs hasLocal ((deployLib "x86_64-linux").deployChecks self.deploy);
 
       # Runs on an aarch64 machine with KVM (the Pi itself), with the Pi's nixpkgs.
       checks.aarch64-linux.pi = import ./tests/pi.nix {
@@ -131,7 +150,7 @@
       # `nix develop` provides the deploy, install and secrets tools.
       devShells.x86_64-linux.default = pkgs.mkShell {
         packages = [
-          deploy-rs.packages.x86_64-linux.default
+          pkgs.deploy-rs
           agenix.packages.x86_64-linux.default
           pkgs.nixos-anywhere
         ];

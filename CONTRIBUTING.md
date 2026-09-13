@@ -180,14 +180,14 @@ availability requirements:
 **Always-on** (the default; start at boot, data on the unencrypted host root):
 - The service starts without any LUKS unlock and NixOS manages `/var/lib/<name>` normally.
 - Current members: Caddy, PostgreSQL (always-on instance), Redis, Authentik, Home Assistant, Grafana, InfluxDB,
-  Mosquitto, Zigbee2MQTT, Frigate, Snapcast, Wyoming pipeline, SearXNG, Telegraf, Homepage
+  Mosquitto, Zigbee2MQTT, Frigate, Music Assistant, Snapcast, Wyoming pipeline, SearXNG, Telegraf, Homepage
 
 **Workload-gated** (start only after `unlock-workload`, data on encrypted LUKS):
 - Set `tier = "workload"`, list the `/var/lib` directories in `state` and the systemd
   units in `units`. The wiring creates the mode-0000 stubs, bind-mounts
   `/mnt/workload/<dir>` over them, and moves the units under `workload-online.target`.
 - Current members: Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba,
-  qBittorrent, Bitmagnet, PostgreSQL (workload instance)
+  qBittorrent, Bitmagnet, RomM, PostgreSQL (workload instance)
 
 When in doubt, prefer **always-on** for monitoring/automation/infrastructure services
 and **workload-gated** for personal data vaults (passwords, photos, documents, media).
@@ -255,7 +255,7 @@ On the Pi: 2049 (NFS) and 10700 (Wyoming satellite), both restricted to the serv
 
 ### Caddy auth
 - Services with **native OIDC** (Nextcloud, Immich, Grafana): `auth = "app"`.
-- Services with **no auth** of their own (Frigate, qBittorrent, Bitmagnet): `auth = "forward-auth"`.
+- Services with **no auth** of their own (Frigate, qBittorrent, Bitmagnet, RomM): `auth = "forward-auth"`.
 - Services with **their own account system** (Vaultwarden, Jellyfin): `auth = "app"` and
   `apiClients = true` — clients need direct API access.
 - Deliberately open services (SearXNG, Homepage, the CA page): `auth = "none"`.

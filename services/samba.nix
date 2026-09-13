@@ -122,45 +122,40 @@
         path = "/srv/storage/b/users/%S";
       };
 
-      # ---- Shared media share (read-only for all users) ----
+      # ---- Shared media shares (read-only for all users) ----
+      # One per drive: media is split across both (modules/pi/storage.nix).
+      # qBittorrent saves into these folders.
       media = {
-        comment = "Media";
+        comment = "Media: movies, TV, music videos";
         path = "/srv/storage/a/media";
         browseable = "yes";
         "read only" = "yes";
         "guest ok" = "no";
         "valid users" = "@media";
-        "create mask" = "0664";
-        "directory mask" = "0775";
       };
 
-      # ---- Downloads share ----
-      downloads = {
-        comment = "Downloads";
-        path = "/srv/storage/a/downloads";
+      media-b = {
+        comment = "Media: music, documentaries, books, ROMs";
+        path = "/srv/storage/b/media";
         browseable = "yes";
-        "read only" = "no";
+        "read only" = "yes";
         "guest ok" = "no";
         "valid users" = "@media";
-        "create mask" = "0664";
-        "directory mask" = "0775";
-        "force group" = "media";
+        # Adult video is only in the private share.
+        "veto files" = "/adult/";
       };
 
-      # ---- Private downloads (restricted to "private" group) ----
+      # ---- Private media (restricted to "private" group) ----
       # Not browseable — does not appear in network discovery.
       # Only users explicitly added to the "private" group can access it.
       # Add users: usermod -aG private <username> && smbpasswd -a <username>
-      private-downloads = {
+      private = {
         comment = "Private";
-        path = "/srv/storage/a/downloads/private";
+        path = "/srv/storage/b/media/adult";
         browseable = "no"; # hidden from share listings
-        "read only" = "no";
+        "read only" = "yes";
         "guest ok" = "no";
         "valid users" = "@private";
-        "create mask" = "0600";
-        "directory mask" = "0700";
-        "force group" = "private";
       };
 
       # ---- Shared space ----
@@ -200,8 +195,6 @@
     "d /srv/storage/b/users                  0755 root  root    -"
     "d /srv/storage/b/users/admin            0700 admin admin   -"
     "d /srv/storage/b/shared                 0775 root  media   -"
-    # Private downloads — mode 0770 so only owner+group can enter.
-    "d /srv/storage/a/downloads/private      0770 admin private -"
   ];
 
   # Note: add Samba users manually after deploying:

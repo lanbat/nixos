@@ -12,8 +12,14 @@
 #
 # DNS assumption: *.<domain> → the server's IPv4 (and optionally IPv6).
 #
-# CA cert location: /var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
-# A systemd service copies it to /var/lib/ca-landing/root.crt for the landing page.
+# Root CA persistence
+# -------------------
+# The root certificate (public) lives in secrets/caddy-ca-root.crt (committed).
+# The root private key is secrets/caddy-ca-root-key.age (agenix), decrypted to
+# /run/agenix/caddy-ca-root-key for the caddy user. Caddy is configured via
+# pki.ca.local.root { cert key } so a host-root reinstall does not mint a new
+# root. Intermediates and leaf certs remain in /var/lib/caddy/ and rotate on
+# Caddy's default schedule (7d / 12h).
 {
   config,
   pkgs,
@@ -26,6 +32,10 @@ let
 
   # "home.example.com" → "home\.example\.com" for the regex below.
   domainRe = builtins.replaceStrings [ "." ] [ "\\." ] domain;
+
+  caRootCert = ../secrets/caddy-ca-root.crt;
+  caRootCertPath = "/etc/caddy/ca-root.crt";
+  caRootKeyPath = config.age.secrets.caddy-ca-root-key.path;
 in
 {
   lanbat.services.caddy = {
@@ -40,16 +50,28 @@ in
       root * /var/lib/ca-landing
       file_server
 
-      # Serve the live CA cert from Caddy's data dir.
-      handle /root.crt {
+      # caddy-export-ca writes the certificate as root.crt; old links to
+      # /root.crt redirect to the download name.
+      redir /root.crt /lanbat-ca.crt permanent
+
+      handle /lanbat-ca.crt {
+        rewrite * /root.crt
         header Content-Type "application/x-pem-file"
         header Content-Disposition "attachment; filename=lanbat-ca.crt"
-        file_server {
-          root /var/lib/caddy/.local/share/caddy/pki/authorities/local
-          index root.crt
-        }
+        file_server
       }
     '';
+  };
+
+  age.secrets.caddy-ca-root-key = {
+    file = ../secrets/caddy-ca-root-key.age;
+    owner = config.services.caddy.user;
+    mode = "0400";
+  };
+
+  environment.etc."caddy/ca-root.crt" = {
+    source = caRootCert;
+    mode = "0644";
   };
 
   services.caddy = {
@@ -57,12 +79,16 @@ in
     package = pkgs.caddy;
 
     globalConfig = ''
-      # Leaf certs rotate automatically (default 7-day lifetime).
-      # The root CA uses Caddy's default lifetime (10 years).
+      # Leaf certs rotate automatically (default 12h lifetime for tls internal).
+      # Intermediates rotate every 7d; the root is pinned via cert/key below.
       pki {
         ca local {
-          name      "Lanbat Homelab CA"
-          root_cn   "Lanbat Root CA"
+          name    "Lanbat Homelab CA"
+          root_cn "Lanbat Root CA"
+          root {
+            cert ${caRootCertPath}
+            key  ${caRootKeyPath}
+          }
         }
       }
 
@@ -103,28 +129,19 @@ in
   };
 
   # ---------------------------------------------------------------------------
-  # Copy the CA cert to the landing page dir after Caddy starts
+  # Copy the persisted CA cert to the landing page dir at boot
   # ---------------------------------------------------------------------------
   systemd.services."caddy-export-ca" = {
     description = "Export Caddy CA cert to landing page dir";
-    after = [ "caddy.service" ];
-    wantedBy = [ "caddy.service" ];
+    after = [ "systemd-tmpfiles-setup.service" ];
+    wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = pkgs.writeShellScript "export-ca" ''
-        for i in $(seq 1 30); do
-          src="/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
-          if [ -f "$src" ]; then
-            cp "$src" /var/lib/ca-landing/root.crt
-            chmod 644 /var/lib/ca-landing/root.crt
-            echo "CA cert exported."
-            exit 0
-          fi
-          sleep 2
-        done
-        echo "WARNING: CA cert not found after 60s"
-        exit 1
+        cp ${caRootCertPath} /var/lib/ca-landing/root.crt
+        chmod 644 /var/lib/ca-landing/root.crt
+        echo "CA cert exported."
       '';
     };
   };
@@ -144,49 +161,38 @@ in
     };
   };
 
-  systemd.tmpfiles.rules = [ "d /var/lib/ca-landing 0755 root root -" ];
+  systemd.tmpfiles.rules = [
+    "d /var/lib/ca-landing 0755 root root -"
+    "d /var/lib/caddy-error-pages 0755 root root -"
+  ];
 
-  # ---------------------------------------------------------------------------
-  # Server-side CA trust
-  # ---------------------------------------------------------------------------
-  # security.pki.certificateFiles needs certs at build time, but Caddy's root CA
-  # is generated at runtime. Keep a combined CA bundle at a fixed path so
-  # programs on the server trust internal TLS endpoints.
-
-  system.activationScripts.caddy-local-ca = lib.stringAfter [ "etc" ] ''
-    mkdir -p /var/lib/caddy-local-ca
-    cat ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt \
-      > /var/lib/caddy-local-ca/ca-certificates.crt
-    # Append the Caddy root CA if it already exists (every boot except the first).
-    _ca="/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt"
-    [ -f "$_ca" ] && cat "$_ca" >> /var/lib/caddy-local-ca/ca-certificates.crt
-  '';
-
-  # First-boot catch-up: the CA cert doesn't exist during activation on a
-  # fresh install, so rebuild the bundle after Caddy has generated it.
-  systemd.services.caddy-trust-local-ca = {
-    description = "Append Caddy internal root CA to system CA bundle";
-    after = [ "caddy.service" ];
-    requires = [ "caddy.service" ];
+  systemd.services."caddy-install-error-pages" = {
+    description = "Install Caddy upstream error pages";
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "install-caddy-error-pages" ''
+        cp -r ${
+          pkgs.callPackage ../pkgs/service-unavailable-page { inherit domain; }
+        }/. /var/lib/caddy-error-pages/
+        chmod -R 644 /var/lib/caddy-error-pages/*
+        chmod 755 /var/lib/caddy-error-pages
+      '';
     };
-    script = ''
-      src=/var/lib/caddy/.local/share/caddy/pki/authorities/local/root.crt
-      for i in $(seq 1 30); do
-        [ -f "$src" ] && break
-        sleep 2
-      done
-      if [ ! -f "$src" ]; then
-        echo "Caddy root CA not found after 60s" >&2
-        exit 1
-      fi
-      cat ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt "$src" \
-        > /var/lib/caddy-local-ca/ca-certificates.crt
-    '';
   };
+
+  # ---------------------------------------------------------------------------
+  # Server-side CA trust
+  # ---------------------------------------------------------------------------
+  # Append the persisted root CA to the system bundle so programs on the server
+  # trust internal TLS endpoints without waiting for Caddy's data directory.
+
+  system.activationScripts.caddy-local-ca = lib.stringAfter [ "etc" ] ''
+    mkdir -p /var/lib/caddy-local-ca
+    cat ${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt ${caRootCertPath} \
+      > /var/lib/caddy-local-ca/ca-certificates.crt
+  '';
 
   # security.pki sets NIX_SSL_CERT_FILE with mkDefault, so normal priority wins.
   environment.variables = {

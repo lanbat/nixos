@@ -26,8 +26,9 @@
                          │  │  Home Assistant (8123)   Mosquitto (1883)       │ │      │
                          │  │  Nextcloud (8080)        Samba (445)            │ │      │
                          │  │  Vaultwarden (8222)      Grafana (3030)         │ │      │
-                         │  │  InfluxDB (8086)         Snapserver (1704/1780) │ │      │
-                         │  │  Wyoming pipeline        Telegraf               │ │      │
+                         │  │  InfluxDB (8086)         Music Assistant (8095) │ │      │
+                         │  │  Snapserver (1704/1780)  Telegraf               │ │      │
+                         │  │  Wyoming pipeline                             │ │      │
                          │  │  Jellyfin / Frigate / Immich / qBittorrent      │ │      │
                          │  │  Bitmagnet / Syncthing / Homepage / SearXNG     │ │      │
                          │  └──────────────────────────┬──────────────────────┘ │      │
@@ -54,8 +55,8 @@
                          │  /dev/nvme0n1 — NVMe drive A                                │
                          │  ┌──────────────────────────────────────────────────────┐   │
                          │  │ LUKS2  →  XFS (pquota)   [locked until Tang replies] │   │
-                         │  │  /mnt/storage-a/media/       (Jellyfin)              │   │
-                         │  │  /mnt/storage-a/downloads/   (qBittorrent)           │   │
+                         │  │  /mnt/storage-a/media/  (qBittorrent, Jellyfin)      │   │
+                         │  │    movies, TV, music videos                          │   │
                          │  │  /mnt/storage-a/photos/      (Immich)                │   │
                          │  │  /mnt/storage-a/surveillance/(Frigate)               │   │
                          │  └──────────────────────────────────────────────────────┘   │
@@ -63,6 +64,7 @@
                          │  /dev/nvme1n1 — NVMe drive B                                │
                          │  ┌──────────────────────────────────────────────────────┐   │
                          │  │ LUKS2  →  XFS (pquota)   [locked until Tang replies] │   │
+                         │  │  /mnt/storage-b/media/  the rest of the media        │   │
                          │  │  /mnt/storage-b/nextcloud/   (Nextcloud)             │   │
                          │  │  /mnt/storage-b/users/       (SMB homes)             │   │
                          │  │  /mnt/storage-b/shared/      (SMB shared)            │   │
@@ -98,13 +100,14 @@
 |---|---|---|
 | Authentik | local only | It IS the identity provider |
 | Homepage | none | LAN landing page |
-| Home Assistant | OIDC (Authentik) + local break-glass | Native OIDC support |
+| Home Assistant | Caddy forward-auth (Authentik) + header auth + local break-glass | Companion apps use /auth/token; browser SSO via hass-auth-header |
 | Nextcloud | OIDC (user_oidc app) + local admin | Native OIDC support |
-| Immich | OIDC (native) + local admin | Native OIDC support |
+| Immich | Caddy forward-auth (Authentik) + native OIDC | Bootstrap admin links to Authentik email; mobile apps use /api/* |
 | Jellyfin | OIDC (plugin) or local | Native OIDC plugin available |
 | Frigate | Caddy forward-auth (Authentik) | No native OIDC |
 | qBittorrent | Caddy forward-auth + local app auth | No OIDC |
 | Bitmagnet | Caddy forward-auth (Authentik) | No native OIDC |
+| RomM | Caddy forward-auth (Authentik), then RomM accounts | OIDC not configured |
 | SearXNG | None (intentional) | Public LAN search |
 | Samba | Local smbpasswd (optionally Authentik LDAP) | SMB doesn't speak OIDC |
 | MQTT | Local password file | IoT devices don't speak OIDC |
@@ -112,6 +115,7 @@
 | Grafana | OIDC (Authentik) + local admin | Native generic_oauth support |
 | InfluxDB | Token auth (not exposed publicly) | Accessed by Grafana only; no browser UI needed on LAN |
 | Syncthing | Caddy forward-auth (Authentik) | Sync clients use port 22000 directly, not Caddy |
+| Music Assistant | Caddy forward-auth (Authentik) | No native OIDC; stream port (8097) not exposed on firewall |
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming port (1704) is LAN-open |
 | Wyoming satellite | No auth (firewall-restricted to server IP) | Internal protocol; only HA connects |
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
@@ -129,12 +133,14 @@
 | `nvr.<domain>` | Frigate NVR |
 | `torrent.<domain>` | qBittorrent |
 | `bitmagnet.<domain>` | Bitmagnet (on-demand) |
+| `romm.<domain>` | RomM (on-demand) |
 | `search.<domain>` | SearXNG |
 | `ca.<domain>` | CA cert distribution |
 | `vault.<domain>` | Vaultwarden password manager |
 | `grafana.<domain>` | Grafana dashboards |
 | `sync.<domain>` | Syncthing web UI |
-| `audio.<domain>` | Snapcast control UI |
+| `music.<domain>` | Music Assistant web UI |
+| `audio.<domain>` | Snapcast control UI (may merge with `music` when retired) |
 
 DNS assumption: `*.<domain>` resolves to the server's IPv4 address.
 This is configured in your router/DNS and is out of scope for this repo.
@@ -143,7 +149,7 @@ This is configured in your router/DNS and is out of scope for this repo.
 
 Services with `lanbat.services.<name>.onDemand` start on the first HTTP request via
 the activator proxy (`modules/wiring/on-demand.nix`) and stop after `idleMinutes` without
-requests. Bitmagnet is the only one; it stops after 3 days idle.
+requests. Bitmagnet stops after 3 days idle, RomM after 30 minutes.
 
 The activator is a lightweight Python proxy that:
 1. Receives requests meant for Bitmagnet.

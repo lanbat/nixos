@@ -84,6 +84,7 @@ Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) fo
 | CA page | `ca.<domain>` | none |
 | Mosquitto | MQTT port 1883 | local password file |
 | InfluxDB | internal only | token auth |
+| Music Assistant | `music.<domain>` | Caddy fwd-auth |
 | Snapcast | `audio.<domain>` | Caddy fwd-auth |
 | Wyoming voice assistant | no web UI (LAN-internal) | firewall-restricted |
 | Telegraf | no web UI (writes to InfluxDB) | internal only |

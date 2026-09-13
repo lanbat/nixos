@@ -84,11 +84,17 @@ in
     // lib.genAttrs (map (d: "/var/lib/${d}") stateDirs) (path: {
       device = "/mnt/workload/${lib.removePrefix "/var/lib/" path}";
       fsType = "none";
-      # No nofail: if /mnt/workload isn't mounted the bind mount fails, and so
-      # does workload-online.target, which keeps services off the empty stubs.
+      # nofail stops systemd ordering the mount before local-fs.target. With that
+      # ordering, a transaction that starts local-fs.target and a new bind mount
+      # together (a switch that adds a workload service while the layer is
+      # unlocked) is cyclic: the mount is after workload-init.service, which is
+      # after sysinit.target, which is after local-fs.target. nofail doesn't
+      # make the mount optional for workload-online.target, which still
+      # requires it, so a failed bind mount keeps services off the empty stubs.
       options = [
         "bind"
         "noauto"
+        "nofail"
         "x-systemd.requires=mnt-workload.mount"
         "x-systemd.after=mnt-workload.mount"
       ];

@@ -67,6 +67,8 @@ let
     AUTHENTIK_ERROR_REPORTING__ENABLED = "false";
     AUTHENTIK_DISABLE_UPDATE_CHECK = "true";
     AUTHENTIK_COOKIE_DOMAIN = domain;
+    # Public URL — required for embedded outpost authorize redirects.
+    AUTHENTIK_HOST = "https://auth.${domain}";
   };
 
   # Path to the agenix-decrypted env file.

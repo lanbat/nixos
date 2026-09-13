@@ -65,8 +65,10 @@ bash secrets/generate-oidc-secrets.sh
 
 This creates `authentik-oidc-secrets.age` and wires the matching secrets into
 `grafana-env.age`, `nextcloud-oidc-env.age`, and `immich-oidc-env.age`.  It
-also prints the client credentials needed for manual UI setup in Home Assistant
-and Jellyfin.
+also prints the client credentials needed for manual UI setup in Jellyfin.
+
+`generate-secrets.sh` also creates `hass-bootstrap-env.age` (owner username and
+break-glass password for automated Home Assistant onboarding).
 
 The full list for reference:
 
@@ -134,6 +136,13 @@ agenix -e grafana-env.age
 #   ADMIN_TOKEN=<openssl rand -base64 48>
 agenix -e vaultwarden-env.age
 
+# ---- Caddy internal CA ----
+# Created once when pinning the root CA (see services/caddy.nix). The public
+# cert is secrets/caddy-ca-root.crt (committed). Encrypt the private key:
+#   agenix -e caddy-ca-root-key.age < /path/to/root.key
+# To rotate deliberately: generate a new root, re-encrypt, redeploy, then
+# redistribute ca.<domain>/lanbat-ca.crt to every client.
+
 # ---- Telegraf ----
 # Leave empty for now — fill in AFTER deploying InfluxDB and creating a
 # write token in its UI (Data → API Tokens → Generate → Write to "metrics").
@@ -178,3 +187,7 @@ agenix -r
 | `grafana-env.age` | `KEY=value` × 4 | Grafana |
 | `vaultwarden-env.age` | `ADMIN_TOKEN=<value>` | Vaultwarden |
 | `telegraf-token.age` | `TELEGRAF_INFLUXDB_TOKEN=<value>` | Telegraf (server + Pi) |
+| `caddy-ca-root.crt` | PEM root certificate (public) | Caddy internal CA — committed plaintext |
+| `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |
+| `romm-db-pass.age` | `POSTGRES_PASSWORD=<value>` and `DB_PASSWD=<same value>` | RomM database password (PostgreSQL setup and the container) |
+| `romm-env.age` | `ROMM_AUTH_SECRET_KEY=<openssl rand -hex 32>` and metadata provider keys (`IGDB_CLIENT_ID=`, `SCREENSCRAPER_USER=`, …) | RomM container |

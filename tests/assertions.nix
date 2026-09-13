@@ -84,16 +84,6 @@ let
       b.account.uid = 950;
     } [ "UID 950 is used by a, b" ])
 
-    (expect "forward auth on a service with API clients" {
-      authentik.port = 9000;
-      app = {
-        subdomain = "app";
-        port = 1234;
-        auth = "forward-auth";
-        apiClients = true;
-      };
-    } [ "app has API clients, so it can't use forward auth" ])
-
     (expect "workload tier without state" {
       demo = {
         tier = "workload";

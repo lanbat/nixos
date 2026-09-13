@@ -7,23 +7,21 @@
 # Server-local:
 #   /var/lib/qbittorrent/   — qBittorrent config, fastresume files, session state
 #
-# Pi-backed via NFS (/srv/storage/a):
-#   /srv/storage/a/downloads/       — default download location
-#   /srv/storage/a/downloads/alice/ — per-user download dirs (pre-created)
-#   /srv/storage/a/downloads/bob/
+# Pi-backed via NFS, media split across both drives by folder:
+#   /srv/storage/a/media/  → /media/a  (movies, TV, music videos)
+#   /srv/storage/b/media/  → /media/b  (music, documentaries, ROMs, books, ...)
+# Each category saves into its folder. The Pi creates the folders
+# (modules/pi/storage.nix), owned by qbt, group media.
 #
 # NFS dependency: strong.
 #   If Pi storage disappears while a torrent is active, qBittorrent will
 #   write I/O errors.  We stop it immediately and restart when NFS returns.
 #
-# Auth: qBittorrent web UI has its own session auth.
-#   The web UI is behind Caddy's Authentik forward_auth, so users must log
-#   into Authentik first.  qBittorrent's own auth acts as a second factor
-#   for direct API access; the web password is set via admin UI on first run.
-#   Keep qBittorrent local auth enabled — do not disable it.
-#
-# One shared instance is enough.  Per-user directories are pre-created so
-# users can select their folder in the web UI.
+# Auth: Authentik, through Caddy's forward auth, is the only login. After it,
+#   everyone shares the one instance: qBittorrent skips its own login for
+#   requests from the server's address, which is where the rootless port
+#   mapping delivers Caddy's requests. The port listens only on the server's
+#   loopback, so nothing on the LAN reaches qBittorrent without Authentik.
 {
   config,
   pkgs,
@@ -40,7 +38,10 @@
     state = [ "qbittorrent" ];
     units = [ "podman-qbittorrent" ];
     workloadDirs."qbittorrent".user = "qbt";
-    nfs.drives = [ "a" ];
+    nfs.drives = [
+      "a"
+      "b"
+    ];
     account = {
       name = "qbt";
       uid = 994;
@@ -70,7 +71,8 @@
 
     volumes = [
       "/var/lib/qbittorrent:/config"
-      "/srv/storage/a/downloads:/downloads"
+      "/srv/storage/a/media:/media/a"
+      "/srv/storage/b/media:/media/b"
     ];
 
     # Do NOT use --network host; bridge mode + port mapping is fine here.
@@ -82,20 +84,26 @@
   };
 
   systemd.services."podman-qbittorrent" = {
+    # Set before every start, so the Authentik-only login holds even if the
+    # setting is changed in the web UI.
+    preStart = ''
+      conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
+      set_pref() {
+        [ -f "$conf" ] || return 0
+        K="$1" V="$2" ${pkgs.gawk}/bin/awk '
+          BEGIN { key = ENVIRON["K"] "="; line = key ENVIRON["V"] }
+          index($0, key) == 1 { if (!done) print line; done = 1; next }
+          { print }
+          $0 == "[Preferences]" && !done { print line; done = 1 }
+          END { if (!done) { print "[Preferences]"; print line } }
+        ' "$conf" > "$conf.tmp" && mv "$conf.tmp" "$conf"
+      }
+      set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
+      set_pref 'WebUI\AuthSubnetWhitelist' '${config.lanbat.serverIp}/32, ::ffff:${config.lanbat.serverIp}/128'
+    '';
     serviceConfig = {
       Restart = lib.mkForce "on-failure";
       RestartSec = "15s";
     };
   };
-
-  # Pre-create per-user download directories (add users as needed).
-  systemd.tmpfiles.rules = [
-    "d /srv/storage/a/downloads            0775 qbt  media -"
-    "d /srv/storage/a/downloads/admin      0770 qbt  media -"
-    # "d /srv/storage/a/downloads/alice    0770 alice media -"
-    # "d /srv/storage/a/downloads/bob      0770 bob   media -"
-  ];
-
-  # XFS project quota for the downloads tree.
-  # Quota setup requires a manual step — see docs/storage-layout.md.
 }
