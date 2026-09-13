@@ -407,6 +407,8 @@ let
           slug: immich
           provider: !KeyOf provider-immich
           policy_engine_mode: any
+          # Listed once in My applications, as immich-proxy.
+          meta_launch_url: "blank://blank"
 
       # ── Home Assistant (OIDC, optional) ─────────────────────────────────────
       # Primary SSO is forward-auth + hass-auth-header (see proxy blueprint).
@@ -441,6 +443,8 @@ let
         attrs:
           name: "Home Assistant"
           slug: home-assistant
+          # Listed once in My applications, as home-assistant-proxy.
+          meta_launch_url: "blank://blank"
           provider: !KeyOf provider-home-assistant
           policy_engine_mode: any
 
