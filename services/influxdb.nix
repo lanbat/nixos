@@ -63,10 +63,12 @@
   };
 
   # The Pi's Telegraf writes metrics here; nobody else on the LAN may connect.
+  # Not loopback: the server's own Telegraf and Grafana connect over it, and
+  # without ! -i lo the rule dropped them too.
   networking.firewall = {
     allowedTCPPorts = [ 8086 ];
     extraCommands = ''
-      iptables -I INPUT -p tcp --dport 8086 ! -s ${config.lanbat.piIp} -j DROP
+      iptables -I INPUT -p tcp --dport 8086 ! -i lo ! -s ${config.lanbat.piIp} -j DROP
     '';
   };
 }
