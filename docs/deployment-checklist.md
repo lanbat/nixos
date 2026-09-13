@@ -631,6 +631,14 @@ Home Assistant, the conversation agent for `lanbat.haLlm` (API key from
 `okay_nabu`, faster-whisper, piper, Home Assistant's local intents first, then
 the LLM.
 
+With `lanbat.voiceRooms` set, a satellite hands each reply to Home Assistant,
+which speaks it as an announcement on the Music Assistant players in the
+satellite's room; Music Assistant turns their music down meanwhile. The
+satellite plays a reply itself only when its room has no players, or Home
+Assistant is out of reach. `home-assistant-post-setup` adds the satellites'
+"Voice satellites" user and token, and `music-assistant-setup` connects Music
+Assistant to the snapserver, so every Snapcast client becomes a player.
+
 1. Verify the services on the server and the Pi:
    ```bash
    systemctl status wyoming-openwakeword wyoming-faster-whisper-main wyoming-piper-main wyoming-satellite
@@ -640,10 +648,19 @@ the LLM.
    A satellite logging "no sound card with USB ID" can't find its microphone:
    compare `lsusb` with `microphone.usbId`.
 
-2. Choose what the assistant may control: **Settings → Voice assistants →
+2. For replies on the room's speakers, create the satellites' token before
+   deploying, and commit both files:
+   ```bash
+   bash secrets/generate-ha-voice-token.sh
+   ```
+   Then give each speaker its room: **Settings → Devices & services → Music
+   Assistant**, open the player's device and set its area. The players in a
+   satellite's room speak its replies, so a new speaker joins by getting an area.
+
+3. Choose what the assistant may control: **Settings → Voice assistants →
    Expose**. The LLM only sees and controls exposed entities.
 
-3. Test: say **"Okay Nabu"** near either microphone, then ask something.
+4. Test: say **"Okay Nabu"** near either microphone, then ask something.
    **Settings → Voice assistants → Voice → ⋮ → Debug** shows each run.
 
 > **Tip:** faster-whisper and piper download their models on first start, and

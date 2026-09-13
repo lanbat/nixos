@@ -52,6 +52,15 @@
       model = "CHANGE_ME"; # the model name the API serves
     };
 
+    # The voice satellites' rooms, as Home Assistant area names. Replies play on
+    # the Music Assistant speakers in the satellite's room; leave a room out to
+    # play them on that satellite's own speaker. Needs secrets/ha-voice-token.age
+    # and ha-voice-refresh-token.age: bash secrets/generate-ha-voice-token.sh
+    voiceRooms = {
+      server = "CHANGE_ME"; # e.g. "Office"
+      pi = "CHANGE_ME"; # e.g. "Living Room"
+    };
+
     # ── Disks ─────────────────────────────────────────────────────────────────
     # The server's system disk. nixos-anywhere ERASES it and applies
     # hosts/server/disk.nix. From the installer: ls -l /dev/disk/by-id/

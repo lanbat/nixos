@@ -33,6 +33,10 @@
       baseUrl = "https://llm.example.com/v1";
       model = "example-model";
     };
+    voiceRooms = {
+      server = "Office";
+      pi = "Living Room";
+    };
     adminSshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExampleExample example";
   };
 }

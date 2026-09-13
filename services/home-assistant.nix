@@ -52,6 +52,8 @@ let
   llmComponent = pkgs.callPackage ../pkgs/home-assistant-extended-openai-conversation { };
   satellite = config.lanbat.voiceSatellite;
   piper = config.services.wyoming.piper.servers.main;
+  # A satellite with a room hands its replies to the voice_reply script.
+  voiceRooms = lib.any (room: room != null) (lib.attrValues config.lanbat.voiceRooms);
 in
 {
   options.lanbat.homeAssistant = {
@@ -77,6 +79,10 @@ in
       // lib.optionalAttrs (llm != null) {
         # The API key of the conversation agent's LLM.
         ha-llm-api-key.owner = "hass";
+      }
+      // lib.optionalAttrs voiceRooms {
+        # The record of the voice satellites' token, for home-assistant-post-setup.
+        ha-voice-refresh-token.owner = "root";
       };
       caddy.proxyOptions = ''
         # Long-lived websockets for HA's live updates.
@@ -176,6 +182,9 @@ in
           export LLM_MODEL="${llm.model}"
           export LLM_API_KEY_FILE="${config.age.secrets.ha-llm-api-key.path}"
         ''}
+        ${lib.optionalString voiceRooms ''
+          export VOICE_TOKEN_RECORD_FILE="${config.age.secrets.ha-voice-refresh-token.path}"
+        ''}
         exec home-assistant-post-setup
       '';
     };
@@ -249,6 +258,66 @@ in
           unit_system = "metric";
           time_zone = config.lanbat.timezone;
           external_url = "https://ha.${domain}";
+        };
+
+        # Voice replies in a room (modules/core/voice-satellite.nix). A satellite
+        # with a room calls voice_reply with its reply; voice_reply starts the
+        # announcement on the room's Music Assistant players and returns how
+        # many there are, so the satellite knows whether to play it itself.
+        script = {
+          voice_reply = {
+            alias = "Voice reply in a room";
+            mode = "parallel";
+            fields = {
+              message.description = "The reply to speak.";
+              room.description = "Name of the area the voice satellite is in.";
+            };
+            sequence = [
+              {
+                variables.players = "{{ area_entities(room) | select('in', integration_entities('music_assistant')) | select('match', 'media_player[.]') | reject('is_state', ['unavailable', 'unknown']) | list }}";
+              }
+              {
+                "if" = "{{ players | count > 0 }}";
+                "then" = [
+                  {
+                    action = "script.turn_on";
+                    target.entity_id = "script.voice_reply_announce";
+                    data.variables = {
+                      players = "{{ players }}";
+                      message = "{{ message }}";
+                    };
+                  }
+                ];
+              }
+              { variables.result.players = "{{ players | count }}"; }
+              {
+                stop = "Reply handed to the room";
+                response_variable = "result";
+              }
+            ];
+          };
+
+          voice_reply_announce = {
+            alias = "Voice reply announcement";
+            mode = "queued";
+            fields = {
+              players.description = "Music Assistant players to announce on.";
+              message.description = "The reply to speak.";
+            };
+            sequence = [
+              {
+                # An announcement: Music Assistant turns the music down meanwhile.
+                action = "tts.speak";
+                target.entity_id = "tts.piper";
+                data = {
+                  media_player_entity_id = "{{ players }}";
+                  message = "{{ message }}";
+                  language = lib.head (lib.splitString "-" piper.voice);
+                  options.voice = piper.voice;
+                };
+              }
+            ];
+          };
         };
 
         # Authentik forward-auth → header-based login (users must exist in HA).

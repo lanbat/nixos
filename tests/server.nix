@@ -87,6 +87,8 @@ pkgs.testers.runNixOSTest {
           FRIGATE_RTSP_PASSWORD=test
         '';
         rclone-frigate-config = "[remote]\ntype = local\n";
+        ha-voice-token = "test-voice-token";
+        ha-voice-refresh-token = "VOICE_TOKEN_ID=test\nVOICE_TOKEN_JWT_KEY=test\nVOICE_TOKEN_CREATED=0\n";
         mosquitto-ha-pass = "test-mqtt-password";
         mosquitto-frigate-pass = "test-mqtt-password";
         mosquitto-z2m-pass = "test-mqtt-password";

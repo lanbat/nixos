@@ -206,6 +206,26 @@ in
       '';
     };
 
+    voiceRooms = {
+      server = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "Office";
+        description = "Home Assistant area of the server's voice satellite.";
+      };
+      pi = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "Living Room";
+        description = ''
+          Home Assistant area of the Pi's voice satellite. A satellite with an
+          area speaks its replies on the area's Music Assistant players, with
+          the token in secrets/ha-voice-token.age; without one, or with no
+          players there, on its own speaker.
+        '';
+      };
+    };
+
     # ── Access ────────────────────────────────────────────────────────────────
     adminSshKey = mkOption {
       type = types.strMatching "(ssh-|ecdsa-|sk-).+";

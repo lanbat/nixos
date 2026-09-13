@@ -17,6 +17,16 @@
 # Replies play to an ALSA device. A hardware device plays nothing else at the
 # same time; the Pi plays replies through its PipeWire instead, which mixes
 # them with Snapcast and the TV (modules/pi/audio.nix).
+#
+# Replies in the room
+# -------------------
+# A satellite with a room (lanbat.voiceRooms) hands each reply to Home
+# Assistant's voice_reply script (services/home-assistant.nix), which speaks
+# it as an announcement on the Music Assistant players in that area; Music
+# Assistant turns their music down meanwhile. The satellite then skips its
+# own copy, so a satellite that is also a Snapcast speaker (the Pi) doesn't
+# say it twice. With no players in the room, or Home Assistant out of reach,
+# the reply plays on the satellite's speaker.
 {
   config,
   lib,
@@ -29,6 +39,7 @@ let
 
   cfg = config.lanbat.voiceSatellite;
   alsa = pkgs.alsa-utils;
+  coreutils = pkgs.coreutils;
   # The module always adds webrtc-noise-gain, for auto gain and noise
   # suppression. Its bundled WebRTC code uses uint32_t without including
   # <cstdint>, which GCC 15 rejects on x86_64. stdint.h, because the flags
@@ -56,6 +67,47 @@ let
     done
     echo "voice-satellite: no sound card with USB ID ${cfg.microphone.usbId}" >&2
     exit 1
+  '';
+
+  runtimeDir = "/run/voice-satellite";
+  # Present while the room's speakers announce the current reply.
+  announced = "${runtimeDir}/announced";
+
+  # Runs for each reply, with its text on stdin, before its audio arrives.
+  replyCommand = pkgs.writeShellScript "voice-satellite-reply" ''
+    ${coreutils}/bin/rm -f ${announced}
+    message=$(${coreutils}/bin/cat)
+    [[ -n $message ]] || exit 0
+    if [[ ! -s ${runtimeDir}/ha-token ]]; then
+      echo "voice-satellite: no Home Assistant token (ha-voice-token.age), playing the reply here" >&2
+      exit 0
+    fi
+    # A header file, not an argument, keeps the token out of the process list.
+    (umask 077 && printf 'Authorization: Bearer %s\n' "$(<${runtimeDir}/ha-token)" > ${runtimeDir}/auth-header)
+    body=$(${lib.getExe pkgs.jq} -n --arg message "$message" --arg room ${lib.escapeShellArg cfg.room} \
+      '{message: $message, room: $room}')
+    if ! response=$(${lib.getExe pkgs.curl} -sS --fail --max-time 5 \
+      ${lib.optionalString (cfg.homeAssistant.caFile != null) "--cacert ${cfg.homeAssistant.caFile}"} \
+      -H @${runtimeDir}/auth-header -H 'Content-Type: application/json' --data "$body" \
+      '${cfg.homeAssistant.url}/api/services/script/voice_reply?return_response'); then
+      echo "voice-satellite: Home Assistant didn't take the reply, playing it here" >&2
+      exit 0
+    fi
+    players=$(${lib.getExe pkgs.jq} -r '.service_response.players // 0' <<<"$response")
+    if (( players > 0 )); then
+      : > ${announced}
+    fi
+  '';
+
+  # Plays a reply, unless the room's speakers announce it. The satellite starts
+  # this for each reply.
+  soundCommand = pkgs.writeShellScript "voice-satellite-play" ''
+    if [[ -e ${announced} ]]; then
+      ${coreutils}/bin/rm -f ${announced}
+      exec ${coreutils}/bin/cat > /dev/null
+    fi
+    # piper's replies are 22.05 kHz mono.
+    exec ${alsa}/bin/aplay -D ${cfg.speaker} -r 22050 -c 1 -f S16_LE -t raw -q
   '';
 in
 {
@@ -92,6 +144,31 @@ in
       example = [ "-c PCH sset Master 80% unmute" ];
       description = "amixer arguments applied before the satellite starts, for example to unmute the speaker.";
     };
+
+    room = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "Living Room";
+      description = ''
+        Home Assistant area the satellite is in. Its replies then play on the
+        area's Music Assistant players, and on its own speaker only when the
+        area has none.
+      '';
+    };
+
+    homeAssistant = {
+      url = mkOption {
+        type = types.str;
+        example = "https://ha.example.com";
+        description = "Home Assistant's address, for handing replies to the room's speakers.";
+      };
+
+      caFile = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = "CA certificate of Home Assistant's HTTPS address, when a public CA didn't issue it.";
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -99,6 +176,12 @@ in
     users.users.wyoming-satellite = {
       isSystemUser = true;
       group = "wyoming-satellite";
+    };
+
+    # The satellites' Home Assistant token: a long-lived access token of a
+    # Home Assistant user, copied for the satellite when it starts.
+    lanbat.services.voice-satellite.secrets = lib.mkIf (cfg.room != null) {
+      ha-voice-token.owner = "root";
     };
 
     services.wyoming.satellite = {
@@ -116,8 +199,11 @@ in
       # time. Its own VAD can't run here anyway: pysilero-vad takes 512-sample
       # chunks only, and the webrtc processing re-chunks the audio.
       vad.enable = false;
-      # piper's replies are 22.05 kHz mono.
-      sound.command = "${alsa}/bin/aplay -D ${cfg.speaker} -r 22050 -c 1 -f S16_LE -t raw -q";
+      sound.command = "${soundCommand}";
+      extraArgs = lib.optionals (cfg.room != null) [
+        "--synthesize-command"
+        "${replyCommand}"
+      ];
     };
 
     systemd.services.wyoming-satellite.serviceConfig = {
@@ -125,11 +211,16 @@ in
       # uses the ALSA devices directly.
       PrivateDevices = lib.mkForce false;
       DeviceAllow = lib.mkForce [ "char-alsa rw" ];
-      # As root (+), and a missing card doesn't stop the satellite (-). systemd
-      # reads % as a specifier.
-      ExecStartPre = map (
-        args: "-+${alsa}/bin/amixer -q ${lib.replaceStrings [ "%" ] [ "%%" ] args}"
-      ) cfg.mixer;
+      # As root (+). A missing card, or a missing token, doesn't stop the
+      # satellite (-); without the token, replies play on its own speaker.
+      # systemd reads % as a specifier.
+      ExecStartPre =
+        map (args: "-+${alsa}/bin/amixer -q ${lib.replaceStrings [ "%" ] [ "%%" ] args}") cfg.mixer
+        ++
+          lib.optional (cfg.room != null)
+            "-+${coreutils}/bin/install -m 0400 -o wyoming-satellite -g wyoming-satellite ${config.age.secrets.ha-voice-token.path} ${runtimeDir}/ha-token";
+      RuntimeDirectory = "voice-satellite";
+      RuntimeDirectoryMode = "0700";
     };
   };
 }

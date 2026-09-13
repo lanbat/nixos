@@ -138,6 +138,8 @@ in
       export HA_PUBLIC_URL="https://ha.${domain}"
       export HASS_BIN="${config.services.home-assistant.package}/bin/hass"
       export HASS_CONFIG="/var/lib/hass"
+      # Music Assistant's Snapcast players come from the snapserver (services/snapcast.nix).
+      export SNAPSERVER_CONTROL_PORT="${toString config.services.snapserver.settings.tcp-control.port}"
       exec music-assistant-setup
     '';
   };
