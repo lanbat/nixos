@@ -53,17 +53,9 @@ let
   lanbatCaRootMount = "/etc/ssl/lanbat/ca-root.crt";
 in
 {
-  options.lanbat.immich = {
-    adminEmail = lib.mkOption {
-      type = lib.types.str;
-      description = ''
-        Email for the bootstrap Immich admin.  Must match the Authentik user's
-        email so the first OAuth login links to this account.
-      '';
-    };
-  };
-
   config = {
+    # The option is declared in modules/core/settings.nix, since local.nix is
+    # shared by both hosts.
     lanbat.immich.adminEmail = lib.mkDefault (
       "${lib.elemAt config.lanbat.homeAssistant.ssoUsers 0}@${config.lanbat.rootDomain}"
     );

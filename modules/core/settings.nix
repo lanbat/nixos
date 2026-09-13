@@ -150,6 +150,18 @@ in
       description = "/dev/disk/by-id/ filename (without the prefix) of the Pi's storage drive B.";
     };
 
+    # ── Services ──────────────────────────────────────────────────────────────
+    # Declared here rather than in the service, because local.nix, which may set
+    # it, is loaded by both hosts. services/immich.nix gives it a default.
+    immich.adminEmail = mkOption {
+      type = types.str;
+      example = "alice@example.com";
+      description = ''
+        Email for the bootstrap Immich admin. Must match the Authentik user's
+        email so the first OAuth login links to this account.
+      '';
+    };
+
     # ── Access ────────────────────────────────────────────────────────────────
     adminSshKey = mkOption {
       type = types.strMatching "(ssh-|ecdsa-|sk-).+";
