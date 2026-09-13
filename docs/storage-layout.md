@@ -20,7 +20,8 @@ Raspberry Pi 5
 └── Drive B  /dev/disk/by-id/DRIVE_B  →  LUKS  →  /dev/mapper/storage-b  →  XFS  →  /mnt/storage-b
     ├── /mnt/storage-b/media/              ← the rest of the media, as on drive A
     │   ├── music/  documentaries/  adult/  roms/
-    │   └── audiobooks/  books/  gym/  games/  misc/
+    │   ├── audiobooks/  books/  gym/  games/  misc/
+    │   └── roms-browser/mame/                 ← zip copies of the arcade sets, for RomM's browser player
     ├── /mnt/storage-b/nextcloud/          ← Nextcloud external storage
     ├── /mnt/storage-b/users/              ← per-user SMB home dirs
     │   ├── admin/
@@ -127,7 +128,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | qBittorrent | server-local | — | Pi/a/media + Pi/b/media (by category) |
 | Frigate | server-local | server-local (SQLite) | Pi/a/surveillance |
 | Bitmagnet | server-local | workload PostgreSQL | — |
-| RomM | server-local | workload PostgreSQL | Pi/b/media/roms (ROM library) |
+| RomM | server-local | workload PostgreSQL | Pi/b/media/roms (ROM library), Pi/b/media/roms-browser (arcade zips) |
 | SearXNG | server-local | — | — |
 | Homepage | server-local | — | — |
 | Samba | (via nss) | — | Pi/a + Pi/b |

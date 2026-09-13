@@ -712,6 +712,11 @@ and stops after 30 minutes idle.
    Library → Scan.
 3. `config.yml` is seeded on the first start (`/var/lib/romm/config/`); change platform
    bindings and exclusions from RomM's settings.
+4. Arcade games in the browser: RomM's arcade folder shows zip copies of the MAME
+   sets (`media/roms-browser/mame`), which `romm-browser-romsets` builds hourly with
+   each game's parent and BIOS files. In the player, pick the **FinalBurn Neo** core
+   once per browser; RomM remembers it, and its default, MAME 2003, crashes on these
+   sets. Dreamcast games don't run in the browser; play them on the TV.
 
 ## Phase 4 — Ongoing
 
