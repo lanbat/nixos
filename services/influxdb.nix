@@ -65,7 +65,9 @@
   };
 
   # telegraf-token.age holds TELEGRAF_INFLUXDB_TOKEN=<token> for Telegraf's
-  # environment; provisioning wants the bare token.
+  # environment; provisioning wants the bare token. The module reads it in
+  # influxdb2's preStart, which runs as the influxdb2 user, so the directory
+  # and file belong to its group.
   systemd.services.influxdb2-telegraf-token = {
     description = "Bare Telegraf write token for InfluxDB provisioning";
     before = [ "influxdb2.service" ];
@@ -73,9 +75,10 @@
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      Group = "influxdb2";
       RuntimeDirectory = "influxdb2-telegraf-token";
-      RuntimeDirectoryMode = "0700";
-      UMask = "0077";
+      RuntimeDirectoryMode = "0750";
+      UMask = "0027";
     };
     script = ''
       sed -n 's/^TELEGRAF_INFLUXDB_TOKEN=//p' ${config.age.secrets.telegraf-token.path} \
