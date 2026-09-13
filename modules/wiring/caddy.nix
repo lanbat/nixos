@@ -79,13 +79,15 @@ let
     svc:
     let
       paths = authBypassPaths svc;
-      pathMatcher = lib.concatStringsSep " " (map (p: "path ${p}") paths);
+      # One `path` directive with multiple arguments (OR). Repeated `path`
+      # keywords would AND and never match.
+      pathMatcher = lib.concatStringsSep " " paths;
     in
     lib.concatStringsSep "\n" [
       ''
         route {
           ${authentikOutpostProxy}
-          @auth_bypass ${pathMatcher}
+          @auth_bypass path ${pathMatcher}
           handle @auth_bypass {
             ${reverseProxy svc}
           }
