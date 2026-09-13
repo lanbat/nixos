@@ -17,13 +17,11 @@
 #   If Pi storage disappears while a torrent is active, qBittorrent will
 #   write I/O errors.  We stop it immediately and restart when NFS returns.
 #
-# Auth: qBittorrent web UI has its own session auth.
-#   The web UI is behind Caddy's Authentik forward_auth, so users must log
-#   into Authentik first.  qBittorrent's own auth acts as a second factor
-#   for direct API access; the web password is set via admin UI on first run.
-#   Keep qBittorrent local auth enabled — do not disable it.
-#
-# One shared instance is enough.
+# Auth: Authentik, through Caddy's forward auth, is the only login. After it,
+#   everyone shares the one instance: qBittorrent skips its own login for
+#   requests from the server's address, which is where the rootless port
+#   mapping delivers Caddy's requests. The port listens only on the server's
+#   loopback, so nothing on the LAN reaches qBittorrent without Authentik.
 {
   config,
   pkgs,
@@ -86,6 +84,23 @@
   };
 
   systemd.services."podman-qbittorrent" = {
+    # Set before every start, so the Authentik-only login holds even if the
+    # setting is changed in the web UI.
+    preStart = ''
+      conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
+      set_pref() {
+        [ -f "$conf" ] || return 0
+        K="$1" V="$2" ${pkgs.gawk}/bin/awk '
+          BEGIN { key = ENVIRON["K"] "="; line = key ENVIRON["V"] }
+          index($0, key) == 1 { if (!done) print line; done = 1; next }
+          { print }
+          $0 == "[Preferences]" && !done { print line; done = 1 }
+          END { if (!done) { print "[Preferences]"; print line } }
+        ' "$conf" > "$conf.tmp" && mv "$conf.tmp" "$conf"
+      }
+      set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
+      set_pref 'WebUI\AuthSubnetWhitelist' '${config.lanbat.serverIp}/32, ::ffff:${config.lanbat.serverIp}/128'
+    '';
     serviceConfig = {
       Restart = lib.mkForce "on-failure";
       RestartSec = "15s";
