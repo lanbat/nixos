@@ -139,6 +139,9 @@ uri_encode() {
 
 plugin_installed() {
   local name="$1"
+  if compgen -G "${STATE_DIR}/plugins/${name}_*" >/dev/null; then
+    return 0
+  fi
   api_call "${JELLYFIN_URL}/Packages/Installed/$(uri_encode "$name")" >/dev/null 2>&1
 }
 
@@ -303,19 +306,18 @@ if [[ -f "$CONFIG_STATE_FILE" ]] && wizard_complete && configuration_complete 2>
   exit 0
 fi
 
-if ! wizard_complete; then
-  if [[ -f "$WIZARD_STATE_FILE" ]]; then
-    log "startup wizard incomplete; re-running setup"
+if wizard_complete || [[ -f "$WIZARD_STATE_FILE" ]]; then
+  if ! wizard_complete; then
+    log "waiting for Jellyfin to finish starting"
+    wait_for_jellyfin
   fi
+  install -d -m 0750 "$STATE_DIR"
+  touch "$WIZARD_STATE_FILE"
+else
   run_startup_wizard
   install -d -m 0750 "$STATE_DIR"
   touch "$WIZARD_STATE_FILE"
   log "startup wizard complete"
-else
-  [[ -f "$WIZARD_STATE_FILE" ]] || {
-    install -d -m 0750 "$STATE_DIR"
-    touch "$WIZARD_STATE_FILE"
-  }
 fi
 
 run_configuration

@@ -93,6 +93,8 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
       User = "root";
+      Restart = "on-failure";
+      RestartSec = "30s";
     };
 
     path = [ bootstrap ];
