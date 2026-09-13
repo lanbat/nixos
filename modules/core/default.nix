@@ -9,6 +9,7 @@
     ./base.nix
     ./ssh.nix
     ./users.nix
+    ./voice-satellite.nix
     ../wiring/accounts.nix
     ../wiring/secrets.nix
     ../wiring/checks.nix

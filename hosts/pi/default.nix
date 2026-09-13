@@ -26,7 +26,6 @@
     ../../modules/pi/storage.nix
     ../../modules/pi/telegraf.nix
     ../../modules/pi/tv.nix
-    ../../modules/pi/wyoming-satellite.nix
   ];
 
   networking.hostName = config.lanbat.piHostname;
@@ -69,6 +68,15 @@
       iptables -I INPUT -p udp --dport 2049  ! -s ${config.lanbat.serverIp} -j DROP
       iptables -I INPUT -p tcp --dport 10700 ! -s ${config.lanbat.serverIp} -j DROP
     '';
+  };
+
+  # Voice satellite for the server's Home Assistant (modules/core/voice-satellite.nix):
+  # the PlayStation Eye's microphones, replies on the TV.
+  lanbat.voiceSatellite = {
+    enable = true;
+    name = "Pi Satellite";
+    uri = "tcp://0.0.0.0:10700";
+    speaker = "default:CARD=vc4hdmi0";
   };
 
   services.timesyncd.enable = true;

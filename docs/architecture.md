@@ -28,7 +28,7 @@
                          │  │  Vaultwarden (8222)      Grafana (3030)         │ │      │
                          │  │  InfluxDB (8086)         Music Assistant (8095) │ │      │
                          │  │  Snapserver (1704/1780)  Telegraf               │ │      │
-                         │  │  Wyoming pipeline                             │ │      │
+                         │  │  Wyoming pipeline + satellite (10700)           │ │      │
                          │  │  Jellyfin / Frigate / Immich / qBittorrent      │ │      │
                          │  │  Bitmagnet / Syncthing / Homepage / SearXNG     │ │      │
                          │  └──────────────────────────┬──────────────────────┘ │      │
@@ -83,7 +83,9 @@
 - Identity and SSO
 - MQTT broker
 - Tang trust anchor
-- Voice assistant pipeline (Wyoming: STT, TTS, wake word)
+- Voice assistant pipeline (Wyoming: wake word, STT, TTS; Home Assistant's
+  conversation agent, backed by an external OpenAI-compatible LLM) and a voice
+  satellite (microphone + internal speaker)
 - Metrics storage (InfluxDB) and dashboards (Grafana)
 - Metrics collection from both machines (Telegraf)
 
@@ -117,8 +119,9 @@
 | Syncthing | Caddy forward-auth (Authentik) | Sync clients use port 22000 directly, not Caddy |
 | Music Assistant | Caddy forward-auth (Authentik) | No native OIDC; stream port (8097) not exposed on firewall |
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming port (1704) is LAN-open |
-| Wyoming satellite | No auth (firewall-restricted to server IP) | Internal protocol; only HA connects |
+| Wyoming satellites | No auth (Pi: firewall-restricted to server IP; server: localhost only) | Internal protocol; only HA connects |
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
+| Conversation LLM (`lanbat.haLlm`) | API key (agenix) | External OpenAI-compatible API; only HA calls it, outbound |
 
 ## Hostname map
 

@@ -4,20 +4,22 @@
 #
 # Wyoming is Home Assistant's open voice assistant protocol.
 # These three services form the processing pipeline that HA uses
-# when the Pi satellite captures speech:
+# when a satellite (this server's own, or the Pi's) captures speech:
 #
-#   Pi mic → satellite → HA → openwakeword → faster-whisper → intent
-#                                                         ↓
-#                              Pi speaker ← satellite ← piper (TTS)
+#   mic → satellite → HA → openwakeword → faster-whisper → conversation agent
+#                                                                ↓
+#            speaker ← satellite ← HA ← piper (TTS) ←───────────┘
 #
-# All three services listen on 127.0.0.1 only — HA connects to them
-# locally.  No server firewall changes are needed.  The only external
-# connection is HA (server) → satellite (Pi) on port 10700, which is
-# an outbound connection so no server-side rule is required.
+# The conversation agent tries Home Assistant's local intents first, then the
+# LLM in lanbat.haLlm (services/home-assistant.nix).
+#
+# Everything here listens on 127.0.0.1 only — HA connects to it locally.  No
+# server firewall changes are needed.  The only external connection is HA
+# (server) → the Pi's satellite on port 10700, which is outbound.
 #
 # Services
 # --------
-# openwakeword (10300) — detects the wake word ("ok nabu" by default).
+# openwakeword (10300) — detects the wake word ("okay nabu", model okay_nabu).
 #   Uses bundled models; no download needed.
 #   Alternative wake words: hey_jarvis, hey_mycroft, alexa.
 #
@@ -32,15 +34,14 @@
 #   female voice.  See https://rhasspy.github.io/piper-samples/ for
 #   all available voices.
 #
-# HA setup (after deploy)
-# -----------------------
-# Settings → Devices & Services → Add Integration → Wyoming
-#   Add each service above by address.  Then:
-# Settings → Voice Assistants → Add Assistant
-#   STT: faster-whisper / main
-#   TTS: piper / main
-#   Wake word: openwakeword (ok_nabu)
-# See docs/deployment-checklist.md § Wyoming Voice Assistant.
+# satellite (10700) — this server's microphone and speaker
+#   (modules/core/voice-satellite.nix).
+#
+# HA setup
+# --------
+# home-assistant-post-setup adds these services and both satellites to HA,
+# and makes a "Voice" pipeline using them the preferred one.
+# See docs/deployment-checklist.md § Wyoming voice assistant.
 #
 # Always-on: yes — no NFS dependency.
 {
@@ -55,6 +56,7 @@
     10300
     10301
     10302
+    10700 # satellite
   ];
 
   # ---------------------------------------------------------------------------
@@ -85,5 +87,18 @@
     enable = true;
     uri = "tcp://127.0.0.1:10302";
     voice = "en_GB-alba-medium"; # see https://rhasspy.github.io/piper-samples/
+  };
+
+  # ---------------------------------------------------------------------------
+  # Satellite: the PlayStation Eye's microphones, replies on the internal speaker
+  # ---------------------------------------------------------------------------
+  lanbat.voiceSatellite = {
+    enable = true;
+    name = "Server Satellite";
+    uri = "tcp://127.0.0.1:10700";
+    # The onboard codec's analog output, which drives the internal speaker.
+    speaker = "plughw:CARD=PCH,DEV=0";
+    # The codec's Master control starts muted.
+    mixer = [ "-c PCH sset Master 80% unmute" ];
   };
 }

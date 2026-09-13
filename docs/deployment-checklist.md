@@ -612,47 +612,35 @@ Visit `https://sync.<domain>` (protected by Authentik forward auth).
 
 ### 3l. Wyoming voice assistant
 
-> **Hardware required:** a USB microphone (or microphone HAT) and speaker
-> connected to the Pi.
+> **Hardware required:** a USB microphone on the server and on the Pi. The
+> default is the PlayStation Eye (`lanbat.voiceSatellite.microphone.usbId` in
+> `modules/core/voice-satellite.nix`). Replies play on the server's internal
+> speaker and on the Pi's HDMI output.
 
-1. Verify the Wyoming services are running on the server:
+`home-assistant-post-setup` adds the Wyoming services and both satellites to
+Home Assistant, the conversation agent for `lanbat.haLlm` (API key from
+`ha-llm-api-key.age`), and a preferred **Voice** pipeline: wake word
+`okay_nabu`, faster-whisper, piper, Home Assistant's local intents first, then
+the LLM.
+
+1. Verify the services on the server and the Pi:
    ```bash
-   systemctl status wyoming-openwakeword
-   systemctl status wyoming-faster-whisper-main
-   systemctl status wyoming-piper-main
+   systemctl status wyoming-openwakeword wyoming-faster-whisper-main wyoming-piper-main wyoming-satellite
+   journalctl -u home-assistant-post-setup
+   ssh admin@<pi-ip> systemctl status wyoming-satellite
    ```
+   A satellite logging "no sound card with USB ID" can't find its microphone:
+   compare `lsusb` with `microphone.usbId`.
 
-2. Verify the satellite is running on the Pi:
-   ```bash
-   ssh admin@pi5 systemctl status wyoming-satellite
-   ```
-   If it fails with an audio error, the default ALSA device may not match your
-   hardware.  Run `ssh admin@pi5 arecord -l` to list capture devices and adjust
-   `microphone.command` in `modules/pi/wyoming-satellite.nix`.
+2. Choose what the assistant may control: **Settings → Voice assistants →
+   Expose**. The LLM only sees and controls exposed entities.
 
-3. In Home Assistant: **Settings → Devices & Services → Add Integration → Wyoming**
-   Add each service:
-   - Satellite: `<pi-ip>:10700`
-   - Wake word: `127.0.0.1:10300`
-   - Speech-to-text: `127.0.0.1:10301`
-   - Text-to-speech: `127.0.0.1:10302`
+3. Test: say **"Okay Nabu"** near either microphone, then ask something.
+   **Settings → Voice assistants → Voice → ⋮ → Debug** shows each run.
 
-4. Create a voice assistant pipeline:
-   **Settings → Voice Assistants → Add Assistant**
-   - Wake word engine: openwakeword → model: `ok_nabu`
-   - Speech-to-text: faster-whisper / main
-   - Text-to-speech: piper / main
-   - Conversation agent: Home Assistant
-
-5. Assign the pipeline to the Pi satellite:
-   **Settings → Devices & Services → Wyoming → Pi Satellite → Configure**
-   Select the pipeline you just created.
-
-6. Test: say **"Ok nabu"** near the Pi mic, then ask a question.
-   The satellite LED (if any) or the HA logbook will confirm detection.
-
-> **Tip:** faster-whisper and piper download their models on first start.
-> Allow a minute or two for the first pipeline run — subsequent runs are fast.
+> **Tip:** faster-whisper and piper download their models on first start, and
+> an LLM endpoint that scales to zero is slow to answer its first request after
+> being idle. Commands Home Assistant understands itself don't wait for the LLM.
 
 ### 3m. Music Assistant
 

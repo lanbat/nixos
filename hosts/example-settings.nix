@@ -29,6 +29,10 @@
     piStorageDriveA = "example-storage-a";
     piStorageDriveB = "example-storage-b";
     piTvFrontend = true;
+    haLlm = {
+      baseUrl = "https://llm.example.com/v1";
+      model = "example-model";
+    };
     adminSshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExampleExample example";
   };
 }

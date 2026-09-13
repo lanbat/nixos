@@ -43,6 +43,15 @@
     haLongitude = "-0.1278";
     haElevation = 11; # metres
 
+    # ── Home Assistant voice assistant ────────────────────────────────────────
+    # The conversation agent: an OpenAI-compatible chat completions API (vLLM,
+    # a RunPod serverless endpoint, …), with its API key in
+    # secrets/ha-llm-api-key.age. Leave it out for Home Assistant's own agent.
+    haLlm = {
+      baseUrl = "CHANGE_ME"; # e.g. "https://api.runpod.ai/v2/<endpoint-id>/openai/v1"
+      model = "CHANGE_ME"; # the model name the API serves
+    };
+
     # ── Disks ─────────────────────────────────────────────────────────────────
     # The server's system disk. nixos-anywhere ERASES it and applies
     # hosts/server/disk.nix. From the installer: ls -l /dev/disk/by-id/
