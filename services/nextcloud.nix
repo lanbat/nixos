@@ -56,8 +56,7 @@ let
           G = "GB";
           T = "TB";
         }
-        .${builtins.elemAt parts 1}
-        or "B";
+        .${builtins.elemAt parts 1} or "B";
     in
     if parts == null then size else "${builtins.elemAt parts 0} ${unitWord}";
 in

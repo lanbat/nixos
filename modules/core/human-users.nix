@@ -196,33 +196,25 @@ in
       }) (lib.attrNames humanUsers)
     );
 
-    systemd.tmpfiles.rules =
-      [
-        "d ${userBase} 0755 root root -"
-      ]
-      ++ lib.concatLists (
-        lib.mapAttrsToList (
-          user: _:
-          map (
-            sub:
-            let
-              owner =
-                if sub == "files" then
-                  user
-                else
-                  userStorage.serviceOwners.${sub}.name;
-            in
-            "d ${userSubdir user sub} ${subdirMode sub} ${owner} ${user} -"
-          ) userStorage.subdirs
-        ) humanUsers
-      );
+    systemd.tmpfiles.rules = [
+      "d ${userBase} 0755 root root -"
+    ]
+    ++ lib.concatLists (
+      lib.mapAttrsToList (
+        user: _:
+        map (
+          sub:
+          let
+            owner = if sub == "files" then user else userStorage.serviceOwners.${sub}.name;
+          in
+          "d ${userSubdir user sub} ${subdirMode sub} ${owner} ${user} -"
+        ) userStorage.subdirs
+      ) humanUsers
+    );
 
-    assertions = lib.mapAttrsToList (
-      user: u:
-      {
-        assertion = u.uid >= 1000;
-        message = "lanbat: humanUsers.${user}.uid must be ≥ 1000 (got ${toString u.uid})";
-      }
-    ) humanUsers;
+    assertions = lib.mapAttrsToList (user: u: {
+      assertion = u.uid >= 1000;
+      message = "lanbat: humanUsers.${user}.uid must be ≥ 1000 (got ${toString u.uid})";
+    }) humanUsers;
   };
 }
