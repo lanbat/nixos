@@ -83,27 +83,32 @@
     autoStart = false; # started by workload-online.target
   };
 
-  systemd.services."podman-qbittorrent" = {
+  systemd.services."podman-qbittorrent".serviceConfig = {
     # Set before every start, so the Authentik-only login holds even if the
-    # setting is changed in the web UI.
-    preStart = ''
-      conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
-      set_pref() {
-        [ -f "$conf" ] || return 0
-        K="$1" V="$2" ${pkgs.gawk}/bin/awk '
-          BEGIN { key = ENVIRON["K"] "="; line = key ENVIRON["V"] }
-          index($0, key) == 1 { if (!done) print line; done = 1; next }
-          { print }
-          $0 == "[Preferences]" && !done { print line; done = 1 }
-          END { if (!done) { print "[Preferences]"; print line } }
-        ' "$conf" > "$conf.tmp" && mv "$conf.tmp" "$conf"
-      }
-      set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
-      set_pref 'WebUI\AuthSubnetWhitelist' '${config.lanbat.serverIp}/32, ::ffff:${config.lanbat.serverIp}/128'
-    '';
-    serviceConfig = {
-      Restart = lib.mkForce "on-failure";
-      RestartSec = "15s";
-    };
+    # setting is changed in the web UI. As root (+): the container owns its
+    # config as whichever user ID it runs under (PUID), which qbt, the unit's
+    # user, can't always write. The file is rewritten in place, so it keeps
+    # that owner.
+    ExecStartPre = [
+      "+${pkgs.writeShellScript "qbittorrent-web-ui-whitelist" ''
+        conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
+        [ -f "$conf" ] || exit 0
+        tmp=$(${pkgs.coreutils}/bin/mktemp)
+        trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+        set_pref() {
+          K="$1" V="$2" ${pkgs.gawk}/bin/awk '
+            BEGIN { key = ENVIRON["K"] "="; line = key ENVIRON["V"] }
+            index($0, key) == 1 { if (!done) print line; done = 1; next }
+            { print }
+            $0 == "[Preferences]" && !done { print line; done = 1 }
+            END { if (!done) { print "[Preferences]"; print line } }
+          ' "$conf" > "$tmp" && ${pkgs.coreutils}/bin/cat "$tmp" > "$conf"
+        }
+        set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
+        set_pref 'WebUI\AuthSubnetWhitelist' '${config.lanbat.serverIp}/32, ::ffff:${config.lanbat.serverIp}/128'
+      ''}"
+    ];
+    Restart = lib.mkForce "on-failure";
+    RestartSec = "15s";
   };
 }
