@@ -29,9 +29,9 @@
 # Secrets
 # -------
 # telegraf-token.age — one line: TELEGRAF_INFLUXDB_TOKEN=<write token>
-# Create the token in InfluxDB UI after first deploy:
-#   Data → API Tokens → Generate API Token → Write to "metrics" bucket
-# Then store it: cd secrets && agenix -e telegraf-token.age
+# Any random value (openssl rand -base64 48). services/influxdb.nix provisions
+# it in InfluxDB as a write token for the "metrics" bucket; the Pi's Telegraf
+# uses the same token.
 #
 # Always-on: yes. No NFS dependency.
 {
