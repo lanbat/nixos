@@ -176,19 +176,17 @@ write_env_value "SYNCTHING_API_KEY" "$SYNCTHING_KEY"
 QBT_PASSWORD="$(read_secret_file hass-bootstrap-env OWNER_PASSWORD || true)"
 write_env_value "QBITTORRENT_PASSWORD" "$QBT_PASSWORD"
 
-# Preserve existing Authentik key if we already have one.
-AUTHENTIK_KEY=""
-if [[ -f homepage-widgets-env.age ]]; then
+# ---- Authentik ----
+AUTHENTIK_KEY="$(ssh -o BatchMode=yes "$SERVER_HOST" 'cd /tmp && sudo -u authentik HOME=/var/lib/containers/authentik podman exec authentik-server ak shell -c "
+from authentik.core.models import Token, User
+user = User.objects.filter(username=\"akadmin\").first()
+token, _ = Token.objects.get_or_create(identifier=\"homepage\", defaults={\"user\": user, \"intent\": \"api\"})
+print(token.key)
+" 2>/dev/null | tail -1' || true)"
+if [[ -z "$AUTHENTIK_KEY" ]] && [[ -f homepage-widgets-env.age ]]; then
   AUTHENTIK_KEY="$($AGENIX -d homepage-widgets-env.age 2>/dev/null | sed -n 's/^AUTHENTIK_API_KEY=//p' || true)"
 fi
-if [[ -z "$AUTHENTIK_KEY" ]]; then
-  echo "  MANUAL AUTHENTIK_API_KEY"
-  echo "        Create an API token in Authentik: Admin → Directory → Tokens & App passwords"
-  echo "        Intent: API Token. Permissions: view User, view Event."
-  echo "        Then run: agenix -e secrets/homepage-widgets-env.age"
-else
-  write_env_value "AUTHENTIK_API_KEY" "$AUTHENTIK_KEY"
-fi
+write_env_value "AUTHENTIK_API_KEY" "$AUTHENTIK_KEY"
 
 if [[ ${#ENV_LINES[@]} -eq 0 ]]; then
   echo

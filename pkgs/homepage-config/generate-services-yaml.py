@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 def load_env_file(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
@@ -58,67 +60,29 @@ def widget_is_usable(widget: dict[str, Any]) -> bool:
     return True
 
 
-def build_services(manifest: dict[str, Any], agenix_dir: Path) -> list[dict[str, Any]]:
+def build_service(entry: dict[str, Any], agenix_dir: Path) -> dict[str, Any]:
+    service: dict[str, Any] = {
+        "href": entry["href"],
+        "description": entry["description"],
+    }
+    if entry.get("icon"):
+        service["icon"] = entry["icon"]
+    if entry.get("widget"):
+        widget = resolve_value(entry["widget"], agenix_dir)
+        if widget_is_usable(widget):
+            service["widget"] = widget
+    return service
+
+
+def build_yaml(manifest: dict[str, Any], agenix_dir: Path) -> list[dict[str, Any]]:
     groups: list[dict[str, Any]] = []
     for group in manifest["groups"]:
-        entries: list[dict[str, Any]] = []
+        services: list[dict[str, Any]] = []
         for entry in group["entries"]:
-            service = {
-                "name": entry["name"],
-                "href": entry["href"],
-                "description": entry["description"],
-            }
-            if entry.get("icon"):
-                service["icon"] = entry["icon"]
-            if entry.get("widget"):
-                widget = resolve_value(entry["widget"], agenix_dir)
-                if widget_is_usable(widget):
-                    service["widget"] = widget
-            entries.append(service)
-        if entries:
-            groups.append({"name": group["name"], "entries": entries})
+            services.append({entry["name"]: build_service(entry, agenix_dir)})
+        if services:
+            groups.append({group["name"]: services})
     return groups
-
-
-def dump_yaml(groups: list[dict[str, Any]]) -> str:
-    lines: list[str] = []
-
-    def emit(value: Any, indent: int = 0) -> None:
-        prefix = "  " * indent
-        if isinstance(value, dict):
-            for key, item in value.items():
-                if isinstance(item, (dict, list)):
-                    lines.append(f"{prefix}{json.dumps(key)}:")
-                    emit(item, indent + 1)
-                elif isinstance(item, bool):
-                    lines.append(f"{prefix}{json.dumps(key)}: {'true' if item else 'false'}")
-                else:
-                    lines.append(f"{prefix}{json.dumps(key)}: {json.dumps(item)}")
-        elif isinstance(value, list):
-            for item in value:
-                if isinstance(item, dict):
-                    lines.append(f"{prefix}-")
-                    emit(item, indent + 1)
-                else:
-                    lines.append(f"{prefix}- {json.dumps(item)}")
-        else:
-            lines.append(f"{prefix}{json.dumps(value)}")
-
-    for group in groups:
-        lines.append("-")
-        lines.append(f"  {json.dumps(group['name'])}:")
-        for entry in group["entries"]:
-            lines.append(f"    {json.dumps(entry['name'])}:")
-            service = {
-                "href": entry["href"],
-                "description": entry["description"],
-            }
-            if entry.get("icon"):
-                service["icon"] = entry["icon"]
-            if entry.get("widget"):
-                service["widget"] = entry["widget"]
-            emit(service, 3)
-    return "\n".join(lines).rstrip() + "\n"
 
 
 def main() -> int:
@@ -134,9 +98,16 @@ def main() -> int:
     output_path = Path(sys.argv[3])
 
     manifest = json.loads(manifest_path.read_text())
-    groups = build_services(manifest, agenix_dir)
+    services = build_yaml(manifest, agenix_dir)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(dump_yaml(groups))
+    output_path.write_text(
+        yaml.safe_dump(
+            services,
+            sort_keys=False,
+            allow_unicode=True,
+            default_flow_style=False,
+        )
+    )
     return 0
 
 
