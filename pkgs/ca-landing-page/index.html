@@ -43,6 +43,8 @@
     code { font-family: "Cascadia Code", "Fira Code", monospace; }
     .download-section { margin-bottom: 1.5rem; }
     .download-section h3 { margin: 0 0 .75rem; font-size: 1rem; }
+    .verify-section { margin-bottom: 1.5rem; }
+    .verify-section h3 { margin: 0 0 .75rem; font-size: 1rem; }
     #qrcode {
       background: #fff; padding: 8px; border-radius: 8px;
       display: inline-block; line-height: 0; width: fit-content;
@@ -78,6 +80,17 @@
         Scan with your phone to download on mobile:
       </p>
       <div id="qrcode"></div>
+    </div>
+    <div class="verify-section">
+      <h3>Verify the download</h3>
+      <p style="color:var(--muted); font-size:.9rem; margin:0 0 .75rem">
+        The SHA-256 fingerprint of the current root must match after you download it:
+      </p>
+      <pre><code class="fingerprint">PLACEHOLDER_SHA256_FINGERPRINT</code></pre>
+      <p style="color:var(--muted); font-size:.9rem; margin:.75rem 0 .5rem">
+        Check a saved copy:
+      </p>
+      <pre><code>openssl x509 -in lanbat-ca.crt -noout -fingerprint -sha256</code></pre>
     </div>
     <div class="note" style="margin-top:0; margin-bottom:1rem">
       <strong>Re-installing or updating the root?</strong> Remove any older

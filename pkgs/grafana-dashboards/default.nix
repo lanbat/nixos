@@ -19,8 +19,9 @@ let
 
     installPhase = ''
       runHook preInstall
+      ${python3}/bin/python3 ./build.py
       mkdir -p $out
-      OUTDIR=$out ${python3}/bin/python3 $src/build.py
+      cp homelab-*.json $out/
       runHook postInstall
     '';
 

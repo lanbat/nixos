@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
@@ -297,7 +296,6 @@ from(bucket: "{BUCKET}")
   |> last()
   |> group(columns: ["host"])
   |> max(column: "_value")
-  |> map(fn: (r) => ({{ r with _field: r.host }}))
 """
 
 
@@ -339,11 +337,7 @@ def cpu_usage_from_idle(
         if agg and not last_only
         else ""
     )
-    last_line = (
-        '\n  |> last()\n  |> group(columns: ["host"])\n  |> map(fn: (r) => ({ r with _field: r.host }))'
-        if last_only
-        else ""
-    )
+    last_line = '\n  |> last()\n  |> group(columns: ["host"])' if last_only else ""
     return f"""
 from(bucket: "{BUCKET}")
   |> range(start: v.timeRangeStart, stop: v.timeRangeStop)
@@ -410,8 +404,7 @@ def overview() -> dict[str, Any]:
             ),
             (
                 "Memory usage",
-                range_query("mem", "used_percent", agg=False)
-                + '\n  |> last()\n  |> group(columns: ["host"])\n  |> map(fn: (r) => ({ r with _field: r.host }))',
+                range_query("mem", "used_percent", agg=False) + "\n  |> last()\n  |> group(columns: [\"host\"])",
                 "percent",
                 [(None, "green"), (75, "yellow"), (90, "red")],
             ),
@@ -1158,8 +1151,7 @@ from(bucket: "{BUCKET}")
 
 
 def main() -> None:
-    out = Path(os.environ.get("OUTDIR", Path(__file__).parent))
-    out.mkdir(parents=True, exist_ok=True)
+    out = Path(__file__).parent
     dashboards = {
         "homelab-overview.json": overview(),
         "homelab-host.json": host_detail(),
