@@ -62,7 +62,9 @@ in
       description = "Media server";
       widget = {
         type = "jellyfin";
-        key = "CHANGE_ME_JELLYFIN_API_KEY";
+        key = {
+          _secret = "JELLYFIN_API_KEY";
+        };
       };
     };
   };

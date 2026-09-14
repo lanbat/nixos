@@ -51,13 +51,16 @@
   ...
 }:
 
+let
+  serverSatellite = config.lanbat.voiceSatelliteServer;
+in
 {
   lanbat.services.wyoming.extraPorts = [
     10300
     10301
     10302
-    10700 # satellite
-  ];
+  ]
+  ++ lib.optionals serverSatellite [ 10700 ];
 
   # ---------------------------------------------------------------------------
   # Wake word detection
@@ -92,7 +95,7 @@
   # ---------------------------------------------------------------------------
   # Satellite: the PlayStation Eye's microphones, replies on the internal speaker
   # ---------------------------------------------------------------------------
-  lanbat.voiceSatellite = {
+  lanbat.voiceSatellite = lib.mkIf serverSatellite {
     enable = true;
     name = "Server Satellite";
     uri = "tcp://127.0.0.1:10700";

@@ -34,6 +34,8 @@
     subdomain = "torrent";
     port = 8090;
     auth = "forward-auth";
+    # Homepage's qBittorrent widget calls /api/v2/* without an Authentik session.
+    caddy.authBypassPaths = [ "/api/v2/*" ];
     tier = "workload";
     state = [ "qbittorrent" ];
     units = [ "podman-qbittorrent" ];
@@ -52,6 +54,14 @@
       group = "Downloads";
       name = "qBittorrent";
       description = "Torrent client";
+      widget = {
+        type = "qbittorrent";
+        username = "admin";
+        password = {
+          _secret = "QBITTORRENT_PASSWORD";
+        };
+        enableLeechProgress = true;
+      };
     };
   };
 

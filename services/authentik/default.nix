@@ -105,7 +105,10 @@ in
       description = "Identity & SSO";
       widget = {
         type = "authentik";
-        key = "CHANGE_ME_HOMEPAGE_AUTHENTIK_API_KEY";
+        version = 2;
+        key = {
+          _secret = "AUTHENTIK_API_KEY";
+        };
       };
     };
   };

@@ -10,6 +10,7 @@
     ./auto-upgrade.nix
     ./ssh.nix
     ./users.nix
+    ./human-users.nix
     ./voice-satellite.nix
     ../wiring/accounts.nix
     ../wiring/secrets.nix

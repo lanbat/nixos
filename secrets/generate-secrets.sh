@@ -110,6 +110,16 @@ encrypt bitmagnet-db-pass.age "POSTGRES_PASSWORD=$(rand 36)"
 # ---- Vaultwarden ----
 encrypt vaultwarden-env.age "ADMIN_TOKEN=$(rand 48)"
 
+# ---- Homepage widgets ----
+# Populated after deploy via: bash secrets/generate-homepage-widgets.sh
+encrypt homepage-widgets-env.age \
+  "JELLYFIN_API_KEY=
+IMMICH_API_KEY=
+HA_LONG_LIVED_TOKEN=
+AUTHENTIK_API_KEY=
+SYNCTHING_API_KEY=
+QBITTORRENT_PASSWORD="
+
 echo
 echo "Done. Secrets that still need manual input:"
 echo
