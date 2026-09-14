@@ -177,12 +177,17 @@ QBT_PASSWORD="$(read_secret_file hass-bootstrap-env OWNER_PASSWORD || true)"
 write_env_value "QBITTORRENT_PASSWORD" "$QBT_PASSWORD"
 
 # ---- Authentik ----
-AUTHENTIK_KEY="$(ssh -o BatchMode=yes "$SERVER_HOST" 'cd /tmp && sudo -u authentik HOME=/var/lib/containers/authentik podman exec authentik-server ak shell -c "
+# Default tokens expire after 30 minutes; mark the Homepage token non-expiring.
+# akadmin needs global permissions to view users and events.
+AUTHENTIK_KEY="$(ssh -o BatchMode=yes "$SERVER_HOST" 'sudo -u authentik bash -c "cd /tmp && podman exec authentik-server ak shell -c \"
 from authentik.core.models import Token, User
-user = User.objects.filter(username=\"akadmin\").first()
-token, _ = Token.objects.get_or_create(identifier=\"homepage\", defaults={\"user\": user, \"intent\": \"api\"})
+user = User.objects.filter(username=\\\"akadmin\\\").first()
+Token.objects.filter(identifier=\\\"homepage\\\").delete()
+token = Token.objects.create(identifier=\\\"homepage\\\", user=user, intent=\\\"api\\\")
+token.expiring = False
+token.save()
 print(token.key)
-" 2>/dev/null | tail -1' || true)"
+\" 2>/dev/null | tail -1"' || true)"
 if [[ -z "$AUTHENTIK_KEY" ]] && [[ -f homepage-widgets-env.age ]]; then
   AUTHENTIK_KEY="$($AGENIX -d homepage-widgets-env.age 2>/dev/null | sed -n 's/^AUTHENTIK_API_KEY=//p' || true)"
 fi
