@@ -2,11 +2,7 @@
 #
 # Declarative Grafana dashboards for Telegraf → InfluxDB metrics.
 # Generated from build.py and provisioned by services/grafana.nix.
-{
-  lib,
-  python3,
-  stdenvNoCC,
-}:
+{ lib, python3, stdenvNoCC }:
 
 let
   dashboards = stdenvNoCC.mkDerivation {
@@ -19,8 +15,9 @@ let
 
     installPhase = ''
       runHook preInstall
+      ${python3}/bin/python3 ./build.py
       mkdir -p $out
-      OUTDIR=$out ${python3}/bin/python3 $src/build.py
+      cp homelab-*.json $out/
       runHook postInstall
     '';
 
