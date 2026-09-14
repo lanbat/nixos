@@ -48,14 +48,13 @@
 let
   lanbat = config.lanbat;
 
-  serviceHealthCheck = name: port: path:
-    {
-      urls = [ "http://127.0.0.1:${toString port}${path}" ];
-      response_status_code = 200;
-      interval = "60s";
-      response_timeout = "5s";
-      name_override = name;
-    };
+  serviceHealthCheck = name: port: path: {
+    urls = [ "http://127.0.0.1:${toString port}${path}" ];
+    response_status_code = 200;
+    interval = "60s";
+    response_timeout = "5s";
+    name_override = name;
+  };
 in
 
 {
