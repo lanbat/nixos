@@ -7,6 +7,7 @@
     ./settings.nix
     ./services.nix
     ./base.nix
+    ./auto-upgrade.nix
     ./ssh.nix
     ./users.nix
     ./voice-satellite.nix

@@ -17,7 +17,7 @@
 #    LUKS2 → XFS (pquota) → /mnt/storage-b
 #    Directories:
 #      /mnt/storage-b/media/         — music, documentaries, ROMs, books and the rest
-#                                      (qBittorrent, Jellyfin, EmulationStation)
+#      /mnt/storage-b/media/adult/   — private group only (Samba + NFS gated)
 #      /mnt/storage-b/nextcloud/     — Nextcloud external storage
 #      /mnt/storage-b/users/         — per-user SMB home dirs
 #      /mnt/storage-b/shared/        — shared SMB space
@@ -56,6 +56,10 @@
   ...
 }:
 
+let
+  privateGid = config.users.groups.private.gid;
+  mediaGid = config.users.groups.media.gid;
+in
 {
   # ── Storage A initialisation ───────────────────────────────────────────────
   # Runs after storage-a is unlocked and mounted, creates the top-level
@@ -63,10 +67,10 @@
   # the drive is served (modules/pi/nfs-exports.nix exports it once mounted).
   systemd.services."storage-a-init" = {
     description = "Initialise storage-a directory tree after unlock";
-    # Require successful unlock (which implies the filesystem is mounted).
     requires = [ "storage-a-unlock.service" ];
     after = [ "storage-a-unlock.service" ];
-    wantedBy = [ "storage-a-unlock.service" ];
+    before = [ "nfs-server.service" ];
+    wantedBy = [ "nfs-server.service" ];
 
     serviceConfig = {
       Type = "oneshot";
@@ -75,10 +79,9 @@
       ExecStart = pkgs.writeShellScript "init-storage-a" ''
         set -e
         base=/mnt/storage-a
-        # Media, split across both drives by folder. qBittorrent on the server
-        # saves here as qbt (UID 994), group media (GID 988); Jellyfin reads.
+        # Media on drive A. qBittorrent saves here as qbt (UID 994), group media.
         for dir in media media/movies media/tv media/music-videos; do
-          install -d -m 2775 -o 994 -g 988 "$base/$dir"
+          install -d -m 2775 -o 994 -g ${toString mediaGid} "$base/$dir"
         done
         install -d -m 0755 -o nobody -g nogroup "$base/photos"
         install -d -m 0755 -o nobody -g nogroup "$base/surveillance"
@@ -94,7 +97,8 @@
     description = "Initialise storage-b directory tree after unlock";
     requires = [ "storage-b-unlock.service" ];
     after = [ "storage-b-unlock.service" ];
-    wantedBy = [ "storage-b-unlock.service" ];
+    before = [ "nfs-server.service" ];
+    wantedBy = [ "nfs-server.service" ];
 
     serviceConfig = {
       Type = "oneshot";
@@ -103,23 +107,26 @@
       ExecStart = pkgs.writeShellScript "init-storage-b" ''
         set -e
         base=/mnt/storage-b
-        # The rest of the media, as on storage-a.
-        for dir in media media/music media/documentaries media/adult media/roms \
-          media/audiobooks media/books media/gym media/games media/misc; do
-          install -d -m 2775 -o 994 -g 988 "$base/$dir"
+        # General media on drive B — group media (Jellyfin, qBittorrent, Samba).
+        for dir in media media/music media/documentaries media/roms \
+          media/audiobooks media/books media/gym media/games media/misc media/incomplete; do
+          install -d -m 2775 -o 994 -g ${toString mediaGid} "$base/$dir"
         done
-        install -d -m 0755 -o root   -g root    "$base/nextcloud"
+        # Adult content is private-group only — not in Jellyfin, hidden from Samba media shares.
+        install -d -m 2770 -o 994 -g ${toString privateGid} "$base/media/adult"
+        chgrp ${toString privateGid} "$base/media/adult" 2>/dev/null || true
+        chmod 2770 "$base/media/adult" 2>/dev/null || true
+        install -d -m 0755 -o root -g root "$base/nextcloud"
         install -d -m 0755 -o nobody -g nogroup "$base/users"
         install -d -m 0775 -o nobody -g nogroup "$base/shared"
-        install -d -m 0700 -o root   -g root    "$base/backups"
+        install -d -m 0700 -o root -g root "$base/backups"
         echo "storage-b directory tree ready."
       '';
     };
   };
 
-  # ── Packages for storage management ───────────────────────────────────────
   environment.systemPackages = with pkgs; [
-    xfsprogs # xfs_quota, xfs_admin
+    xfsprogs
     cryptsetup
     clevis
   ];

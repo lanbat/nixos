@@ -33,26 +33,59 @@ ssh admin@server sudo nixos-rebuild switch --rollback
 
 ## Updating
 
-Hosts don't upgrade themselves: a host only changes when you deploy. To update nixpkgs
-and the other inputs:
+Both hosts run `nixos-upgrade.service` nightly, pulling the latest commit from
+`/etc/nixos` and running `nixos-rebuild switch`. You can also deploy immediately
+from your workstation with deploy-rs.
+
+To update nixpkgs and the other inputs:
 
 ```bash
 nix flake update
 nix flake check --no-build path:.
+git commit -m "flake.lock: update" flake.lock
+git push
+# Hosts pick up the change on the next nightly run, or deploy now:
 deploy path:.#server
 deploy path:.#pi
-git commit -m "flake.lock: update" flake.lock
 ```
 
-New kernels take effect after a reboot. Check whether one is pending:
+Check the last upgrade:
+
+```bash
+systemctl status nixos-upgrade.service
+journalctl -u nixos-upgrade.service -n 50
+journalctl -u nixos-upgrade-pull.service -n 20
+```
+
+**Server:** upgrades apply immediately but the machine is **not rebooted** — a new
+kernel only takes effect after the next manual reboot. Check whether a reboot is pending:
 
 ```bash
 [ "$(readlink /run/booted-system/kernel)" = "$(readlink /run/current-system/kernel)" ] \
   && echo "up to date" || echo "reboot pending"
 ```
 
-After a server reboot, unlock both layers (see `docs/runbook.md`). The Pi unlocks its
-drives on its own once Tang is reachable.
+After a server reboot, unlock both layers (see `docs/runbook.md`).
+
+**Pi:** upgrades apply immediately and the machine **reboots automatically** (between
+04:00–06:00) if a reboot is needed. Clevis/Tang handles LUKS unlock automatically.
+NFS-dependent services on the server briefly pause and auto-restart as usual.
+
+### Disabling auto-upgrade temporarily
+
+```bash
+sudo systemctl stop nixos-upgrade.timer
+sudo systemctl start nixos-upgrade.timer   # re-enable
+```
+
+### Pinning a specific commit
+
+If an upgrade breaks something, pin the repo to a known-good commit:
+
+```bash
+sudo git -C /etc/nixos checkout <good-commit-hash>
+# Auto-upgrade rebuilds from this commit until you move HEAD forward.
+```
 
 ## Disk space (server)
 
@@ -267,11 +300,12 @@ journalctl -u grafana -n 50
 ```bash
 # Check InfluxDB is running and healthy
 systemctl status influxdb2
-curl -s http://127.0.0.1:8086/health
+curl -s http://localhost:8086/health
 
 # Query via CLI (requires the operator token)
+# Use localhost, not 127.0.0.1 — the firewall rule for port 8086 can block the latter.
 influx query 'from(bucket:"metrics") |> range(start: -1h)' \
-  --host http://127.0.0.1:8086 \
+  --host http://localhost:8086 \
   --token "$(cat /run/agenix/influxdb-admin-token)"
 ```
 

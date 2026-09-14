@@ -401,6 +401,44 @@ From now on, deploy with `deploy path:.#pi`.
 - With `piTvFrontend` on, Kodi should appear on HDMI (if a screen is attached). Holding a
   controller's Guide button for 2 seconds switches to EmulationStation and back.
 
+### 2h. Clone the config repo on each machine
+
+Unattended upgrades rebuild from a local copy of this repo at `/etc/nixos`.
+Clone it on both machines now:
+
+```bash
+# On the server
+ssh admin@server
+sudo git clone <your-repo-url> /etc/nixos
+sudo cp /path/to/local.nix /etc/nixos/local.nix
+
+# On the Pi
+ssh admin@pi5
+sudo git clone <your-repo-url> /etc/nixos
+sudo cp /path/to/local.nix /etc/nixos/local.nix
+```
+
+Set the upstream branch on each clone (use your default branch name):
+
+```bash
+sudo git -C /etc/nixos branch --set-upstream-to=origin/master
+```
+
+If your repo is **private**, configure git credentials before auto-upgrade
+will be able to pull:
+
+```bash
+# Option A — HTTPS token (simpler)
+sudo git -C /etc/nixos remote set-url origin https://<token>@github.com/user/repo.git
+
+# Option B — SSH deploy key (more secure)
+sudo ssh-keygen -t ed25519 -f /root/.ssh/nixos_deploy -N ""
+# Add /root/.ssh/nixos_deploy.pub as a read-only deploy key in your git host
+sudo git -C /etc/nixos remote set-url origin git@github.com:user/repo.git
+```
+
+If your repo is **public**, no credentials are needed — HTTPS clone works as-is.
+
 ---
 
 ## Phase 3 — Post-install configuration
@@ -480,23 +518,19 @@ automatically and registers the Authentik provider.  No further steps needed.
 4. Grant users access to the **Home Assistant** application in Authentik
    (Applications → Home Assistant → Policy / group bindings).
 
-#### Jellyfin — bootstrap and SSO
+#### Jellyfin — automatic setup
 
-`jellyfin-bootstrap` completes the first-run startup wizard automatically on
-deploy, using `OWNER_USERNAME` / `OWNER_PASSWORD` from `hass-bootstrap-env.age`
-(same break-glass credentials as Home Assistant and Immich).  Add media
-libraries under Dashboard → Libraries after deploy if needed.
+`jellyfin-bootstrap` completes first-run onboarding on deploy:
 
-SSO plugin setup (manual):
+- Admin account from `hass-bootstrap-env.age` (same break-glass credentials as HA/Immich)
+- Media libraries for every Pi folder except `adult/` (Samba-only), `incomplete/`
+  (active downloads), and `roms/` (RomM): Movies, TV, Music Videos, Music,
+  Documentaries, Audiobooks, Books, Gym, Games, Misc
+- Plugins: Open Subtitles, Trakt, SSO Authentication
+- Authentik OIDC provider (`authentik`) from `authentik-oidc-secrets.age`
 
-1. Dashboard → Plugins → Catalog → **SSO Authentication** → Install. Restart Jellyfin.
-2. Dashboard → SSO-Auth → Add provider with values from `generate-oidc-secrets.sh`:
-   - Provider name: `authentik`
-   - client_id: `jellyfin`
-   - client_secret: (from the script output)
-   - Authorization URL: `https://auth.<domain>/application/o/authorize/`
-   - Token URL: `https://auth.<domain>/application/o/token/`
-   - Userinfo URL: `https://auth.<domain>/application/o/userinfo/`
+Grant users access to the **Jellyfin** application in Authentik.  Adult content
+is only available via the hidden Samba `private` share (`@private` group).
 
 ### 3c. Samba user setup
 
@@ -576,7 +610,7 @@ Telegraf needs a write-only InfluxDB token (separate from the operator token
 used by Grafana).
 
 1. Open the InfluxDB UI through an SSH tunnel (it is not exposed via Caddy):
-   `ssh -L 8086:127.0.0.1:8086 admin@<serverIp>`, then `http://localhost:8086`.
+   `ssh -L 8086:localhost:8086 admin@<serverIp>`, then `http://localhost:8086`.
 2. **Data → API Tokens → Generate API Token → Custom API Token**
    - Description: `telegraf`
    - Buckets: Write → `metrics`
@@ -720,9 +754,9 @@ and stops after 30 minutes idle.
 
 ## Phase 4 — Ongoing
 
-- Deploy changes: `deploy path:.#server` / `deploy path:.#pi`.
-- Update inputs: `nix flake update`, check, deploy, commit `flake.lock`
-  (`docs/operations.md` § Updating). Hosts don't upgrade themselves.
+- Deploy changes immediately: `deploy path:.#server` / `deploy path:.#pi`.
+- Update inputs: `nix flake update`, commit `flake.lock`, `git push`
+  (`docs/operations.md` § Updating). Hosts auto-upgrade nightly from `/etc/nixos`.
 - Back up the Tang key directory: `docs/runbook.md` § Backing up Tang keys.
 - Test Pi unlock after a server reboot to verify Clevis/Tang works.
 - Pin container image versions when stability matters.
