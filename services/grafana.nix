@@ -66,6 +66,13 @@ in
   systemd.services.grafana = {
     after = [ config.lanbat.postgresql.instances.always-on.unit ];
     requires = [ config.lanbat.postgresql.instances.always-on.unit ];
+    serviceConfig = {
+      # OAuth token/userinfo calls hit https://auth.<domain> server-side; trust
+      # the internal Caddy CA (global environment.variables do not reach units).
+      Environment = [
+        "SSL_CERT_FILE=/var/lib/caddy-local-ca/ca-certificates.crt"
+      ];
+    };
   };
 
   services.grafana = {
@@ -98,6 +105,8 @@ in
         admin_user = "admin";
       };
 
+      auth.signout_redirect_url = "https://auth.${domain}/application/o/grafana/end-session/";
+
       # ---------------------------------------------------------------------------
       # Authentik OIDC
       # ---------------------------------------------------------------------------
@@ -114,7 +123,7 @@ in
         token_url = "https://auth.${domain}/application/o/token/";
         api_url = "https://auth.${domain}/application/o/userinfo/";
         # Map all Authentik users to Viewer by default; promote in Grafana UI.
-        role_attribute_path = "contains(groups, 'grafana-admins') && 'Admin' || 'Viewer'";
+        role_attribute_path = "contains(groups[*], 'grafana-admins') && 'Admin' || 'Viewer'";
         login_attribute_path = "preferred_username";
         name_attribute_path = "name";
         email_attribute_path = "email";
