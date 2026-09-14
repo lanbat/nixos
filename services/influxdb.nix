@@ -5,8 +5,10 @@
 # Design
 # ------
 # - NixOS-native service; no container needed.
-# - Listens on localhost:8086 only — not exposed through Caddy.
-#   Grafana connects to it directly; there is no public UI for InfluxDB.
+# - Binds on all interfaces (0.0.0.0:8086) so the Pi can write metrics; the
+#   firewall below restricts access to loopback and the Pi's IP only. Not
+#   exposed through Caddy — Grafana and Telegraf on the server use
+#   http://localhost:8086 (not 127.0.0.1 — that can hang behind the rule).
 # - Initial org/bucket/admin are provisioned declaratively via the NixOS
 #   module's provision option.  After first boot this block is a no-op.
 # - The operator token is loaded from an agenix secret so it is never in

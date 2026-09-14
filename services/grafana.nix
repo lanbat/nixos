@@ -10,15 +10,14 @@
 # - Auth: Authentik OIDC via generic_oauth.  Local admin is kept as
 #   break-glass.  Auto-assign the Viewer role to all Authentik users;
 #   promote individuals to Editor/Admin in the Grafana UI as needed.
-# - InfluxDB datasource is provisioned declaratively — no manual setup
-#   required after deploy.
+# - InfluxDB datasource and Homelab dashboards are provisioned declaratively.
 #
 # Secrets (all in grafana-env.age, one KEY=value per line)
 # -------
 #   GF_SECURITY_SECRET_KEY          — random 64-char string for session signing
 #   GF_SECURITY_ADMIN_PASSWORD      — local break-glass admin password
 #   GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET — OIDC client secret from Authentik
-#   INFLUXDB_TOKEN                  — same operator token as influxdb-admin-token.age
+#   INFLUXDB_TOKEN is injected at service start from influxdb-admin-token.age.
 #
 # OIDC setup (chicken-and-egg, same pattern as Nextcloud/Immich)
 # -----
@@ -30,10 +29,11 @@
 #   4. Rebuild — OIDC login becomes available.
 #
 # Always-on: yes.  No NFS dependency.
-{ config, ... }:
+{ config, pkgs, ... }:
 
 let
   domain = config.lanbat.domain;
+  dashboards = pkgs.callPackage ../pkgs/grafana-dashboards { };
 in
 
 {
@@ -47,8 +47,14 @@ in
       description = "Metrics dashboards";
       widget = {
         type = "grafana";
+        version = 2;
         username = "admin";
-        password = "CHANGE_ME_GRAFANA_ADMIN_PASS";
+        password = {
+          _secret = {
+            file = "grafana-env";
+            var = "GF_SECURITY_ADMIN_PASSWORD";
+          };
+        };
       };
     };
   };
@@ -57,14 +63,44 @@ in
   # logs in as its system user over the socket, so no password is needed.
   lanbat.postgresql.databases.grafana.instance = "always-on";
 
+  systemd.services.grafana-influxdb-token = {
+    description = "InfluxDB operator token for Grafana datasource";
+    before = [ "grafana.service" ];
+    requiredBy = [ "grafana.service" ];
+    # Use a separate runtime dir from grafana.service — stopping Grafana clears
+    # its own RuntimeDirectory=grafana and would delete a shared token file.
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      RuntimeDirectory = "grafana-datasource";
+      RuntimeDirectoryMode = "0750";
+    };
+    script = ''
+      umask 077
+      echo "INFLUXDB_TOKEN=$(cat ${config.age.secrets.influxdb-admin-token.path})" \
+        > /run/grafana-datasource/influxdb-token.env
+      test -s /run/grafana-datasource/influxdb-token.env
+    '';
+  };
+
   systemd.services.grafana = {
-    after = [ config.lanbat.postgresql.instances.always-on.unit ];
-    requires = [ config.lanbat.postgresql.instances.always-on.unit ];
+    after = [
+      config.lanbat.postgresql.instances.always-on.unit
+      "grafana-influxdb-token.service"
+    ];
+    requires = [
+      config.lanbat.postgresql.instances.always-on.unit
+      "grafana-influxdb-token.service"
+    ];
     serviceConfig = {
       # OAuth token/userinfo calls hit https://auth.<domain> server-side; trust
       # the internal Caddy CA (global environment.variables do not reach units).
       Environment = [
         "SSL_CERT_FILE=/var/lib/caddy-local-ca/ca-certificates.crt"
+      ];
+      EnvironmentFile = [
+        config.age.secrets.grafana-env.path
+        "/run/grafana-datasource/influxdb-token.env"
       ];
     };
   };
@@ -90,6 +126,13 @@ in
         http_port = config.lanbat.services.grafana.port;
         domain = "grafana.${domain}";
         root_url = "https://grafana.${domain}";
+      };
+
+      dashboards.default_home_dashboard_uid = "homelab-overview";
+
+      users = {
+        default_theme = "system";
+        viewers_can_edit = false;
       };
 
       security = {
@@ -131,13 +174,25 @@ in
     provision = {
       enable = true;
 
-      datasources.settings.datasources = [
+      datasources.settings = {
+        # Replace the auto-generated UID from first boot with a stable one used
+        # by the provisioned dashboards.
+        deleteDatasources = [
+          {
+            name = "InfluxDB";
+            orgId = 1;
+          }
+        ];
+
+        datasources = [
         {
           name = "InfluxDB";
+          uid = "influxdb-homelab";
           type = "influxdb";
           access = "proxy";
-          url = "http://127.0.0.1:8086";
+          url = "http://localhost:8086";
           isDefault = true;
+          editable = false;
 
           jsonData = {
             version = "Flux";
@@ -151,14 +206,25 @@ in
             token = "$__env{INFLUXDB_TOKEN}";
           };
         }
-      ];
+        ];
+      };
+
+      dashboards.settings = {
+        apiVersion = 1;
+        providers = [
+          {
+            name = "homelab";
+            orgId = 1;
+            folder = "Homelab";
+            type = "file";
+            disableDeletion = true;
+            allowUiUpdates = false;
+            updateIntervalSeconds = 30;
+            options.path = dashboards;
+          }
+        ];
+      };
     };
   };
 
-  # ---------------------------------------------------------------------------
-  # Inject secrets at runtime
-  # ---------------------------------------------------------------------------
-  systemd.services.grafana.serviceConfig.EnvironmentFile = [
-    config.age.secrets.grafana-env.path
-  ];
 }

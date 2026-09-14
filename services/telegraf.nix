@@ -76,7 +76,7 @@ in
 
       outputs.influxdb_v2 = [
         {
-          urls = [ "http://127.0.0.1:8086" ];
+          urls = [ "http://localhost:8086" ];
           token = "$TELEGRAF_INFLUXDB_TOKEN";
           organization = "homelab";
           bucket = "metrics";
@@ -88,7 +88,7 @@ in
           percpu = true;
           totalcpu = true;
           collect_cpu_time = false;
-          report_active = false;
+          report_active = true;
         }
       ];
       inputs.mem = [ { } ];
