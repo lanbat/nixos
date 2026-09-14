@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<settings version="1">
+  <setting id="kodion.setup_wizard" default="true">false</setting>
+  <setting id="kodion.setup_wizard.forced_runs" default="true">1</setting>
+  <setting id="kodion.video.quality.isa" default="true">true</setting>
+  <setting id="kodion.mpd.videos" default="true">true</setting>
+  <setting id="kodion.http.listen.ip" default="true">0.0.0.0</setting>
+  <setting id="kodion.http.proxy.type" default="true">0</setting>
+</settings>

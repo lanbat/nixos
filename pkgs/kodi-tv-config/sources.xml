@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sources>
+  <programs>
+    <default pathversion="1"></default>
+  </programs>
+  <video>
+    <default pathversion="1"></default>
+    <source>
+      <name>Movies</name>
+      <path pathversion="1">/mnt/storage-a/media/movies/</path>
+      <allowsharing>true</allowsharing>
+    </source>
+    <source>
+      <name>TV Shows</name>
+      <path pathversion="1">/mnt/storage-a/media/tv/</path>
+      <allowsharing>true</allowsharing>
+    </source>
+    <source>
+      <name>Music Videos</name>
+      <path pathversion="1">/mnt/storage-a/media/music-videos/</path>
+      <allowsharing>true</allowsharing>
+    </source>
+    <source>
+      <name>Documentaries</name>
+      <path pathversion="1">/mnt/storage-b/media/documentaries/</path>
+      <allowsharing>true</allowsharing>
+    </source>
+    <source>
+      <name>Gym</name>
+      <path pathversion="1">/mnt/storage-b/media/gym/</path>
+      <allowsharing>true</allowsharing>
+    </source>
+    <source>
+      <name>Games</name>
+      <path pathversion="1">/mnt/storage-b/media/games/</path>
+      <allowsharing>true</allowsharing>
+    </source>
+    <source>
+      <name>Misc</name>
+      <path pathversion="1">/mnt/storage-b/media/misc/</path>
+      <allowsharing>true</allowsharing>
+    </source>
+    <source>
+      <name>Private</name>
+      <path pathversion="1">/mnt/storage-b/media/adult/</path>
+      <allowsharing>false</allowsharing>
+    </source>
+  </video>
+  <music>
+    <default pathversion="1"></default>
+    <source>
+      <name>Music</name>
+      <path pathversion="1">/mnt/storage-b/media/music/</path>
+      <allowsharing>true</allowsharing>
+    </source>
+    <source>
+      <name>Audiobooks</name>
+      <path pathversion="1">/mnt/storage-b/media/audiobooks/</path>
+      <allowsharing>true</allowsharing>
+    </source>
+  </music>
+  <pictures>
+    <default pathversion="1"></default>
+  </pictures>
+  <files>
+    <default pathversion="1"></default>
+  </files>
+</sources>

@@ -16,6 +16,7 @@
 
     ../../modules/core
     ../../modules/server/control-layer.nix
+    ../../modules/server/mdns.nix
     ../../modules/server/backups.nix
     ../../modules/wiring/caddy.nix
     ../../modules/wiring/nfs.nix
