@@ -171,9 +171,15 @@ uri_encode() {
 
 plugin_installed() {
   local name="$1"
-  if compgen -G "${STATE_DIR}/plugins/${name}_*" >/dev/null; then
-    return 0
-  fi
+  # Use a glob test instead of compgen — compgen is not available in the
+  # NixOS systemd oneshot environment and caused false negatives that
+  # reinstalled plugins and restarted Jellyfin in a loop.
+  local plugin_dir
+  for plugin_dir in "${STATE_DIR}/plugins/${name}_"*; do
+    if [[ -d "$plugin_dir" ]]; then
+      return 0
+    fi
+  done
   api_call "${JELLYFIN_URL}/Packages/Installed/$(uri_encode "$name")" >/dev/null 2>&1
 }
 
