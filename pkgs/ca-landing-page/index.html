@@ -41,8 +41,13 @@
       color: #c9d1d9;
     }
     code { font-family: "Cascadia Code", "Fira Code", monospace; }
-    .qr-wrap { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
-    #qrcode { background: #fff; padding: 8px; border-radius: 8px; }
+    .download-section { margin-bottom: 1.5rem; }
+    .download-section h3 { margin: 0 0 .75rem; font-size: 1rem; }
+    #qrcode {
+      background: #fff; padding: 8px; border-radius: 8px;
+      display: inline-block; line-height: 0; width: fit-content;
+    }
+    #qrcode img, #qrcode canvas { display: block; }
     .note { background: #1e3a5f; border-left: 4px solid var(--accent);
             border-radius: 4px; padding: .75rem 1rem; font-size: .9rem;
             color: var(--muted); margin-top: 1rem; }
@@ -58,41 +63,22 @@
     Install it once on each device to get valid HTTPS on all homelab services.
   </p>
 
-  <!-- Download -->
-  <div class="card">
-    <h2>Download CA Certificate</h2>
-    <a class="download-btn" href="/lanbat-ca.crt" download="lanbat-ca.crt">
-      ⬇ Download lanbat-ca.crt
-    </a>
-    <p style="color:var(--muted); font-size:.9rem; margin:0">
-      PEM format — works on Linux, macOS, Windows, Android, and iOS.
-    </p>
-    <div class="qr-wrap" style="margin-top:1.2rem">
-      <div>
-        <p style="color:var(--muted);font-size:.9rem;margin:0 0 .5rem">
-          Scan with your phone to download on mobile:
-        </p>
-        <div id="qrcode"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Fingerprint -->
-  <div class="card">
-    <h2>Verify the download</h2>
-    <p style="color:var(--muted); font-size:.9rem; margin:0 0 .75rem">
-      The SHA-256 fingerprint of the current root must match after you download it:
-    </p>
-    <pre><code class="fingerprint">PLACEHOLDER_SHA256_FINGERPRINT</code></pre>
-    <p style="color:var(--muted); font-size:.9rem; margin:.75rem 0 .5rem">
-      Check a saved copy:
-    </p>
-    <pre><code>openssl x509 -in lanbat-ca.crt -noout -fingerprint -sha256</code></pre>
-  </div>
-
   <!-- OS instructions -->
   <div class="card">
     <h2>Install Instructions</h2>
+    <div class="download-section">
+      <h3>Download CA Certificate</h3>
+      <a class="download-btn" href="/lanbat-ca.crt" download="lanbat-ca.crt">
+        ⬇ Download lanbat-ca.crt
+      </a>
+      <p style="color:var(--muted); font-size:.9rem; margin:0">
+        PEM format — works on Linux, macOS, Windows, Android, Android TV, and iOS.
+      </p>
+      <p style="color:var(--muted);font-size:.9rem;margin:1.2rem 0 .5rem">
+        Scan with your phone to download on mobile:
+      </p>
+      <div id="qrcode"></div>
+    </div>
     <div class="note" style="margin-top:0; margin-bottom:1rem">
       <strong>Re-installing or updating the root?</strong> Remove any older
       <em>Lanbat Root CA</em> first. Every generation shares the same name, so
@@ -104,6 +90,7 @@
       <div class="tab" onclick="showTab('macos')">macOS</div>
       <div class="tab" onclick="showTab('windows')">Windows</div>
       <div class="tab" onclick="showTab('android')">Android</div>
+      <div class="tab" onclick="showTab('androidtv')">Android TV</div>
       <div class="tab" onclick="showTab('ios')">iPhone / iPad</div>
     </div>
 
@@ -202,6 +189,57 @@ Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
       </div>
     </div>
 
+    <div id="tab-androidtv" class="tab-content">
+      <p>Android TV has no built-in browser on most devices. Pick whichever method fits your box.</p>
+
+      <h3>Option 1 — Settings (if available)</h3>
+      <ol>
+        <li>Get <strong>lanbat-ca.crt</strong> onto the TV (Downloader app, USB stick, or ADB below).</li>
+        <li>If updating: open <strong>Settings → Device Preferences → Security &amp; Restrictions →
+        Encryption &amp; credentials → Trusted credentials → User</strong> and remove any old
+        <em>Lanbat Root CA</em>. (Menu names vary by OEM — look for Encryption &amp; credentials.)</li>
+        <li>Go to <strong>Settings → Device Preferences → Security &amp; Restrictions →
+        Encryption &amp; credentials → Install a certificate</strong>.</li>
+        <li>Choose <em>CA Certificate</em> and select the file.</li>
+        <li>Accept the warning and confirm the install on screen.</li>
+      </ol>
+      <div class="note">
+        <strong>Some TVs hide this menu.</strong> Google TV, Fire TV, and several OEM skins omit
+        certificate settings entirely — use Option 2 or 3 instead.
+      </div>
+
+      <h3>Option 2 — Downloader app</h3>
+      <ol>
+        <li>Install the <strong>Downloader</strong> app (AFTVnews) from your TV's app store.</li>
+        <li>Enter this URL in Downloader:</li>
+      </ol>
+      <pre><code>PLACEHOLDER_CA_ORIGIN/lanbat-ca.crt</code></pre>
+      <ol start="3">
+        <li>When the download finishes, open the file — Downloader should launch the certificate installer.</li>
+        <li>Choose <em>CA Certificate</em> and accept the warning.</li>
+      </ol>
+
+      <h3>Option 3 — ADB from a computer</h3>
+      <p>Enable <strong>Developer options → USB debugging</strong> (or wireless debugging) on the TV,
+      then run on your PC:</p>
+      <pre><code># Connect (USB, or wireless — replace with your TV's IP):
+adb connect &lt;tv-ip&gt;:5555
+
+curl -k PLACEHOLDER_CA_ORIGIN/lanbat-ca.crt -o lanbat-ca.crt
+adb push lanbat-ca.crt /sdcard/Download/lanbat-ca.crt
+adb shell chmod o+r /sdcard/Download/lanbat-ca.crt
+adb shell am start -n com.android.certinstaller/.CertInstallerMain \
+  -a android.intent.action.VIEW -t application/x-x509-ca-cert \
+  -d file:///sdcard/Download/lanbat-ca.crt</code></pre>
+      <p>Confirm the install on the TV when prompted.</p>
+
+      <div class="note">
+        <strong>Note:</strong> As on phones, user-installed CAs are not trusted by all apps
+        (Chrome and many browsers work; some apps ignore user CAs). Rooting the TV to install
+        a system CA is outside normal homelab setup and not recommended while under warranty.
+      </div>
+    </div>
+
     <div id="tab-ios" class="tab-content">
       <ol>
         <li>Scan the QR code above → Safari opens the cert download.</li>
@@ -216,6 +254,19 @@ Import-Certificate -FilePath "$env:TEMP\lanbat-ca.crt" `
         profile is installed but Safari still warns.
       </div>
     </div>
+  </div>
+
+  <!-- Fingerprint -->
+  <div class="card">
+    <h2>Verify the download</h2>
+    <p style="color:var(--muted); font-size:.9rem; margin:0 0 .75rem">
+      The SHA-256 fingerprint of the current root must match after you download it:
+    </p>
+    <pre><code class="fingerprint">PLACEHOLDER_SHA256_FINGERPRINT</code></pre>
+    <p style="color:var(--muted); font-size:.9rem; margin:.75rem 0 .5rem">
+      Check a saved copy:
+    </p>
+    <pre><code>openssl x509 -in lanbat-ca.crt -noout -fingerprint -sha256</code></pre>
   </div>
 
   <!-- Verify install -->
