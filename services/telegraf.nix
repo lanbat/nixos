@@ -20,6 +20,10 @@
 # Services:
 #   systemd_units — active/failed state for all systemd services
 #   nfsclient     — NFS mount operation counters and latency
+#   http_response — HTTP health checks for Grafana, Home Assistant, Jellyfin,
+#                   Immich, and Vaultwarden (localhost endpoints)
+#   ping          — reachability of the Pi, default gateway, and 1.1.1.1
+#   redis         — shared Redis instance (127.0.0.1:6379, no auth)
 #
 # Note: inputs.docker removed — rootless Podman containers each have their own
 # socket under /run/user/<uid>/podman; there is no single shared Docker-compat
@@ -40,6 +44,19 @@
   lib,
   ...
 }:
+
+let
+  lanbat = config.lanbat;
+
+  serviceHealthCheck = name: port: path:
+    {
+      urls = [ "http://127.0.0.1:${toString port}${path}" ];
+      response_status_code = 200;
+      interval = "60s";
+      timeout = "5s";
+      name_override = name;
+    };
+in
 
 {
   services.telegraf = {
@@ -96,13 +113,39 @@
       inputs.temp = [ { } ];
       inputs.systemd_units = [ { } ];
       inputs.nfsclient = [ { fullstat = false; } ];
+
+      inputs.http_response = [
+        (serviceHealthCheck "grafana" lanbat.services.grafana.port "/api/health")
+        (serviceHealthCheck "home-assistant" lanbat.services.home-assistant.port "/")
+        (serviceHealthCheck "jellyfin" lanbat.services.jellyfin.port "/health")
+        (serviceHealthCheck "immich" lanbat.services.immich.port "/api/server/ping")
+        (serviceHealthCheck "vaultwarden" lanbat.services.vaultwarden.port "/alive")
+      ];
+
+      inputs.ping = [
+        {
+          urls = [
+            lanbat.piIp
+            lanbat.gatewayIp
+            "1.1.1.1"
+          ];
+        }
+      ];
+
+      inputs.redis = [
+        {
+          servers = [ "127.0.0.1:6379" ];
+        }
+      ];
     };
   };
 
-  # Inject the InfluxDB write token at runtime — never stored in Nix store.
-  systemd.services.telegraf.serviceConfig.EnvironmentFile = [
-    config.age.secrets.telegraf-token.path
-  ];
+  systemd.services.telegraf.serviceConfig = {
+    AmbientCapabilities = "CAP_NET_RAW";
+    EnvironmentFile = [
+      config.age.secrets.telegraf-token.path
+    ];
+  };
 
   lanbat.services.telegraf.secrets.telegraf-token = { };
 }

@@ -16,6 +16,9 @@
 #   system       — load average, uptime
 #   processes    — process states
 #   temp         — Raspberry Pi CPU temperature (via thermal zone)
+#   ping         — reachability of the server
+#   smart        — S.M.A.R.T. attributes for the NVMe drives backing
+#                  /mnt/storage-a and /mnt/storage-b (lanbat.piStorageDrive*)
 #
 # Secrets
 # -------
@@ -28,6 +31,10 @@
   lib,
   ...
 }:
+
+let
+  lanbat = config.lanbat;
+in
 
 {
   services.telegraf = {
@@ -89,13 +96,36 @@
       inputs.processes = [ { } ];
       # Raspberry Pi CPU temperature via kernel thermal zone.
       inputs.temp = [ { } ];
+
+      inputs.ping = [
+        {
+          urls = [ lanbat.serverIp ];
+        }
+      ];
+
+      # NVMe SMART via smartctl/nvme-cli. telegraf is in the disk group so
+      # use_sudo is not required.
+      inputs.smart = [
+        {
+          use_sudo = false;
+          path_smartctl = "${pkgs.smartmontools}/bin/smartctl";
+          path_nvme = "${pkgs.nvme-cli}/bin/nvme";
+          devices = [
+            "/dev/disk/by-id/${lanbat.piStorageDriveA}"
+            "/dev/disk/by-id/${lanbat.piStorageDriveB}"
+          ];
+        }
+      ];
     };
   };
 
-  # Inject the InfluxDB write token at runtime.
-  systemd.services.telegraf.serviceConfig.EnvironmentFile = [
-    config.age.secrets.telegraf-token.path
-  ];
+  systemd.services.telegraf.serviceConfig = {
+    AmbientCapabilities = "CAP_NET_RAW";
+    SupplementaryGroups = [ "disk" ];
+    EnvironmentFile = [
+      config.age.secrets.telegraf-token.path
+    ];
+  };
 
   lanbat.services.telegraf.secrets.telegraf-token = { };
 }
