@@ -128,37 +128,35 @@ add_library() {
 
 # All media folders on Pi storage except adult (Samba-only) and incomplete
 # (in-progress downloads). roms/ is served by RomM, not Jellyfin.
-EXPECTED_LIBRARIES=(
-  "Movies"
-  "TV Shows"
-  "Music Videos"
-  "Music"
-  "Documentaries"
-  "Audiobooks"
-  "Books"
-  "Gym"
-  "Games"
-  "Misc"
+# Format: collectionType|displayName|path
+LIBRARY_SPECS=(
+  "movies|Movies|/srv/storage/a/media/movies"
+  "tvshows|TV Shows|/srv/storage/a/media/tv"
+  "musicvideos|Music Videos|/srv/storage/a/media/music-videos"
+  "music|Music|/srv/storage/b/media/music"
+  "movies|Documentaries|/srv/storage/b/media/documentaries"
+  "books|Audiobooks|/srv/storage/b/media/audiobooks"
+  "books|Books|/srv/storage/b/media/books"
+  "tvshows|Gym|/srv/storage/b/media/gym"
+  "mixed|Games|/srv/storage/b/media/games"
+  "mixed|Misc|/srv/storage/b/media/misc"
 )
 
 libraries_complete() {
-  local name
-  for name in "${EXPECTED_LIBRARIES[@]}"; do
+  local spec _collection name path
+  for spec in "${LIBRARY_SPECS[@]}"; do
+    IFS='|' read -r _collection name path <<< "$spec"
+    [[ -d "$path" ]] || continue
     library_exists "$name" || return 1
   done
 }
 
 setup_libraries() {
-  add_library movies "Movies" "/srv/storage/a/media/movies"
-  add_library tvshows "TV Shows" "/srv/storage/a/media/tv"
-  add_library musicvideos "Music Videos" "/srv/storage/a/media/music-videos"
-  add_library music "Music" "/srv/storage/b/media/music"
-  add_library movies "Documentaries" "/srv/storage/b/media/documentaries"
-  add_library books "Audiobooks" "/srv/storage/b/media/audiobooks"
-  add_library books "Books" "/srv/storage/b/media/books"
-  add_library tvshows "Gym" "/srv/storage/b/media/gym"
-  add_library mixed "Games" "/srv/storage/b/media/games"
-  add_library mixed "Misc" "/srv/storage/b/media/misc"
+  local spec collection name path
+  for spec in "${LIBRARY_SPECS[@]}"; do
+    IFS='|' read -r collection name path <<< "$spec"
+    add_library "$collection" "$name" "$path"
+  done
 }
 
 refresh_all_libraries() {
@@ -392,6 +390,11 @@ fi
 
 run_configuration
 
-install -d -m 0750 "$STATE_DIR"
-touch "$CONFIG_STATE_FILE"
-log "done"
+if configuration_complete; then
+  install -d -m 0750 "$STATE_DIR"
+  touch "$CONFIG_STATE_FILE"
+  log "done"
+else
+  log "configuration incomplete (waiting for NFS mounts or plugin load)"
+  exit 1
+fi
