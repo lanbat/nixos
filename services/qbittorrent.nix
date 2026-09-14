@@ -68,7 +68,7 @@
   # Run qBittorrent as an OCI container to simplify volume mounts and
   # to use the linuxserver.io image which ships a clean web UI.
   virtualisation.oci-containers.containers."qbittorrent" = {
-    image = "lscr.io/linuxserver/qbittorrent:latest";
+    image = "lscr.io/linuxserver/qbittorrent:5.2.3";
 
     environment = {
       # Match the host qbt account so NFS media dirs (qbt:media, mode 2775) are writable.

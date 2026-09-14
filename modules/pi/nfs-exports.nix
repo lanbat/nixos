@@ -7,8 +7,8 @@
 # /mnt/storage-a  →  server (read/write, no_root_squash for service accounts)
 # /mnt/storage-b  →  server (read/write, no_root_squash)
 #
-# "no_root_squash" is used because the server's service accounts (jellyfin,
-# immich, frigate, qbt — UIDs 991-994) must write to the NFS paths without
+# "no_root_squash" is used because the server's service accounts (nextcloud 990,
+# immich 991, jellyfin 992, qbt 994, frigate 995) must write to the NFS paths without
 # being squashed to nobody.  Ownership is stored as the numeric IDs pinned in
 # each service's lanbat.services.<name>.account on the server.
 #

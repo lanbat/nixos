@@ -136,9 +136,21 @@ class ActivatorHandler(http.server.BaseHTTPRequestHandler):
                 body = self.rfile.read(body_len) if body_len else b""
 
                 conn = http.client.HTTPConnection("127.0.0.1", ARGS.real_port, timeout=30)
-                headers = {k: v for k, v in self.headers.items()
-                           if k.lower() not in ("host", "connection")}
-                headers["Host"] = f"127.0.0.1:{ARGS.real_port}"
+                host = self.headers.get("Host", f"127.0.0.1:{ARGS.listen_port}")
+                proto = "https" if self.headers.get("X-Forwarded-Proto") == "https" else "http"
+                if self.headers.get("X-Forwarded-Proto") is None and self.server.server_port != 80:
+                    proto = "https"
+                headers = {
+                    k: v
+                    for k, v in self.headers.items()
+                    if k.lower() not in ("host", "connection", "content-length")
+                }
+                headers["Host"] = host
+                headers["X-Forwarded-Host"] = host
+                headers["X-Forwarded-Proto"] = proto
+                headers["X-Forwarded-For"] = self.client_address[0]
+                if body:
+                    headers["Content-Length"] = str(len(body))
                 conn.request(method, self.path, body=body or None, headers=headers)
                 resp = conn.getresponse()
                 resp_body = resp.read()

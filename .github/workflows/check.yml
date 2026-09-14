@@ -49,4 +49,4 @@ jobs:
         with:
           extra_nix_config: system-features = nixos-test benchmark big-parallel kvm
       - name: Run the wiring tests
-        run: nix build -L .#checks.x86_64-linux.assertions .#checks.x86_64-linux.workload-gate .#checks.x86_64-linux.postgresql
+        run: nix build -L .#checks.x86_64-linux.assertions .#checks.x86_64-linux.workload-gate .#checks.x86_64-linux.postgresql .#checks.x86_64-linux.settings-guard .#checks.x86_64-linux.pkgs-build

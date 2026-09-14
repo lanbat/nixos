@@ -48,33 +48,11 @@
 ### Server → Pi backup (nightly)
 
 `backup-server.sh` writes to `/srv/storage/b/backups/server/` (Pi Drive B) and
-keeps 7 daily backups. It is **not enabled by default**: the timer requires Pi
-NFS (`srv-storage-b.mount`) to be available. Enable it in `hosts/server/default.nix`
-only after Phase 2 (Pi install) is complete.
-
-Add to `hosts/server/default.nix`:
-
-```nix
-systemd.services."backup-server" = {
-  description = "Nightly server backup";
-  after    = [ "srv-storage-b.mount" ];
-  bindsTo  = [ "srv-storage-b.mount" ];
-  path     = [ pkgs.rsync pkgs.gzip pkgs.postgresql ];
-  serviceConfig = {
-    Type    = "oneshot";
-    User    = "root";
-    ExecStart = "${pkgs.callPackage ../../pkgs/scripts { }}/bin/backup-server";
-  };
-};
-
-systemd.timers."backup-server" = {
-  wantedBy = [ "timers.target" ];
-  timerConfig = {
-    OnCalendar = "03:00";
-    Persistent = true;   # run if machine was off at 03:00
-  };
-};
-```
+keeps 7 daily backups. A nightly timer is defined in `modules/server/backups.nix`
+(03:00, after `srv-storage-b.mount` is available). The script skips control- and
+workload-layer paths when the matching LUKS layer is locked, so a backup taken
+while locked is incomplete but never silently copies empty stubs as if they were
+real data.
 
 ### Frigate clips → cloud (real-time)
 

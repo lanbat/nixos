@@ -90,7 +90,6 @@ agenix -e authentik-env.age
 
 # ---- Nextcloud ----
 # Single-line plaintext password:
-agenix -e nextcloud-db-pass.age
 agenix -e nextcloud-admin-pass.age
 # Two KEY=value lines (fill in after creating Authentik OIDC app):
 #   NEXTCLOUD_OIDC_CLIENT_ID=<value>
@@ -110,6 +109,7 @@ agenix -e immich-oidc-env.age
 # Each file: single-line plaintext password
 agenix -e mosquitto-ha-pass.age
 agenix -e mosquitto-frigate-pass.age
+agenix -e mosquitto-z2m-pass.age
 
 # ---- Frigate ----
 # Full rclone config file — run: rclone config, then paste the result.
@@ -173,13 +173,15 @@ agenix -r
 | File | Format | Used by |
 |------|--------|---------|
 | `authentik-env.age` | `KEY=value` × 2 | Authentik server + worker |
-| `nextcloud-db-pass.age` | plaintext password | Nextcloud |
+| `authentik-oidc-secrets.age` | `KEY=value` lines (one per OIDC client) | Authentik blueprints |
 | `nextcloud-admin-pass.age` | plaintext password | Nextcloud |
 | `nextcloud-oidc-env.age` | `KEY=value` × 2 | Nextcloud OIDC setup |
 | `immich-db-password.age` | `POSTGRES_PASSWORD=<value>` | Immich postgres container |
 | `immich-oidc-env.age` | `KEY=value` × 2 | Immich server container |
 | `mosquitto-ha-pass.age` | plaintext password | Mosquitto (Home Assistant user) |
 | `mosquitto-frigate-pass.age` | plaintext password | Mosquitto (Frigate user) |
+| `mosquitto-z2m-pass.age` | plaintext password | Mosquitto (Zigbee2MQTT user) |
+| `bitmagnet-db-pass.age` | `POSTGRES_PASSWORD=<value>` | Bitmagnet PostgreSQL |
 | `frigate-rtsp-env.age` | `FRIGATE_RTSP_USER=<value>`, `FRIGATE_RTSP_PASSWORD=<value>` | Frigate camera RTSP auth |
 | `rclone-frigate-config.age` | full rclone config file | Frigate rclone sync |
 | `influxdb-admin-password.age` | plaintext password | InfluxDB initial setup |

@@ -14,6 +14,11 @@
 # If the Pi is down, Nextcloud still works — external storage shows errors
 # for those folders only; the app itself is healthy.
 #
+# NFS dependency: soft (intentionally omitted from lanbat.services.*.nfs).
+# Bulk data lives on Pi storage, but hard-binding Nextcloud to NFS would stop
+# the whole app (and OIDC login) when the Pi is unreachable. External Storage
+# fails per-folder instead; see CONTRIBUTING.md § NFS-dependent services.
+#
 # Auth
 # ----
 # Nextcloud uses the `user_oidc` app to delegate login to Authentik.
@@ -160,7 +165,10 @@ in
 
         OCC="${config.services.nextcloud.occ}/bin/nextcloud-occ"
 
-        # Enable the app if not already enabled.
+        # Install and enable the OIDC app (not always in extraApps for every NC version).
+        if ! $OCC app:list 2>/dev/null | grep -q "user_oidc"; then
+          $OCC app:install user_oidc
+        fi
         $OCC app:enable user_oidc || true
 
         # Check if provider already registered.

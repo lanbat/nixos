@@ -37,11 +37,7 @@ in
   };
 
   virtualisation.oci-containers.containers."searxng" = {
-    image = "docker.io/searxng/searxng:latest";
-
-    # --pull=newer: on each start, check the registry and pull if a newer
-    # image is available — ensures upgrades happen automatically.
-    extraOptions = [ "--pull=newer" ];
+    image = "docker.io/searxng/searxng:2025.5.12-7a4efb280";
 
     volumes = [
       "/var/lib/searxng:/etc/searxng"
