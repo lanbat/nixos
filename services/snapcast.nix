@@ -38,9 +38,8 @@
 # Snapserver must listen on IPv6 (::) as well as IPv4.  Avahi publishes the
 # host's IPv6 addresses in mDNS and Android clients prefer them; with a v4-only
 # bind they get "connection refused".  Binding :: accepts both (Linux dual-stack).
-# Avahi IPv6 is also disabled so mDNS prefers the LAN IPv4.  http.host is set
-# to lanbat.domain (s.<root>) — it has only an A record, unlike the PTR name
-# services.<root> which carries a stale public AAAA.
+# Avahi IPv6 is also disabled so mDNS prefers the LAN IPv4.
+# http.host is the LAN IP (cover-art URLs) — same address snapclient uses on the Pi.
 #
 # Always-on: yes.  No NFS dependency.
 { config, pkgs, ... }:
@@ -87,7 +86,7 @@
         enabled = true;
         port = 1780;
         bind_to_address = "127.0.0.1";
-        host = config.lanbat.domain;
+        host = config.lanbat.serverIp;
       };
 
       # Idle "default" stream — MA sets groups back here when playback stops.
