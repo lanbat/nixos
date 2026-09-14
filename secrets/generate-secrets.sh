@@ -64,7 +64,6 @@ encrypt authentik-env.age \
 AUTHENTIK_SECRET_KEY=$(rand 50)"
 
 # ---- Nextcloud ----
-encrypt nextcloud-db-pass.age    "$(rand 36)"
 encrypt nextcloud-admin-pass.age "$(rand 24)"
 
 # ---- Immich ----

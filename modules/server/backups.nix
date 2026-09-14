@@ -201,59 +201,75 @@ in
 {
   environment.systemPackages = [ pkgs.restic ];
 
-  # ── Track A: Host backup ───────────────────────────────────────────────────
-  # Runs regardless of LUKS state. Backs up the host OS layer.
-  # Restic repo must be configured. Local backup to /mnt/storage-b/backups/host
-  # would require Pi NFS — for host backup, prefer an external or offsite repo.
-  #
-  # TODO: create secrets/restic-host-password.age and set hostBackupRepo in local.nix.
-  # Uncomment the block below once the secret and repo are configured.
-  #
-  # systemd.services = mkResticService {
-  #   name         = "host";
-  #   repoPath     = cfg.backups.hostRepo;           # add this option to modules/core/settings.nix
-  #   passwordFile = config.age.secrets.restic-host-password.path;
-  #   paths        = [
-  #     "/etc"
-  #     "/root"
-  #     "/var/lib/nixos"
-  #   ];
-  # };
-  # systemd.timers = mkResticTimer "host" "02:00";
+  # ── Server → Pi backup (active) ────────────────────────────────────────────
+  # Nightly rsync/pg_dump of server state to /srv/storage/b/backups/server.
+  # Requires Pi NFS (srv-storage-b.mount). Skips control/workload paths when
+  # the matching LUKS layer is locked — see pkgs/scripts/backup-server.sh.
+  systemd.services."backup-server" = {
+    description = "Backup server state to Pi storage";
+    after = [
+      "srv-storage-b.mount"
+      "network-online.target"
+    ];
+    wants = [ "srv-storage-b.mount" ];
+    path = with pkgs; [
+      rsync
+      gzip
+      postgresql
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.callPackage ../../pkgs/scripts { inherit (cfg) domain; }}/bin/backup-server";
+    };
+  };
 
-  # ── Track B: Control backup ────────────────────────────────────────────────
-  # Runs ONLY when control-online.target is active.
-  # TREAT AS HIGHLY SENSITIVE — backs up Tang key material.
-  # Store the restic repo itself off-server (S3, B2, etc.) or on offline media.
-  #
-  # TODO: create secrets/restic-control-password.age and configure controlBackupRepo.
-  #
-  # systemd.services = mkResticService {
-  #   name         = "control";
-  #   repoPath     = cfg.backups.controlRepo;
-  #   passwordFile = config.age.secrets.restic-control-password.path;
-  #   paths        = [ "/mnt/control" ];
-  #   extraRequires = [ "control-online.target" ];
-  #   extraAfter    = [ "control-online.target" ];
-  # };
-  # systemd.timers = mkResticTimer "control" "03:00";
+  systemd.timers."backup-server" = {
+    description = "Nightly server backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "03:00";
+      RandomizedDelaySec = "30min";
+      Persistent = true;
+    };
+  };
 
-  # ── Track C: Workload backup ───────────────────────────────────────────────
-  # Runs ONLY when workload-online.target is active.
-  # For PostgreSQL: dump databases before backup for consistency.
-  # The timer runs daily at 03:30 (after control backup window).
+  # ── Restic tracks (optional, off by default) ───────────────────────────────
+  # Uncomment and configure lanbat.backups.* repos in local.nix. Merge every
+  # enabled track into one systemd.services / systemd.timers attr each:
   #
-  # TODO: create secrets/restic-workload-password.age and configure workloadBackupRepo.
-  #
-  # systemd.services = mkResticService {
-  #   name         = "workload";
-  #   repoPath     = cfg.backups.workloadRepo;
-  #   passwordFile = config.age.secrets.restic-workload-password.path;
-  #   paths        = [ "/mnt/workload" ];
-  #   extraRequires = [ "workload-online.target" ];
-  #   extraAfter    = [ "workload-online.target" ];
-  # };
-  # systemd.timers = mkResticTimer "workload" "03:30";
+  # systemd.services = lib.mkMerge [
+  #   (mkResticService {
+  #     name = "host";
+  #     repoPath = cfg.backups.hostRepo;
+  #     passwordFile = config.age.secrets.restic-host-password.path;
+  #     paths = [
+  #       "/etc"
+  #       "/root"
+  #       "/var/lib/nixos"
+  #     ];
+  #   })
+  #   (mkResticService {
+  #     name = "control";
+  #     repoPath = cfg.backups.controlRepo;
+  #     passwordFile = config.age.secrets.restic-control-password.path;
+  #     paths = [ "/mnt/control" ];
+  #     extraRequires = [ "control-online.target" ];
+  #     extraAfter = [ "control-online.target" ];
+  #   })
+  #   (mkResticService {
+  #     name = "workload";
+  #     repoPath = cfg.backups.workloadRepo;
+  #     passwordFile = config.age.secrets.restic-workload-password.path;
+  #     paths = [ "/mnt/workload" ];
+  #     extraRequires = [ "workload-online.target" ];
+  #     extraAfter = [ "workload-online.target" ];
+  #   })
+  # ];
+  # systemd.timers = lib.mkMerge [
+  #   (mkResticTimer "host" "02:00")
+  #   (mkResticTimer "control" "03:00")
+  #   (mkResticTimer "workload" "03:30")
+  # ];
 
   # ── PostgreSQL dump helper (run before workload backup) ────────────────────
   # Dumps all databases to /mnt/workload/postgresql-dumps/ for consistent backup.

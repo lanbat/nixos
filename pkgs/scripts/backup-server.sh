@@ -9,7 +9,7 @@
 #       workload  (port 5432): nextcloud, immich, bitmagnet — only while unlocked
 #   - /var/lib/hass  (Home Assistant)
 #   - /var/lib/caddy (Caddy config + CA keys)
-#   - /var/lib/tang  (Tang private keys — CRITICAL)
+#   - /var/lib/tang  (Tang private keys — CRITICAL; control layer only)
 #   - /var/lib/authentik
 #   - /var/lib/nextcloud
 #   - /var/lib/immich/profile
@@ -30,13 +30,16 @@
 # For this homelab, the Pi storage is LUKS-encrypted so the backup
 # is protected at rest without additional encryption.
 #
-# Run it as root. There is no timer for it yet (see modules/server/backups.nix).
+# Run it as root. A nightly timer is defined in modules/server/backups.nix.
 
 set -euo pipefail
 
 BACKUP_DIR=/srv/storage/b/backups/server
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 DEST=$BACKUP_DIR/$TIMESTAMP
+
+control_online() { systemctl is-active --quiet control-online.target; }
+workload_online() { systemctl is-active --quiet workload-online.target; }
 
 echo "[$TIMESTAMP] Starting server backup to $DEST..."
 
@@ -68,7 +71,7 @@ dump_instance() {
 
 dump_instance always-on "-h /run/postgresql-always-on -p 5433" authentik hass grafana
 
-if systemctl is-active --quiet postgresql.service; then
+if workload_online; then
   dump_instance workload "-h /run/postgresql -p 5432" nextcloud immich bitmagnet
 else
   echo "  Skipping the PostgreSQL workload instance: the workload layer is locked."
@@ -77,16 +80,28 @@ fi
 # ---------------------------------------------------------------------------
 # Service state
 # ---------------------------------------------------------------------------
-echo "  Backing up service state..."
-rsync -a --delete /var/lib/hass/         "$DEST/hass/"
-rsync -a --delete /var/lib/caddy/        "$DEST/caddy/"
-rsync -a --delete /var/lib/tang/         "$DEST/tang/"
-rsync -a --delete /var/lib/authentik/    "$DEST/authentik/"
-rsync -a --delete /var/lib/nextcloud/    "$DEST/nextcloud/"
+echo "  Backing up always-on service state..."
+rsync -a --delete /var/lib/hass/           "$DEST/hass/"
+rsync -a --delete /var/lib/caddy/          "$DEST/caddy/"
+rsync -a --delete /var/lib/authentik/      "$DEST/authentik/"
 rsync -a --delete /var/lib/frigate/config/ "$DEST/frigate-config/"
-rsync -a --delete /var/lib/qbittorrent/  "$DEST/qbittorrent/"
-rsync -a --delete /var/lib/bitmagnet/    "$DEST/bitmagnet/"
-rsync -a --delete /var/lib/immich/profile/ "$DEST/immich-profile/"
+
+if control_online; then
+  echo "  Backing up control-layer state..."
+  rsync -a --delete /var/lib/tang/ "$DEST/tang/"
+else
+  echo "  Skipping /var/lib/tang: the control layer is locked."
+fi
+
+if workload_online; then
+  echo "  Backing up workload-layer state..."
+  rsync -a --delete /var/lib/nextcloud/      "$DEST/nextcloud/"
+  rsync -a --delete /var/lib/qbittorrent/    "$DEST/qbittorrent/"
+  rsync -a --delete /var/lib/bitmagnet/      "$DEST/bitmagnet/"
+  rsync -a --delete /var/lib/immich/profile/ "$DEST/immich-profile/"
+else
+  echo "  Skipping workload service state: the workload layer is locked."
+fi
 
 # Immich thumbs/encoded-video can be regenerated — skip them to save space.
 

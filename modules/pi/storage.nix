@@ -83,10 +83,11 @@ in
         for dir in media media/movies media/tv media/music-videos; do
           install -d -m 2775 -o 994 -g ${toString mediaGid} "$base/$dir"
         done
-        install -d -m 0755 -o nobody -g nogroup "$base/photos"
-        install -d -m 0755 -o nobody -g nogroup "$base/surveillance"
-        install -d -m 0755 -o nobody -g nogroup "$base/surveillance/clips"
-        install -d -m 0755 -o nobody -g nogroup "$base/surveillance/exports"
+        # Immich (UID 991) writes originals; Frigate (UID 995) writes recordings.
+        install -d -m 0755 -o 991 -g nogroup "$base/photos"
+        install -d -m 0755 -o 995 -g nogroup "$base/surveillance"
+        install -d -m 0755 -o 995 -g nogroup "$base/surveillance/clips"
+        install -d -m 0755 -o 995 -g nogroup "$base/surveillance/exports"
         echo "storage-a directory tree ready."
       '';
     };
@@ -116,9 +117,10 @@ in
         install -d -m 2770 -o 994 -g ${toString privateGid} "$base/media/adult"
         chgrp ${toString privateGid} "$base/media/adult" 2>/dev/null || true
         chmod 2770 "$base/media/adult" 2>/dev/null || true
-        install -d -m 0755 -o root -g root "$base/nextcloud"
-        install -d -m 0755 -o nobody -g nogroup "$base/users"
-        install -d -m 0775 -o nobody -g nogroup "$base/shared"
+        # Nextcloud (UID 990) owns bulk user data; Samba shared space is group media.
+        install -d -m 0750 -o 990 -g nogroup "$base/nextcloud"
+        install -d -m 0755 -o root -g nogroup "$base/users"
+        install -d -m 0775 -o root -g ${toString mediaGid} "$base/shared"
         install -d -m 0700 -o root -g root "$base/backups"
         echo "storage-b directory tree ready."
       '';

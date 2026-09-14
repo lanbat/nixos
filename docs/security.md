@@ -146,11 +146,16 @@ the pinned root need no further change.
 
 ## Home Assistant and Zigbee
 
-- HA runs as a NixOS service with access to the Zigbee USB dongle via udev rules.
-- The `ha` group owns the serial device — only the HA service and root can access it.
+- Home Assistant does **not** own the Zigbee USB dongle. Zigbee2MQTT (`zigbee.<domain>`)
+  holds the dongle exclusively and bridges devices over MQTT.
+- HA discovers Zigbee devices through MQTT discovery (`homeassistant: true` in Z2M).
+  Do not enable ZHA in HA — only one service can own the dongle.
+- The `ha` group can access `/dev/zigbee` for diagnostics, but Zigbee2MQTT is the
+  active bridge.
 - HA is not exposed on IPv6 by default (Caddy proxies it on v4 internally).
 - HA retains local admin — do not disable it.
-- Zigbee devices communicate on 2.4 GHz RF; this is a separate attack surface (ZHA has strong security defaults).
+- MQTT credentials for Z2M live in `mosquitto-z2m-pass.age` (agenix).
+- Zigbee devices communicate on 2.4 GHz RF; Zigbee2MQTT enforces the network key.
 
 ## Frigate / cameras
 
@@ -178,7 +183,7 @@ the pinned root need no further change.
 
 ## Least privilege
 
-- Service users (jellyfin, immich, frigate, qbt) run as UIDs 991-994 with no sudo.
+- Service users (nextcloud 990, immich 991, jellyfin 992, qbt 994, frigate 995) run with no sudo.
 - Each service has its own user/group; they share the `media` group only for storage access.
 - Containers run as non-root where possible (linuxserver.io images use PUID/PGID).
 - The `admin` human user has `wheel` but is not used for day-to-day service management.

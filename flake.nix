@@ -132,7 +132,9 @@
       checks.x86_64-linux = {
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };
         music-assistant = import ./tests/music-assistant.nix { inherit pkgs; };
+        pkgs-build = import ./tests/pkgs-build.nix { inherit pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
+        settings-guard = import ./tests/settings-guard.nix { inherit lib pkgs; };
         server = import ./tests/server.nix {
           inherit pkgs;
           inherit (inputs) agenix disko;

@@ -39,7 +39,7 @@
 }:
 
 let
-  immichVersion = "release"; # CHANGE_ME: pin to a specific tag, e.g. "v1.118.2"
+  immichVersion = "v1.136.8";
   domain = config.lanbat.domain;
   bootstrap = pkgs.callPackage ../pkgs/immich-bootstrap { };
   # immich-db-password.age exports POSTGRES_PASSWORD for postgres init; Immich v3

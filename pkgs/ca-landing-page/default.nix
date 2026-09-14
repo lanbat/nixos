@@ -18,7 +18,7 @@ pkgs.stdenv.mkDerivation {
   pname = "ca-landing-page";
   version = "1.0.1";
 
-  src = ./.;
+  dontUnpack = true;
 
   nativeBuildInputs = [ pkgs.openssl ];
 

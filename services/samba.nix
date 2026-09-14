@@ -52,7 +52,6 @@
       "samba-smbd"
       "samba-nmbd"
       "samba-winbindd" # RequiresMountsFor=/var/lib/samba
-      "avahi-daemon" # announces the shares
     ];
     # winbindd requires private/ to exist before it starts.
     workloadDirs = lib.genAttrs [ "samba/private" "samba/usershares" ] (_: {
@@ -66,13 +65,6 @@
       ];
       units = [ "samba-smbd" ];
     };
-  };
-
-  # The socket would start avahi-daemon, and with it the workload layer, on the
-  # first connection. Listen only while the layer is unlocked.
-  systemd.sockets.avahi-daemon = {
-    wantedBy = lib.mkForce [ "workload-online.target" ];
-    partOf = [ "workload-online.target" ];
   };
 
   services.samba = {
@@ -173,7 +165,9 @@
     };
   };
 
-  # Samba avahi announcement for macOS autodiscovery.
+  # Samba avahi announcement for macOS autodiscovery. avahi-daemon stays always-on
+  # (not workload-gated) so mDNS works before the workload layer is unlocked; Samba
+  # shares only appear once samba-smbd is running.
   services.avahi = {
     enable = true;
     nssmdns4 = true;

@@ -232,9 +232,18 @@ it comes back. Use `nfs.units` when only some units touch the storage. The unit 
 container is `podman-<container-name>`; for NixOS-native services use the actual unit
 name (e.g. `samba-smbd`, not `samba`).
 
+**Soft dependency exception:** Nextcloud keeps bulk user data on Pi storage through the
+External Storage app but deliberately omits `nfs.drives`. Hard-binding would stop the
+entire app (including OIDC login) when NFS drops; external folders fail individually
+instead. Document the reason in the service file if you add another soft dependency.
+
 ### Secrets
-- Declare the secrets a service reads in `lanbat.services.<name>.secrets`; the file is
-  `secrets/<secret>.age` and the owner defaults to the service account, or the service name.
+- **Primary pattern:** declare secrets in `lanbat.services.<name>.secrets`. Wiring
+  (`modules/wiring/secrets.nix`) turns each entry into an `age.secrets` definition with
+  the right owner and `secrets/<name>.age` path.
+- **Exceptions:** secrets not tied to one service account (e.g. `caddy-ca-root-key` in
+  `services/caddy.nix`) may declare `age.secrets` directly in the service module.
+- Add every new secret to `secrets/secrets.nix.example` and `secrets/README.md`.
 - Inject secrets at runtime via `environmentFile` or `config.age.secrets.<name>.path` —
   never inline plaintext in Nix expressions.
 - Only declare a secret that the service actually reads: every declared `.age` file must

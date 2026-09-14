@@ -60,7 +60,7 @@
   # Bitmagnet container
   # ---------------------------------------------------------------------------
   virtualisation.oci-containers.containers."bitmagnet" = {
-    image = "ghcr.io/bitmagnet-io/bitmagnet:latest";
+    image = "ghcr.io/bitmagnet-io/bitmagnet:v0.17.0";
     cmd = [
       "worker"
       "run"

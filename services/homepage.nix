@@ -166,7 +166,7 @@ in
   };
 
   virtualisation.oci-containers.containers."homepage" = {
-    image = "ghcr.io/gethomepage/homepage:latest";
+    image = "ghcr.io/gethomepage/homepage:v0.11.4";
 
     volumes = [
       "${homepageServicesYaml}:/app/config/services.yaml:ro"
