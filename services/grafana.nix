@@ -185,27 +185,27 @@ in
         ];
 
         datasources = [
-        {
-          name = "InfluxDB";
-          uid = "influxdb-homelab";
-          type = "influxdb";
-          access = "proxy";
-          url = "http://localhost:8086";
-          isDefault = true;
-          editable = false;
+          {
+            name = "InfluxDB";
+            uid = "influxdb-homelab";
+            type = "influxdb";
+            access = "proxy";
+            url = "http://localhost:8086";
+            isDefault = true;
+            editable = false;
 
-          jsonData = {
-            version = "Flux";
-            organization = "homelab";
-            defaultBucket = "metrics";
-            tlsSkipVerify = false;
-          };
+            jsonData = {
+              version = "Flux";
+              organization = "homelab";
+              defaultBucket = "metrics";
+              tlsSkipVerify = false;
+            };
 
-          # Token injected from the environment — not stored in Nix store.
-          secureJsonData = {
-            token = "$__env{INFLUXDB_TOKEN}";
-          };
-        }
+            # Token injected from the environment — not stored in Nix store.
+            secureJsonData = {
+              token = "$__env{INFLUXDB_TOKEN}";
+            };
+          }
         ];
       };
 

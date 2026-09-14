@@ -17,13 +17,10 @@ let
   sortedUsers = lib.sort (a: b: a < b) (lib.attrNames humanUsers);
 
   userProjectIds = lib.listToAttrs (
-    lib.imap1 (
-      i: name:
-      {
-        name = name;
-        value = userStorage.projectIdBase + i - 1;
-      }
-    ) sortedUsers
+    lib.imap1 (i: name: {
+      name = name;
+      value = userStorage.projectIdBase + i - 1;
+    }) sortedUsers
   );
 
   effectiveQuota =
@@ -74,10 +71,18 @@ let
           echo "${pname}:${toString id}" >> "$PROJID_FILE"  # lanbat-user-quota
 
           install -d -m 0755 "${path}"
-          install -d -m 0700 -o ${toString humanUsers.${user}.uid} -g ${toString humanUsers.${user}.uid} "${path}/files"
-          install -d -m 0770 -o ${toString userStorage.serviceOwners.cloud.uid} -g ${toString humanUsers.${user}.uid} "${path}/cloud"
-          install -d -m 0770 -o ${toString userStorage.serviceOwners.sync.uid} -g ${toString humanUsers.${user}.uid} "${path}/sync"
-          install -d -m 0770 -o ${toString userStorage.serviceOwners.photos.uid} -g ${toString humanUsers.${user}.uid} "${path}/photos"
+          install -d -m 0700 -o ${toString humanUsers.${user}.uid} -g ${
+            toString humanUsers.${user}.uid
+          } "${path}/files"
+          install -d -m 0770 -o ${toString userStorage.serviceOwners.cloud.uid} -g ${
+            toString humanUsers.${user}.uid
+          } "${path}/cloud"
+          install -d -m 0770 -o ${toString userStorage.serviceOwners.sync.uid} -g ${
+            toString humanUsers.${user}.uid
+          } "${path}/sync"
+          install -d -m 0770 -o ${toString userStorage.serviceOwners.photos.uid} -g ${
+            toString humanUsers.${user}.uid
+          } "${path}/photos"
 
           echo "Applying project quota for ${user} (ID ${toString id}) at ${path}..."
           xfs_quota -x -c "project -s -p ${path} ${toString id}" "$STORAGE_B"
@@ -105,17 +110,15 @@ in
   };
 
   environment.systemPackages = [
-    (pkgs.writeShellScriptBin "quota-report-users" (
-      ''
-        set -euo pipefail
-        mount=${userStorage.mountOnPi}
-        if mountpoint -q "$mount"; then
-          echo "===== Per-user quotas: $mount ====="
-          xfs_quota -x -c "report -p -b -h" "$mount" | grep -E '^user-' || true
-        else
-          echo "$mount is not mounted."
-        fi
-      ''
-    ))
+    (pkgs.writeShellScriptBin "quota-report-users" (''
+      set -euo pipefail
+      mount=${userStorage.mountOnPi}
+      if mountpoint -q "$mount"; then
+        echo "===== Per-user quotas: $mount ====="
+        xfs_quota -x -c "report -p -b -h" "$mount" | grep -E '^user-' || true
+      else
+        echo "$mount is not mounted."
+      fi
+    ''))
   ];
 }
