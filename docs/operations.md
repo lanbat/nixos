@@ -300,11 +300,12 @@ journalctl -u grafana -n 50
 ```bash
 # Check InfluxDB is running and healthy
 systemctl status influxdb2
-curl -s http://127.0.0.1:8086/health
+curl -s http://localhost:8086/health
 
 # Query via CLI (requires the operator token)
+# Use localhost, not 127.0.0.1 — the firewall rule for port 8086 can block the latter.
 influx query 'from(bucket:"metrics") |> range(start: -1h)' \
-  --host http://127.0.0.1:8086 \
+  --host http://localhost:8086 \
   --token "$(cat /run/agenix/influxdb-admin-token)"
 ```
 

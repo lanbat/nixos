@@ -610,7 +610,7 @@ Telegraf needs a write-only InfluxDB token (separate from the operator token
 used by Grafana).
 
 1. Open the InfluxDB UI through an SSH tunnel (it is not exposed via Caddy):
-   `ssh -L 8086:127.0.0.1:8086 admin@<serverIp>`, then `http://localhost:8086`.
+   `ssh -L 8086:localhost:8086 admin@<serverIp>`, then `http://localhost:8086`.
 2. **Data → API Tokens → Generate API Token → Custom API Token**
    - Description: `telegraf`
    - Buckets: Write → `metrics`
