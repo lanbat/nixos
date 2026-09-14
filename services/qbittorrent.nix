@@ -74,8 +74,10 @@
       "/srv/storage/b/media:/media/b"
     ];
 
-    # Do NOT use --network host; bridge mode + port mapping is fine here.
-    ports = [ "127.0.0.1:8090:8090" ];
+    # Host networking avoids pasta's IPv4 fragment drops, which break BitTorrent
+    # peer connections in rootless Podman. The web UI stays on loopback via
+    # WebUI\Address set in ExecStartPre below.
+    extraOptions = [ "--network=host" ];
 
     podman.user = "qbt";
     user = "0";
@@ -103,8 +105,11 @@
             END { if (!done) { print "[Preferences]"; print line } }
           ' "$conf" > "$tmp" && ${pkgs.coreutils}/bin/cat "$tmp" > "$conf"
         }
+        set_pref 'WebUI\Address' 127.0.0.1
         set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
-        set_pref 'WebUI\AuthSubnetWhitelist' '${config.lanbat.serverIp}/32, ::ffff:${config.lanbat.serverIp}/128'
+        # Host networking: Caddy connects via loopback (127.0.0.1). Bridge/pasta
+        # used to rewrite the source to the server IP — keep both.
+        set_pref 'WebUI\AuthSubnetWhitelist' '127.0.0.1/32, ::1/128, ${config.lanbat.serverIp}/32, ::ffff:${config.lanbat.serverIp}/128'
       ''}"
     ];
     Restart = lib.mkForce "on-failure";
