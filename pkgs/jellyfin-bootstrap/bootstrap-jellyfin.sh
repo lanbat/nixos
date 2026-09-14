@@ -126,6 +126,28 @@ add_library() {
     -o /dev/null
 }
 
+# All media folders on Pi storage except adult (Samba-only) and incomplete
+# (in-progress downloads). roms/ is served by RomM, not Jellyfin.
+EXPECTED_LIBRARIES=(
+  "Movies"
+  "TV Shows"
+  "Music Videos"
+  "Music"
+  "Documentaries"
+  "Audiobooks"
+  "Books"
+  "Gym"
+  "Games"
+  "Misc"
+)
+
+libraries_complete() {
+  local name
+  for name in "${EXPECTED_LIBRARIES[@]}"; do
+    library_exists "$name" || return 1
+  done
+}
+
 setup_libraries() {
   add_library movies "Movies" "/srv/storage/a/media/movies"
   add_library tvshows "TV Shows" "/srv/storage/a/media/tv"
@@ -134,6 +156,9 @@ setup_libraries() {
   add_library movies "Documentaries" "/srv/storage/b/media/documentaries"
   add_library books "Audiobooks" "/srv/storage/b/media/audiobooks"
   add_library books "Books" "/srv/storage/b/media/books"
+  add_library tvshows "Gym" "/srv/storage/b/media/gym"
+  add_library mixed "Games" "/srv/storage/b/media/games"
+  add_library mixed "Misc" "/srv/storage/b/media/misc"
 }
 
 refresh_all_libraries() {
@@ -237,7 +262,7 @@ sso_configured() {
 
 configuration_complete() {
   api_auth
-  library_exists "Movies" \
+  libraries_complete \
     && plugin_installed "Open Subtitles" \
     && sso_configured
 }
@@ -345,6 +370,8 @@ wait_for_jellyfin
 if [[ -f "$CONFIG_STATE_FILE" ]] && wizard_complete && configuration_complete 2>/dev/null; then
   repair_media_permissions
   harden_adult_permissions
+  api_auth
+  setup_libraries
   log "configuration already complete"
   exit 0
 fi

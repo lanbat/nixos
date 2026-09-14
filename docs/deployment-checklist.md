@@ -485,7 +485,9 @@ automatically and registers the Authentik provider.  No further steps needed.
 `jellyfin-bootstrap` completes first-run onboarding on deploy:
 
 - Admin account from `hass-bootstrap-env.age` (same break-glass credentials as HA/Immich)
-- Media libraries on `/srv/storage/a/media/*` and `/srv/storage/b/media/*` (adult excluded)
+- Media libraries for every Pi folder except `adult/` (Samba-only), `incomplete/`
+  (active downloads), and `roms/` (RomM): Movies, TV, Music Videos, Music,
+  Documentaries, Audiobooks, Books, Gym, Games, Misc
 - Plugins: Open Subtitles, Trakt, SSO Authentication
 - Authentik OIDC provider (`authentik`) from `authentik-oidc-secrets.age`
 
