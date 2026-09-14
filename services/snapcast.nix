@@ -28,8 +28,21 @@
 #   1705 TCP  — control API (snapclient, MA, web UI)
 #   1780 TCP  — HTTP API + web UI (proxied by Caddy, localhost-only)
 #
+# Discovery
+# ---------
+# Snapclients (Snapdroid on Android TV, snapclient on the Pi) find the server
+# via mDNS (_snapcast._tcp / _snapcast-ctrl._tcp).  That requires mdns_enabled
+# and publish in snapserver.conf, plus Avahi D-Bus access (DynamicUser blocks
+# it by default — see the avahi-snapserver group below).
+#
+# Snapserver must listen on IPv6 (::) as well as IPv4.  Avahi publishes the
+# host's IPv6 addresses in mDNS and Android clients prefer them; with a v4-only
+# bind they get "connection refused".  Binding :: accepts both (Linux dual-stack).
+# Avahi IPv6 is also disabled so mDNS prefers the LAN IPv4.
+# http.host is the LAN IP (cover-art URLs) — same address snapclient uses on the Pi.
+#
 # Always-on: yes.  No NFS dependency.
-{ config, ... }:
+{ config, pkgs, ... }:
 
 {
   lanbat.services.snapcast = {
@@ -51,22 +64,29 @@
     enable = true;
 
     settings = {
+      server = {
+        mdns_enabled = true;
+      };
+
       tcp-streaming = {
         enabled = true;
         port = 1704;
-        bind_to_address = "0.0.0.0";
+        bind_to_address = "::";
+        publish = true;
       };
 
       tcp-control = {
         enabled = true;
         port = 1705;
-        bind_to_address = "0.0.0.0";
+        bind_to_address = "::";
+        publish = true;
       };
 
       http = {
         enabled = true;
         port = 1780;
         bind_to_address = "127.0.0.1";
+        host = config.lanbat.serverIp;
       };
 
       # Idle "default" stream — MA sets groups back here when playback stops.
@@ -78,5 +98,30 @@
   networking.firewall.allowedTCPPorts = [
     1704
     1705
+  ];
+
+  # IPv4-only mDNS — see Discovery above.  Merged into avahi-daemon.conf from
+  # services/samba.nix.
+  services.avahi.ipv6 = false;
+
+  # Let snapserver register _snapcast._tcp with avahi-daemon (already enabled
+  # for Samba in services/samba.nix).  Upstream fix: nixpkgs#548066.
+  users.groups.avahi-snapserver = { };
+
+  systemd.services.snapserver = {
+    after = [ "avahi-daemon.service" ];
+    serviceConfig.SupplementaryGroups = [ "avahi-snapserver" ];
+  };
+
+  services.dbus.packages = [
+    (pkgs.writeTextDir "share/dbus-1/system.d/snapserver-avahi.conf" ''
+      <!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-BUS Bus Configuration 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+      <busconfig>
+        <policy group="avahi-snapserver">
+          <allow send_destination="org.freedesktop.Avahi"/>
+          <allow receive_sender="org.freedesktop.Avahi"/>
+        </policy>
+      </busconfig>
+    '')
   ];
 }

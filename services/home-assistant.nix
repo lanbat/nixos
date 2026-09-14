@@ -96,7 +96,9 @@ in
         description = "Home automation";
         widget = {
           type = "homeassistant";
-          key = "CHANGE_ME_HA_LONG_LIVED_TOKEN";
+          key = {
+            _secret = "HA_LONG_LIVED_TOKEN";
+          };
         };
       };
     };
@@ -258,6 +260,9 @@ in
           unit_system = "metric";
           time_zone = config.lanbat.timezone;
           external_url = "https://ha.${domain}";
+          # Music Assistant fetches tts_proxy URLs server-side; use loopback so
+          # announcements are not blocked by ip_ban when MA calls 192.168.1.10.
+          internal_url = "http://127.0.0.1:8123";
         };
 
         # Voice replies in a room (modules/core/voice-satellite.nix). A satellite

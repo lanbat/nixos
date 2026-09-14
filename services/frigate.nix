@@ -86,10 +86,12 @@ let
     # (OvDetectorConfig inherits model from BaseDetectorConfig, not its own field)
     model:
       path: /models/yolov8n_openvino_model/yolov8n.xml
+      labelmap_path: /labelmap/coco-80.txt
       model_type: yolo-generic
       width: 640
       height: 640
       input_tensor: nchw
+      input_dtype: float
       input_pixel_format: rgb
 
     detectors:
@@ -117,17 +119,17 @@ let
       c1:
         ffmpeg:
           inputs:
-            - path: rtsp://127.0.0.1:8554/c1_sub
-              input_args: preset-rtsp-restream
-              roles: [ detect ]
+            # Main stream (2560x1920) downscaled for detect — sub stream is too
+            # soft for overhead/distant objects on Tennison Road.
             - path: rtsp://127.0.0.1:8554/c1
               input_args: preset-rtsp-restream
-              roles: [ record ]
+              roles: [ detect, record ]
         detect:
           enabled: true
-          width:  640
-          height: 480
-          fps:    5
+          width:  1280
+          height: 960
+          fps:    7
+          min_initialized: 2
         lpr:
           enabled: true
         zones:
@@ -140,6 +142,11 @@ let
             inertia: 3
             loitering_time: 0
             friendly_name: Pavement
+          road:
+            coordinates: 0,0,1,0,1,0.22,0,0.22
+            inertia: 3
+            loitering_time: 0
+            friendly_name: Tennison Road
         objects:
           track:
             - person
@@ -153,33 +160,32 @@ let
             - bird
           filters:
             person:
-              min_score: 0.6
-              threshold: 0.7
+              min_score: 0.35
+              threshold: 0.45
             car:
-              min_score: 0.6
-              threshold: 0.7
+              min_score: 0.35
+              threshold: 0.45
             truck:
-              min_score: 0.6
-              threshold: 0.7
+              min_score: 0.35
+              threshold: 0.45
             motorcycle:
-              min_score: 0.85
-              threshold: 0.9
-              max_area: 40000
+              min_score: 0.5
+              threshold: 0.6
             bus:
-              min_score: 0.85
-              threshold: 0.9
+              min_score: 0.5
+              threshold: 0.65
             bicycle:
-              min_score: 0.85
-              threshold: 0.9
+              min_score: 0.5
+              threshold: 0.65
             dog:
-              min_score: 0.6
-              threshold: 0.7
+              min_score: 0.45
+              threshold: 0.55
             cat:
-              min_score: 0.6
-              threshold: 0.7
+              min_score: 0.45
+              threshold: 0.55
             bird:
-              min_score: 0.7
-              threshold: 0.8
+              min_score: 0.55
+              threshold: 0.65
         review:
           alerts:
             labels:
@@ -189,9 +195,6 @@ let
               - bus
               - truck
               - bicycle
-            required_zones:
-              - driveway
-              - pavement
           detections:
             labels:
               - person
@@ -203,12 +206,11 @@ let
               - dog
               - cat
               - bird
-            required_zones:
-              - driveway
-              - pavement
         motion:
-          mask:
-            - 0,0.218,0.385,0,0.599,0,0.755,0,0.604,0.036,0.496,0.065,0.33,0.116,0.185,0.189,0,0.291
+          # Overhead driveway + distant road traffic need sensitive motion to
+          # trigger object detection. Do not mask the road area.
+          threshold: 10
+          contour_area: 5
         notifications:
           enabled: true
 
@@ -236,6 +238,8 @@ in
     port = 5000;
     extraPorts = [ 8554 ]; # RTSP restream
     auth = "forward-auth";
+    # Homepage's Frigate widget calls /api/* without an Authentik session.
+    caddy.authBypassPaths = [ "/api/*" ];
     account = {
       uid = 995;
       container = true;
@@ -265,6 +269,10 @@ in
       group = "Surveillance";
       name = "Frigate";
       description = "NVR & object detection";
+      widget = {
+        type = "frigate";
+        enableRecentEvents = true;
+      };
     };
   };
 

@@ -34,6 +34,8 @@
     subdomain = "torrent";
     port = 8090;
     auth = "forward-auth";
+    # Homepage's qBittorrent widget calls /api/v2/* without an Authentik session.
+    caddy.authBypassPaths = [ "/api/v2/*" ];
     tier = "workload";
     state = [ "qbittorrent" ];
     units = [ "podman-qbittorrent" ];
@@ -52,6 +54,14 @@
       group = "Downloads";
       name = "qBittorrent";
       description = "Torrent client";
+      widget = {
+        type = "qbittorrent";
+        username = "admin";
+        password = {
+          _secret = "QBITTORRENT_PASSWORD";
+        };
+        enableLeechProgress = true;
+      };
     };
   };
 
@@ -61,10 +71,9 @@
     image = "lscr.io/linuxserver/qbittorrent:latest";
 
     environment = {
-      # PUID/PGID=0: linuxserver entrypoint stays as root inside the container.
-      # In rootless mode, container root maps to the host "qbt" user (UID 994).
-      PUID = "0";
-      PGID = "0";
+      # Match the host qbt account so NFS media dirs (qbt:media, mode 2775) are writable.
+      PUID = toString config.lanbat.services.qbittorrent.account.uid;
+      PGID = toString config.users.groups.media.gid;
       TZ = config.lanbat.timezone;
       WEBUI_PORT = "8090";
     };
@@ -75,8 +84,10 @@
       "/srv/storage/b/media:/media/b"
     ];
 
-    # Do NOT use --network host; bridge mode + port mapping is fine here.
-    ports = [ "127.0.0.1:8090:8090" ];
+    # Host networking avoids pasta's IPv4 fragment drops, which break BitTorrent
+    # peer connections in rootless Podman. The web UI stays on loopback via
+    # WebUI\Address set in ExecStartPre below.
+    extraOptions = [ "--network=host" ];
 
     podman.user = "qbt";
     user = "0";
@@ -89,7 +100,7 @@
     # config as whichever user ID it runs under (PUID), which qbt, the unit's
     # user, can't always write. The file is rewritten in place, so it keeps
     # that owner.
-    ExecStartPre = [
+    ExecStartPre = lib.mkBefore [
       "+${pkgs.writeShellScript "qbittorrent-web-ui-whitelist" ''
         conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
         [ -f "$conf" ] || exit 0
@@ -104,8 +115,11 @@
             END { if (!done) { print "[Preferences]"; print line } }
           ' "$conf" > "$tmp" && ${pkgs.coreutils}/bin/cat "$tmp" > "$conf"
         }
+        set_pref 'WebUI\Address' 127.0.0.1
         set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
-        set_pref 'WebUI\AuthSubnetWhitelist' '${config.lanbat.serverIp}/32, ::ffff:${config.lanbat.serverIp}/128'
+        # Host networking: Caddy connects via loopback (127.0.0.1). Bridge/pasta
+        # used to rewrite the source to the server IP — keep both.
+        set_pref 'WebUI\AuthSubnetWhitelist' '127.0.0.1/32, ::1/128, ${config.lanbat.serverIp}/32, ::ffff:${config.lanbat.serverIp}/128'
       ''}"
     ];
     Restart = lib.mkForce "on-failure";

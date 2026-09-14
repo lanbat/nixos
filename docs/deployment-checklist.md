@@ -401,6 +401,44 @@ From now on, deploy with `deploy path:.#pi`.
 - With `piTvFrontend` on, Kodi should appear on HDMI (if a screen is attached). Holding a
   controller's Guide button for 2 seconds switches to EmulationStation and back.
 
+### 2h. Clone the config repo on each machine
+
+Unattended upgrades rebuild from a local copy of this repo at `/etc/nixos`.
+Clone it on both machines now:
+
+```bash
+# On the server
+ssh admin@server
+sudo git clone <your-repo-url> /etc/nixos
+sudo cp /path/to/local.nix /etc/nixos/local.nix
+
+# On the Pi
+ssh admin@pi5
+sudo git clone <your-repo-url> /etc/nixos
+sudo cp /path/to/local.nix /etc/nixos/local.nix
+```
+
+Set the upstream branch on each clone (use your default branch name):
+
+```bash
+sudo git -C /etc/nixos branch --set-upstream-to=origin/master
+```
+
+If your repo is **private**, configure git credentials before auto-upgrade
+will be able to pull:
+
+```bash
+# Option A — HTTPS token (simpler)
+sudo git -C /etc/nixos remote set-url origin https://<token>@github.com/user/repo.git
+
+# Option B — SSH deploy key (more secure)
+sudo ssh-keygen -t ed25519 -f /root/.ssh/nixos_deploy -N ""
+# Add /root/.ssh/nixos_deploy.pub as a read-only deploy key in your git host
+sudo git -C /etc/nixos remote set-url origin git@github.com:user/repo.git
+```
+
+If your repo is **public**, no credentials are needed — HTTPS clone works as-is.
+
 ---
 
 ## Phase 3 — Post-install configuration
@@ -480,23 +518,19 @@ automatically and registers the Authentik provider.  No further steps needed.
 4. Grant users access to the **Home Assistant** application in Authentik
    (Applications → Home Assistant → Policy / group bindings).
 
-#### Jellyfin — bootstrap and SSO
+#### Jellyfin — automatic setup
 
-`jellyfin-bootstrap` completes the first-run startup wizard automatically on
-deploy, using `OWNER_USERNAME` / `OWNER_PASSWORD` from `hass-bootstrap-env.age`
-(same break-glass credentials as Home Assistant and Immich).  Add media
-libraries under Dashboard → Libraries after deploy if needed.
+`jellyfin-bootstrap` completes first-run onboarding on deploy:
 
-SSO plugin setup (manual):
+- Admin account from `hass-bootstrap-env.age` (same break-glass credentials as HA/Immich)
+- Media libraries for every Pi folder except `adult/` (Samba-only), `incomplete/`
+  (active downloads), and `roms/` (RomM): Movies, TV, Music Videos, Music,
+  Documentaries, Audiobooks, Books, Gym, Games, Misc
+- Plugins: Open Subtitles, Trakt, SSO Authentication
+- Authentik OIDC provider (`authentik`) from `authentik-oidc-secrets.age`
 
-1. Dashboard → Plugins → Catalog → **SSO Authentication** → Install. Restart Jellyfin.
-2. Dashboard → SSO-Auth → Add provider with values from `generate-oidc-secrets.sh`:
-   - Provider name: `authentik`
-   - client_id: `jellyfin`
-   - client_secret: (from the script output)
-   - Authorization URL: `https://auth.<domain>/application/o/authorize/`
-   - Token URL: `https://auth.<domain>/application/o/token/`
-   - Userinfo URL: `https://auth.<domain>/application/o/userinfo/`
+Grant users access to the **Jellyfin** application in Authentik.  Adult content
+is only available via the hidden Samba `private` share (`@private` group).
 
 ### 3c. Samba user setup
 
@@ -505,10 +539,9 @@ SSO plugin setup (manual):
 sudo smbpasswd -a admin
 # Repeat for other users.
 
-# Create user home directories on Pi storage (if not already created by storage init):
-sudo mkdir -p /srv/storage/b/users/admin
-sudo chown admin:media /srv/storage/b/users/admin
-sudo chmod 0700 /srv/storage/b/users/admin
+# User storage trees (files/, sync/, cloud/, photos/) are created by
+# human-users.nix on the server and user-storage-quotas.service on the Pi.
+# Re-deploy both hosts after adding lanbat.humanUsers entries.
 ```
 
 ### 3d. XFS quota setup
@@ -610,10 +643,13 @@ Invite users from there — open signup is disabled.
 
 Visit `https://sync.<domain>` (protected by Authentik forward auth).
 
-1. Set a GUI username and password under **Settings → GUI**.
+1. Set a GUI username and password under **Settings → GUI** (optional second layer inside Syncthing).
 2. Note this device's ID (**Actions → Show ID**) — share it with devices you want to sync with.
 3. Add remote devices via **Add Remote Device**.
-4. The default sync folder is `/srv/storage/b/syncthing/`. Add or adjust folders as needed.
+4. The default sync folder is `/srv/storage/b/users/admin/sync/` (personal storage,
+   counted toward the admin user's XFS project quota — not the shared 200 GB cap).
+   If you already synced to `/srv/storage/b/syncthing/`, move that data into the new path
+   before or after deploy. Add or adjust folders in `services/syncthing.nix` or the web UI.
    If you add a folder on Pi storage Drive A, add `"a"` to `nfs.drives` in
    `services/syncthing.nix`.
 
@@ -720,9 +756,9 @@ and stops after 30 minutes idle.
 
 ## Phase 4 — Ongoing
 
-- Deploy changes: `deploy path:.#server` / `deploy path:.#pi`.
-- Update inputs: `nix flake update`, check, deploy, commit `flake.lock`
-  (`docs/operations.md` § Updating). Hosts don't upgrade themselves.
+- Deploy changes immediately: `deploy path:.#server` / `deploy path:.#pi`.
+- Update inputs: `nix flake update`, commit `flake.lock`, `git push`
+  (`docs/operations.md` § Updating). Hosts auto-upgrade nightly from `/etc/nixos`.
 - Back up the Tang key directory: `docs/runbook.md` § Backing up Tang keys.
 - Test Pi unlock after a server reboot to verify Clevis/Tang works.
 - Pin container image versions when stability matters.

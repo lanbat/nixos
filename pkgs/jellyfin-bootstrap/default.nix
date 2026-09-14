@@ -4,6 +4,7 @@
   makeWrapper,
   curl,
   jq,
+  systemd,
 }:
 
 stdenv.mkDerivation {
@@ -23,6 +24,7 @@ stdenv.mkDerivation {
         lib.makeBinPath [
           curl
           jq
+          systemd
         ]
       }"
   '';

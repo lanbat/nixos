@@ -159,9 +159,9 @@ this is harmless until the next manual maintenance window.
 | Server NIC failure | No (Pi retries) |
 | Tang key rotation | Yes — re-bind Clevis on Pi |
 | Drives fill up | Yes — cleanup or expand |
-| NixOS package upgrades | Yes — `nix flake update`, then deploy from the workstation |
-| Server new kernel | Yes — reboot after the deploy, then unlock both layers |
-| Pi new kernel | Yes — reboot after the deploy; drives unlock via Clevis/Tang |
+| NixOS package upgrades | No — auto-upgrade runs nightly after `git push` |
+| Server new kernel | Yes — manual reboot required, then unlock both layers |
+| Pi new kernel | No — Pi reboots automatically via Clevis/Tang |
 | Container image updates | Yes — bump the tag and deploy |
 | Server root or workload fills up | Yes — grow the volume from LVM free space (`docs/operations.md`) |
 

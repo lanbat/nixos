@@ -107,7 +107,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 ├── romm/              RomM config, artwork, saves and states
 ├── vaultwarden/       Vaultwarden SQLite DB + attachments (BACK THIS UP)
 ├── syncthing/         Syncthing config + SQLite index (BACK THIS UP)
-│                      (actual synced files are on Pi/b/syncthing)
+│                      (actual synced files are on Pi/b/users/<user>/sync)
 └── samba/             Samba configuration and state
 
 /var/cache/
@@ -136,7 +136,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Vaultwarden | server-local | server-local (SQLite) | — |
 | Grafana | server-local | always-on PostgreSQL | — |
 | InfluxDB | server-local | server-local | — |
-| Syncthing | server-local | server-local (SQLite index) | Pi/b/syncthing |
+| Syncthing | server-local | server-local (SQLite index) | Pi/b/users/<user>/sync |
 | Music Assistant | server-local | server-local (embedded) | Pi/b/media/music (NFS, read-only) |
 | Snapcast | — | — | — (streams created dynamically by MA) |
 | Wyoming (server) | — | — | — (models re-downloaded on first start) |
@@ -160,18 +160,31 @@ Run `quota-setup.sh` on the Pi after first format (see docs/deployment-checklist
 | photos | 102 | /mnt/storage-a/photos | A | no limit |
 | surveillance | 103 | /mnt/storage-a/surveillance | A | 500 GB soft, 550 GB hard |
 | nextcloud | 200 | /mnt/storage-b/nextcloud | B | 500 GB soft, 550 GB hard |
-| users | 201 | /mnt/storage-b/users | B | no limit |
 | shared | 202 | /mnt/storage-b/shared | B | 200 GB soft, 220 GB hard |
+| user-* | 300+ | /mnt/storage-b/users/<user> | B | per-user (see human-users.nix) |
 | backups | 203 | /mnt/storage-b/backups | B | 300 GB soft, 350 GB hard |
 
-### Per-user quotas
+### Per-user unified quotas
 
-XFS also supports user and group quotas alongside project quotas (pquota enables all three).
-To set a per-user limit (e.g. cap user "alice" at 100 GB on Drive B):
+Human user storage is declared in `lanbat.humanUsers` (see `modules/core/human-users.nix`).
+Each user gets one XFS **project quota** on their entire directory tree under
+`/mnt/storage-b/users/<username>/`, covering Samba, Nextcloud, Syncthing and Immich data.
 
-```bash
-sudo xfs_quota -x -c "limit bsoft=100g bhard=110g alice" /mnt/storage-b
+Default quota: `lanbat.userStorage.defaultQuota` (100 GB soft / 110 GB hard).
+Override per user with `lanbat.humanUsers.<name>.quota`.
+
+```nix
+lanbat.humanUsers.alice = {
+  uid = 1002;
+  groups = [ "media" ];
+  quota = { soft = "200G"; hard = "220G"; };
+};
 ```
+
+Quotas are applied automatically on the Pi by `user-storage-quotas.service` after
+storage-b unlocks.
+
+Authentik handles identity only — it does not manage storage quotas.
 
 NFS stores numeric IDs, so a user's UID must be the same on the Pi and the server. Service
 accounts pin theirs in `lanbat.services.<name>.account.uid`.

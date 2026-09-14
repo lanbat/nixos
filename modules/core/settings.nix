@@ -206,6 +206,15 @@ in
       '';
     };
 
+    voiceSatelliteServer = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Run a Wyoming voice satellite on the server (PlayStation Eye mic and
+        internal speaker). Disable when a Pi satellite handles voice for the room.
+      '';
+    };
+
     voiceRooms = {
       server = mkOption {
         type = types.nullOr types.str;

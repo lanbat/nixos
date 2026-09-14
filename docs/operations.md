@@ -33,26 +33,59 @@ ssh admin@server sudo nixos-rebuild switch --rollback
 
 ## Updating
 
-Hosts don't upgrade themselves: a host only changes when you deploy. To update nixpkgs
-and the other inputs:
+Both hosts run `nixos-upgrade.service` nightly, pulling the latest commit from
+`/etc/nixos` and running `nixos-rebuild switch`. You can also deploy immediately
+from your workstation with deploy-rs.
+
+To update nixpkgs and the other inputs:
 
 ```bash
 nix flake update
 nix flake check --no-build path:.
+git commit -m "flake.lock: update" flake.lock
+git push
+# Hosts pick up the change on the next nightly run, or deploy now:
 deploy path:.#server
 deploy path:.#pi
-git commit -m "flake.lock: update" flake.lock
 ```
 
-New kernels take effect after a reboot. Check whether one is pending:
+Check the last upgrade:
+
+```bash
+systemctl status nixos-upgrade.service
+journalctl -u nixos-upgrade.service -n 50
+journalctl -u nixos-upgrade-pull.service -n 20
+```
+
+**Server:** upgrades apply immediately but the machine is **not rebooted** — a new
+kernel only takes effect after the next manual reboot. Check whether a reboot is pending:
 
 ```bash
 [ "$(readlink /run/booted-system/kernel)" = "$(readlink /run/current-system/kernel)" ] \
   && echo "up to date" || echo "reboot pending"
 ```
 
-After a server reboot, unlock both layers (see `docs/runbook.md`). The Pi unlocks its
-drives on its own once Tang is reachable.
+After a server reboot, unlock both layers (see `docs/runbook.md`).
+
+**Pi:** upgrades apply immediately and the machine **reboots automatically** (between
+04:00–06:00) if a reboot is needed. Clevis/Tang handles LUKS unlock automatically.
+NFS-dependent services on the server briefly pause and auto-restart as usual.
+
+### Disabling auto-upgrade temporarily
+
+```bash
+sudo systemctl stop nixos-upgrade.timer
+sudo systemctl start nixos-upgrade.timer   # re-enable
+```
+
+### Pinning a specific commit
+
+If an upgrade breaks something, pin the repo to a known-good commit:
+
+```bash
+sudo git -C /etc/nixos checkout <good-commit-hash>
+# Auto-upgrade rebuilds from this commit until you move HEAD forward.
+```
 
 ## Disk space (server)
 
@@ -134,10 +167,11 @@ sudo smbpasswd -x alice
 # List Samba users
 sudo pdbedit -L
 
-# Create a user home dir on Pi storage
-sudo mkdir -p /srv/storage/b/users/alice
-sudo chown alice:media /srv/storage/b/users/alice
-sudo chmod 0700 /srv/storage/b/users/alice
+# Add a human user (declare in hosts/server/default.nix):
+#   lanbat.humanUsers.alice = { uid = 1002; groups = [ "media" ]; };
+# Deploy server + Pi, then set Samba password (above).
+# Per-user dirs and XFS quotas are applied by human-users.nix and
+# user-storage-quotas.service on the Pi.
 ```
 
 ## Tang key management
@@ -175,8 +209,8 @@ ssh admin@pi5
 sudo xfs_quota -x -c "report -pb -h" /mnt/storage-a
 sudo xfs_quota -x -c "report -pb -h" /mnt/storage-b
 
-# User quotas
-sudo xfs_quota -x -c "report -ub -h" /mnt/storage-a
+# Per-user unified quotas (Syncthing, Samba, Nextcloud, …)
+sudo quota-report-users
 
 # Set a project limit (example: cap surveillance at 500 GB)
 sudo xfs_quota -x -c "limit -p bsoft=500g bhard=550g surveillance" /mnt/storage-a

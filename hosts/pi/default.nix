@@ -25,11 +25,29 @@
     ../../modules/pi/nfs-exports.nix
     ../../modules/pi/snapclient.nix
     ../../modules/pi/storage.nix
+    ../../modules/pi/user-quotas.nix
     ../../modules/pi/telegraf.nix
     ../../modules/pi/tv.nix
   ];
 
   networking.hostName = config.lanbat.piHostname;
+
+  # ---------------------------------------------------------------------------
+  # Unattended upgrades
+  # ---------------------------------------------------------------------------
+  # Rebuild nightly from /etc/nixos (see docs/deployment-checklist.md). Clevis/Tang
+  # unlocks storage after an automatic reboot in the early-hours window.
+  system.autoUpgrade = {
+    enable = true;
+    flake = "path:/etc/nixos#pi";
+    allowReboot = true;
+    rebootWindow = {
+      lower = "04:00";
+      upper = "06:00";
+    };
+    dates = "04:30";
+    randomizedDelaySec = "30min";
+  };
 
   # ---------------------------------------------------------------------------
   # Networking
