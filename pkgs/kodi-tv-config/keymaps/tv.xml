@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<keymap>
+  <global>
+    <keyboard>
+      <!-- Switch to EmulationStation or PlayStation Remote Play from Kodi. -->
+      <f9>System.Exec(/run/current-system/sw/bin/tv-switch,games)</f9>
+      <f10>System.Exec(/run/current-system/sw/bin/tv-switch,chiaki)</f10>
+      <g mod="ctrl">System.Exec(/run/current-system/sw/bin/tv-switch,games)</g>
+      <p mod="ctrl">System.Exec(/run/current-system/sw/bin/tv-switch,chiaki)</p>
+    </keyboard>
+    <remote>
+      <guide>System.Exec(/run/current-system/sw/bin/tv-switch,games)</guide>
+    </remote>
+  </global>
+</keymap>
