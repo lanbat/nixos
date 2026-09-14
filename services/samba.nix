@@ -165,17 +165,8 @@
     };
   };
 
-  # Samba avahi announcement for macOS autodiscovery. avahi-daemon stays always-on
-  # (not workload-gated) so mDNS works before the workload layer is unlocked; Samba
-  # shares only appear once samba-smbd is running.
-  services.avahi = {
-    enable = true;
-    nssmdns4 = true;
-    publish = {
-      enable = true;
-      userServices = true;
-    };
-  };
+  # macOS discovers shares via Avahi (modules/server/mdns.nix). Samba itself is
+  # workload-gated; avahi-daemon stays always-on so mDNS works before unlock.
 
   systemd.services.samba-smbd = {
     serviceConfig = {

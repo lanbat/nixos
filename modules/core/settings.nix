@@ -31,7 +31,12 @@ in
     rootDomain = mkOption {
       type = types.str;
       example = "example.com";
-      description = "Root DNS zone, typically the parent of lanbat.domain. Camera hostnames live here.";
+      description = ''
+        Root DNS zone, typically the parent of lanbat.domain. Camera hostnames
+        live here. LAN hosts are also published as
+        <hostname>.<rootDomain> via router dnsmasq — keep Kestrel device labels
+        identical to serverHostname / piHostname.
+      '';
     };
 
     serverIp = mkOption {
@@ -61,7 +66,10 @@ in
     serverHostname = mkOption {
       type = types.str;
       example = "server";
-      description = "Hostname of the server.";
+      description = ''
+        Hostname of the server. Must match networking.hostName and the Kestrel
+        router device label so LAN DNS/mDNS agree (e.g. core → core.10ctr.vg.cd).
+      '';
     };
 
     serverInterface = mkOption {

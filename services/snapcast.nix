@@ -35,11 +35,13 @@
 # and publish in snapserver.conf, plus Avahi D-Bus access (DynamicUser blocks
 # it by default — see the avahi-snapserver group below).
 #
-# Snapserver must listen on IPv6 (::) as well as IPv4.  Avahi publishes the
-# host's IPv6 addresses in mDNS and Android clients prefer them; with a v4-only
-# bind they get "connection refused".  Binding :: accepts both (Linux dual-stack).
-# Avahi IPv6 is also disabled so mDNS prefers the LAN IPv4.
-# http.host is the LAN IP (cover-art URLs) — same address snapclient uses on the Pi.
+# mDNS publishes core.local (Avahi .local requirement); unicast DNS uses
+# <serverHostname>.<rootDomain> (e.g. core.10ctr.vg.cd) — keep the router
+# device label in sync (modules/server/mdns.nix).
+#
+# Snapserver binds :: for dual-stack TCP.  Avahi IPv6 mDNS stays off so Android
+# does not pick stale AAAA records from discovery.
+# http.host is the canonical LAN FQDN (cover-art URLs).
 #
 # Always-on: yes.  No NFS dependency.
 { config, pkgs, ... }:
@@ -86,7 +88,7 @@
         enabled = true;
         port = 1780;
         bind_to_address = "127.0.0.1";
-        host = config.lanbat.serverIp;
+        host = "${config.lanbat.serverHostname}.${config.lanbat.rootDomain}";
       };
 
       # Idle "default" stream — MA sets groups back here when playback stops.
@@ -100,12 +102,8 @@
     1705
   ];
 
-  # IPv4-only mDNS — see Discovery above.  Merged into avahi-daemon.conf from
-  # services/samba.nix.
-  services.avahi.ipv6 = false;
-
-  # Let snapserver register _snapcast._tcp with avahi-daemon (already enabled
-  # for Samba in services/samba.nix).  Upstream fix: nixpkgs#548066.
+  # Let snapserver register _snapcast._tcp with avahi-daemon (modules/server/mdns.nix).
+  # Upstream fix: nixpkgs#548066.
   users.groups.avahi-snapserver = { };
 
   systemd.services.snapserver = {
