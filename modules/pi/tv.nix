@@ -35,6 +35,8 @@
 let
   romDirectory = "/mnt/storage-b/media/roms";
   home = config.users.users.media.home;
+  kodiTvConfig = pkgs.callPackage ../../pkgs/kodi-tv-config { };
+  kodiBootstrap = pkgs.callPackage ../../pkgs/kodi-bootstrap { };
 
   # Emulators that run well on a Raspberry Pi 5.
   cores = with pkgs.libretro; [
@@ -146,14 +148,23 @@ let
     flakeIgnore = [ "E501" ];
   } (builtins.readFile ../../pkgs/tv-session/tv-hotkey.py);
 
-  session = description: other: command: {
-    inherit description;
-    conflicts = [ other ];
-    after = [
-      "systemd-user-sessions.service"
-      "systemd-logind.service"
-      "sound.target"
-    ];
+  session =
+    {
+      extraAfter ? [ ],
+      description,
+      other,
+      command,
+    }:
+    {
+      inherit description;
+      conflicts = [ other ];
+      after =
+        [
+          "systemd-user-sessions.service"
+          "systemd-logind.service"
+          "sound.target"
+        ]
+        ++ extraAfter;
     # Emulators and tv-switch are looked up in the system profile.
     path = [ "/run/current-system/sw" ];
     startLimitBurst = 5;
@@ -190,6 +201,7 @@ in
         "video"
         "input"
         "render"
+        "private"
       ];
     };
 
@@ -217,15 +229,46 @@ in
       "getty@tty1".enable = false;
       "autovt@tty1".enable = false;
 
-      tv-kodi = session "Kodi on the TV" "tv-games.service" "${kodi}/bin/kodi-standalone";
-      tv-games =
-        session "EmulationStation on the TV" "tv-kodi.service"
-          "${lib.getExe pkgs.cage} -s -- ${lib.getExe es-de}";
+      tv-kodi = session {
+        description = "Kodi on the TV";
+        other = "tv-games.service";
+        command = "${kodi}/bin/kodi-standalone";
+        extraAfter = [
+          "kodi-bootstrap.service"
+          "storage-a-unlock.service"
+          "storage-b-unlock.service"
+        ];
+      };
+      tv-games = session {
+        description = "EmulationStation on the TV";
+        other = "tv-kodi.service";
+        command = "${lib.getExe pkgs.cage} -s -- ${lib.getExe es-de}";
+      };
+
+      kodi-bootstrap = {
+        description = "Wait for Pi storage before Kodi scans libraries";
+        wantedBy = [ "multi-user.target" ];
+        after = [
+          "storage-a-unlock.service"
+          "storage-b-unlock.service"
+        ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          User = "root";
+        };
+        path = [ kodiBootstrap ];
+        environment.KODI_HOME = home;
+        script = "exec kodi-bootstrap";
+      };
 
       tv-session = {
         description = "Start the last TV session";
         wantedBy = [ "multi-user.target" ];
-        after = [ "systemd-user-sessions.service" ];
+        after = [
+          "systemd-user-sessions.service"
+          "kodi-bootstrap.service"
+        ];
         serviceConfig.Type = "oneshot";
         script = ''
           session=$(cat /var/lib/tv-session/current 2>/dev/null || echo kodi)
@@ -261,6 +304,8 @@ in
 
       "d ${home}/.kodi 0755 media media -"
       "d ${home}/.kodi/userdata 0755 media media -"
+      "C ${home}/.kodi/userdata/advancedsettings.xml - - - - ${kodiTvConfig}/advancedsettings.xml"
+      "C ${home}/.kodi/userdata/sources.xml - - - - ${kodiTvConfig}/sources.xml"
       "C ${home}/.kodi/userdata/favourites.xml - - - - ${kodiFavourites}"
       "z ${home}/.kodi/userdata/favourites.xml 0644 media media -"
     ];

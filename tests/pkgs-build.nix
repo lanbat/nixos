@@ -9,6 +9,8 @@ let
   pages = pkgs.callPackage ../pkgs/service-unavailable-page { inherit domain; };
   caPage = pkgs.callPackage ../pkgs/ca-landing-page { };
   dashboards = pkgs.callPackage ../pkgs/grafana-dashboards { };
+  kodiTvConfig = pkgs.callPackage ../pkgs/kodi-tv-config { };
+  kodiBootstrap = pkgs.callPackage ../pkgs/kodi-bootstrap { };
 in
 pkgs.runCommand "pkgs-build-smoke"
   {
@@ -17,13 +19,16 @@ pkgs.runCommand "pkgs-build-smoke"
       pages
       caPage
       dashboards
+      kodiBootstrap
     ];
   }
   ''
     command -v backup-server
     command -v quota-setup
+    command -v kodi-bootstrap
     test -f ${pages}/offline.html
     test -f ${caPage}/index.html
     test -d ${dashboards}
+    test -f ${kodiTvConfig}/sources.xml
     touch $out
   ''
