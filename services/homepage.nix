@@ -14,10 +14,13 @@
 # and trusted via NODE_EXTRA_CA_CERTS. Caddy generates the cert on the first
 # TLS request; if Homepage starts earlier, widgets error until it restarts.
 #
-# Widget coverage
-# ---------------
-# Services behind Authentik forward auth are links only: their APIs aren't
-# reachable without a session cookie.
+# Widget credentials
+# ------------------
+# Widget API keys and passwords are not baked into the /nix/store. services.yaml
+# is generated at container start from a manifest plus agenix secrets under
+# /run/agenix. Service files reference secrets with `_secret` values in their
+# dashboard.widget blocks. Run `bash secrets/generate-homepage-widgets.sh` on the
+# server after deploy to create the API keys/tokens that can be automated.
 {
   config,
   pkgs,
@@ -27,7 +30,11 @@
 
 let
   domain = config.lanbat.domain;
-  yaml = pkgs.formats.yaml { };
+  homepageConfig = pkgs.callPackage ../pkgs/homepage-config { };
+  homepageStateDir = "/var/lib/homepage";
+  homepageManifest = "${homepageStateDir}/manifest.json";
+  homepageServicesYaml = "${homepageStateDir}/services.yaml";
+  agenixDir = "/run/agenix";
 
   # Group order on the page, with icons. Groups not listed here come last.
   groupIcons = [
@@ -70,18 +77,11 @@ let
   );
   url = svc: "https://${svc.subdomain}.${domain}";
 
-  entry = svc: {
-    ${svc.dashboard.name} = {
-      href = url svc;
-      inherit (svc.dashboard) description icon;
+  widgetEntry = svc:
+    {
+      url = url svc;
     }
-    // lib.optionalAttrs (svc.dashboard.widget != null) {
-      widget = {
-        url = url svc;
-      }
-      // svc.dashboard.widget;
-    };
-  };
+    // svc.dashboard.widget;
 
   knownGroups = map (g: g.name) groupIcons;
   groups =
@@ -95,14 +95,27 @@ let
       lib.filter (svc: svc.dashboard.group == group) onDashboard
     );
 
-  servicesYaml = yaml.generate "homepage-services.yaml" (
-    map (group: { ${group} = map entry (inGroup group); }) (
-      lib.filter (group: inGroup group != [ ]) groups
-    )
-  );
+  manifest = {
+    groups = map (
+      group:
+      {
+        name = group;
+        entries = map (
+          svc:
+          {
+            name = svc.dashboard.name;
+            href = url svc;
+            description = svc.dashboard.description;
+            icon = svc.dashboard.icon;
+            widget = if svc.dashboard.widget != null then widgetEntry svc else null;
+          }
+        ) (inGroup group);
+      }
+    ) (lib.filter (group: inGroup group != [ ]) groups);
+  };
 
-  # Written as text: YAML generated from an attrset would sort the layout
-  # keys, and Homepage orders groups by them.
+  manifestJson = pkgs.writeText "homepage-manifest.json" (builtins.toJSON manifest);
+
   settingsYaml = pkgs.writeText "homepage-settings.yaml" ''
     title: Homelab
     theme: dark
@@ -126,6 +139,15 @@ let
           dateStyle: long
           timeStyle: short
   '';
+
+  generateServicesYaml = pkgs.writeShellScript "homepage-generate-services-yaml" ''
+    set -euo pipefail
+    install -d -m 0750 -o homepage -g homepage ${homepageStateDir}
+    install -m 0640 -o homepage -g homepage ${manifestJson} ${homepageManifest}
+    ${homepageConfig.generateServicesYaml} ${homepageManifest} ${agenixDir} ${homepageServicesYaml}
+    chmod 0640 ${homepageServicesYaml}
+    chown homepage:homepage ${homepageServicesYaml}
+  '';
 in
 {
   lanbat.services.homepage = {
@@ -136,13 +158,23 @@ in
       uid = 961;
       container = true;
     };
+    secrets.homepage-widgets-env = { };
+  };
+
+  systemd.tmpfiles.rules = [
+    "d ${homepageStateDir} 0750 homepage homepage -"
+  ];
+
+  systemd.services.podman-homepage = {
+    after = [ "agenix-mount.service" ];
+    serviceConfig.ExecStartPre = lib.mkBefore [ "+${generateServicesYaml}" ];
   };
 
   virtualisation.oci-containers.containers."homepage" = {
     image = "ghcr.io/gethomepage/homepage:latest";
 
     volumes = [
-      "${servicesYaml}:/app/config/services.yaml:ro"
+      "${homepageServicesYaml}:/app/config/services.yaml:ro"
       "${settingsYaml}:/app/config/settings.yaml:ro"
       "${widgetsYaml}:/app/config/widgets.yaml:ro"
       # Persisted Caddy root CA, for widget TLS verification.

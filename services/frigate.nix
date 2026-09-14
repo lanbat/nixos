@@ -238,6 +238,8 @@ in
     port = 5000;
     extraPorts = [ 8554 ]; # RTSP restream
     auth = "forward-auth";
+    # Homepage's Frigate widget calls /api/* without an Authentik session.
+    caddy.authBypassPaths = [ "/api/*" ];
     account = {
       uid = 995;
       container = true;
@@ -267,6 +269,10 @@ in
       group = "Surveillance";
       name = "Frigate";
       description = "NVR & object detection";
+      widget = {
+        type = "frigate";
+        enableRecentEvents = true;
+      };
     };
   };
 
