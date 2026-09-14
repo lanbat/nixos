@@ -120,8 +120,8 @@ deploy path:.#pi
 The real `server` and `pi` configurations only exist when `local.nix` (copied from
 `local.nix.example`) is present, and only a `path:` flake reference includes that
 gitignored file. The server is installed with nixos-anywhere, which partitions its
-disk from `hosts/server/disk.nix`. Hosts don't upgrade themselves: run
-`nix flake update` and deploy. See
+disk from `hosts/server/disk.nix`. Hosts also auto-upgrade nightly from a local
+clone at `/etc/nixos`; run `nix flake update`, push, or deploy immediately. See
 [docs/deployment-checklist.md](docs/deployment-checklist.md) for the full
 step-by-step guide.
 

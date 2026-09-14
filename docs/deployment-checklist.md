@@ -401,6 +401,44 @@ From now on, deploy with `deploy path:.#pi`.
 - With `piTvFrontend` on, Kodi should appear on HDMI (if a screen is attached). Holding a
   controller's Guide button for 2 seconds switches to EmulationStation and back.
 
+### 2h. Clone the config repo on each machine
+
+Unattended upgrades rebuild from a local copy of this repo at `/etc/nixos`.
+Clone it on both machines now:
+
+```bash
+# On the server
+ssh admin@server
+sudo git clone <your-repo-url> /etc/nixos
+sudo cp /path/to/local.nix /etc/nixos/local.nix
+
+# On the Pi
+ssh admin@pi5
+sudo git clone <your-repo-url> /etc/nixos
+sudo cp /path/to/local.nix /etc/nixos/local.nix
+```
+
+Set the upstream branch on each clone (use your default branch name):
+
+```bash
+sudo git -C /etc/nixos branch --set-upstream-to=origin/master
+```
+
+If your repo is **private**, configure git credentials before auto-upgrade
+will be able to pull:
+
+```bash
+# Option A — HTTPS token (simpler)
+sudo git -C /etc/nixos remote set-url origin https://<token>@github.com/user/repo.git
+
+# Option B — SSH deploy key (more secure)
+sudo ssh-keygen -t ed25519 -f /root/.ssh/nixos_deploy -N ""
+# Add /root/.ssh/nixos_deploy.pub as a read-only deploy key in your git host
+sudo git -C /etc/nixos remote set-url origin git@github.com:user/repo.git
+```
+
+If your repo is **public**, no credentials are needed — HTTPS clone works as-is.
+
 ---
 
 ## Phase 3 — Post-install configuration
@@ -716,9 +754,9 @@ and stops after 30 minutes idle.
 
 ## Phase 4 — Ongoing
 
-- Deploy changes: `deploy path:.#server` / `deploy path:.#pi`.
-- Update inputs: `nix flake update`, check, deploy, commit `flake.lock`
-  (`docs/operations.md` § Updating). Hosts don't upgrade themselves.
+- Deploy changes immediately: `deploy path:.#server` / `deploy path:.#pi`.
+- Update inputs: `nix flake update`, commit `flake.lock`, `git push`
+  (`docs/operations.md` § Updating). Hosts auto-upgrade nightly from `/etc/nixos`.
 - Back up the Tang key directory: `docs/runbook.md` § Backing up Tang keys.
 - Test Pi unlock after a server reboot to verify Clevis/Tang works.
 - Pin container image versions when stability matters.

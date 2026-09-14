@@ -53,6 +53,19 @@
   networking.hostName = config.lanbat.serverHostname;
 
   # ---------------------------------------------------------------------------
+  # Unattended upgrades
+  # ---------------------------------------------------------------------------
+  # Rebuild nightly from /etc/nixos (see docs/deployment-checklist.md). The server
+  # never reboots unattended — LUKS unlock requires a manual SSH session.
+  system.autoUpgrade = {
+    enable = true;
+    flake = "path:/etc/nixos#server";
+    allowReboot = false;
+    dates = "04:00";
+    randomizedDelaySec = "30min";
+  };
+
+  # ---------------------------------------------------------------------------
   # Boot
   # ---------------------------------------------------------------------------
   # No passphrase at boot: the host root is unencrypted and both LUKS layers
