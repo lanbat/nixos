@@ -167,10 +167,11 @@ sudo smbpasswd -x alice
 # List Samba users
 sudo pdbedit -L
 
-# Create a user home dir on Pi storage
-sudo mkdir -p /srv/storage/b/users/alice
-sudo chown alice:media /srv/storage/b/users/alice
-sudo chmod 0700 /srv/storage/b/users/alice
+# Add a human user (declare in hosts/server/default.nix):
+#   lanbat.humanUsers.alice = { uid = 1002; groups = [ "media" ]; };
+# Deploy server + Pi, then set Samba password (above).
+# Per-user dirs and XFS quotas are applied by human-users.nix and
+# user-storage-quotas.service on the Pi.
 ```
 
 ## Tang key management
@@ -208,8 +209,8 @@ ssh admin@pi5
 sudo xfs_quota -x -c "report -pb -h" /mnt/storage-a
 sudo xfs_quota -x -c "report -pb -h" /mnt/storage-b
 
-# User quotas
-sudo xfs_quota -x -c "report -ub -h" /mnt/storage-a
+# Per-user unified quotas (Syncthing, Samba, Nextcloud, …)
+sudo quota-report-users
 
 # Set a project limit (example: cap surveillance at 500 GB)
 sudo xfs_quota -x -c "limit -p bsoft=500g bhard=550g surveillance" /mnt/storage-a

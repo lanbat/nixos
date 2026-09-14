@@ -25,6 +25,7 @@
     ../../modules/pi/nfs-exports.nix
     ../../modules/pi/snapclient.nix
     ../../modules/pi/storage.nix
+    ../../modules/pi/user-quotas.nix
     ../../modules/pi/telegraf.nix
     ../../modules/pi/tv.nix
   ];

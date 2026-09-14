@@ -29,7 +29,6 @@ declare -A PROJECTS=(
   [surveillance]=103
   # Drive B
   [nextcloud]=200
-  [users]=201
   [shared]=202
   [backups]=203
 )
@@ -40,7 +39,6 @@ declare -A PATHS=(
   [photos]=$STORAGE_A/photos
   [surveillance]=$STORAGE_A/surveillance
   [nextcloud]=$STORAGE_B/nextcloud
-  [users]=$STORAGE_B/users
   [shared]=$STORAGE_B/shared
   [backups]=$STORAGE_B/backups
 )

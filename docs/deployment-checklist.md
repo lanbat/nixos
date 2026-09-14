@@ -539,10 +539,9 @@ is only available via the hidden Samba `private` share (`@private` group).
 sudo smbpasswd -a admin
 # Repeat for other users.
 
-# Create user home directories on Pi storage (if not already created by storage init):
-sudo mkdir -p /srv/storage/b/users/admin
-sudo chown admin:media /srv/storage/b/users/admin
-sudo chmod 0700 /srv/storage/b/users/admin
+# User storage trees (files/, sync/, cloud/, photos/) are created by
+# human-users.nix on the server and user-storage-quotas.service on the Pi.
+# Re-deploy both hosts after adding lanbat.humanUsers entries.
 ```
 
 ### 3d. XFS quota setup
@@ -644,10 +643,13 @@ Invite users from there — open signup is disabled.
 
 Visit `https://sync.<domain>` (protected by Authentik forward auth).
 
-1. Set a GUI username and password under **Settings → GUI**.
+1. Set a GUI username and password under **Settings → GUI** (optional second layer inside Syncthing).
 2. Note this device's ID (**Actions → Show ID**) — share it with devices you want to sync with.
 3. Add remote devices via **Add Remote Device**.
-4. The default sync folder is `/srv/storage/b/syncthing/`. Add or adjust folders as needed.
+4. The default sync folder is `/srv/storage/b/users/admin/sync/` (personal storage,
+   counted toward the admin user's XFS project quota — not the shared 200 GB cap).
+   If you already synced to `/srv/storage/b/syncthing/`, move that data into the new path
+   before or after deploy. Add or adjust folders in `services/syncthing.nix` or the web UI.
    If you add a folder on Pi storage Drive A, add `"a"` to `nfs.drives` in
    `services/syncthing.nix`.
 

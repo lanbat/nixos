@@ -119,7 +119,7 @@
         "create mask" = "0700";
         "directory mask" = "0700";
         "valid users" = "%S";
-        path = "/srv/storage/b/users/%S";
+        path = "${config.lanbat.userStorage.mountOnServer}/%S/files";
       };
 
       # ---- Shared media shares (read-only for all users) ----
@@ -190,11 +190,9 @@
     };
   };
 
-  # Pre-create user home dirs on Pi storage (add users as needed).
+  # User home dirs are created by human-users.nix (files/ subdir per user).
   systemd.tmpfiles.rules = [
-    "d /srv/storage/b/users                  0755 root  root    -"
-    "d /srv/storage/b/users/admin            0700 admin admin   -"
-    "d /srv/storage/b/shared                 0775 root  media   -"
+    "d /srv/storage/b/shared 0775 root media -"
   ];
 
   # Note: add Samba users manually after deploying:

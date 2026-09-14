@@ -19,8 +19,8 @@
 # Storage split
 # -------------
 # Config and SQLite index stay server-local (/var/lib/syncthing).
-# Actual synced folder data lives on Pi storage:
-#   /srv/storage/b/syncthing/   (Drive B — user data, alongside Nextcloud)
+# Actual synced folder data lives in each user's personal storage tree:
+#   /srv/storage/b/users/<user>/sync/   (counts toward per-user XFS quota)
 #
 # This is safe on NFSv4:
 # - The database is never on NFS, so no SQLite locking issues.
@@ -89,7 +89,7 @@ in
         # Additional folders can be added here or via the web UI.
         "syncthing" = {
           label = "Syncthing";
-          path = "/srv/storage/b/syncthing";
+          path = "${config.lanbat.userStorage.mountOnServer}/admin/sync";
           # Disable inotify — it does not work over NFS.
           # Syncthing will poll for local changes every 60 seconds instead.
           fsWatcherEnabled = false;
