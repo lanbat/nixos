@@ -37,7 +37,11 @@ in
   };
 
   virtualisation.oci-containers.containers."searxng" = {
-    image = "docker.io/searxng/searxng:2025.5.12-5d99373";
+    image = "docker.io/searxng/searxng:latest";
+
+    # --pull=newer: on each start, check the registry and pull if a newer
+    # image is available — keeps engine parsers in sync with upstream sites.
+    extraOptions = [ "--pull=newer" ];
 
     volumes = [
       "/var/lib/searxng:/etc/searxng"
@@ -85,7 +89,7 @@ in
 
         search:
           safe_search: 0
-          autocomplete: ""
+          autocomplete: "brave"
           default_lang: "auto"
 
         outgoing:
@@ -93,6 +97,14 @@ in
           max_request_timeout: 15.0
           pool_connections: 100
           pool_maxsize: 10
+
+        engines:
+          # bing is disabled upstream but works from this IP.
+          - name: bing
+            disabled: false
+          # wikidata SPARQL queries can exceed the default 3 s engine timeout.
+          - name: wikidata
+            timeout: 15.0
         YAML
                 chown -R searxng:searxng /var/lib/searxng
                 # 0755: uwsgi workers run as the container's searxng user, not root.
