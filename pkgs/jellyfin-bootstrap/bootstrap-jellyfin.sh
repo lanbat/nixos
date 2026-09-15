@@ -333,6 +333,25 @@ sso_configured() {
     | jq -e '.authentik.Enabled == true' >/dev/null
 }
 
+configure_networking() {
+  local current desired
+  current="$(api_call "${JELLYFIN_URL}/System/Configuration/network")"
+  desired="$(jq \
+    --arg url "$EXTERNAL_URL" \
+    '.AutoDiscovery = true
+     | .KnownProxies = ((.KnownProxies // []) + ["127.0.0.1"] | unique)
+     | .PublishedServerUriBySubnet = ["all=" + $url]' \
+    <<<"$current")"
+  if [[ "$desired" == "$current" ]]; then
+    return 0
+  fi
+  log "configuring networking (auto-discovery, known proxies, published URL)"
+  api_call -X POST "${JELLYFIN_URL}/System/Configuration/network" \
+    -H 'Content-Type: application/json' \
+    -d "$desired" \
+    -o /dev/null
+}
+
 configuration_complete() {
   api_auth
   libraries_complete \
@@ -444,6 +463,7 @@ run_configuration() {
   repair_media_permissions
   harden_adult_permissions
   api_auth
+  configure_networking
   setup_libraries
   configure_nfs_libraries
   configure_scheduled_scan
@@ -460,6 +480,7 @@ if [[ -f "$CONFIG_STATE_FILE" ]] && wizard_complete && configuration_complete 2>
   repair_media_permissions
   harden_adult_permissions
   api_auth
+  configure_networking
   setup_libraries
   configure_nfs_libraries
   configure_scheduled_scan
