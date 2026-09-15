@@ -38,11 +38,11 @@
   <videolibrary>
     <updateonstartup>true</updateonstartup>
     <cleanonupdate>true</cleanonupdate>
-    <scanonstartup>false</scanonstartup>
+    <scanonstartup>true</scanonstartup>
   </videolibrary>
 
   <musiclibrary>
     <updateonstartup>true</updateonstartup>
-    <scanonstartup>false</scanonstartup>
+    <scanonstartup>true</scanonstartup>
   </musiclibrary>
 </advancedsettings>

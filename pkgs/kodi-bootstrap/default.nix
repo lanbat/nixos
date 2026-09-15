@@ -3,6 +3,7 @@
   stdenv,
   makeWrapper,
   coreutils,
+  sqlite,
   util-linux,
 }:
 
@@ -22,6 +23,7 @@ stdenv.mkDerivation {
       --prefix PATH : "${
         lib.makeBinPath [
           coreutils
+          sqlite
           util-linux
         ]
       }"
