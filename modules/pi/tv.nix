@@ -158,36 +158,35 @@ let
     {
       inherit description;
       conflicts = [ other ];
-      after =
-        [
-          "systemd-user-sessions.service"
-          "systemd-logind.service"
-          "sound.target"
-        ]
-        ++ extraAfter;
-    # Emulators and tv-switch are looked up in the system profile.
-    path = [ "/run/current-system/sw" ];
-    startLimitBurst = 5;
-    startLimitIntervalSec = 60;
-    serviceConfig = {
-      ExecStart = command;
-      User = "media";
-      # A logind session on tty1 gives the session the display and input
-      # devices. Audio goes to the system-wide PipeWire (modules/pi/audio.nix).
-      PAMName = "login";
-      TTYPath = "/dev/tty1";
-      TTYReset = true;
-      TTYVHangup = true;
-      TTYVTDisallocate = true;
-      StandardInput = "tty-fail";
-      StandardOutput = "journal";
-      StandardError = "journal";
-      UtmpIdentifier = "tty1";
-      UtmpMode = "user";
-      Restart = "on-failure";
-      RestartSec = "2s";
+      after = [
+        "systemd-user-sessions.service"
+        "systemd-logind.service"
+        "sound.target"
+      ]
+      ++ extraAfter;
+      # Emulators and tv-switch are looked up in the system profile.
+      path = [ "/run/current-system/sw" ];
+      startLimitBurst = 5;
+      startLimitIntervalSec = 60;
+      serviceConfig = {
+        ExecStart = command;
+        User = "media";
+        # A logind session on tty1 gives the session the display and input
+        # devices. Audio goes to the system-wide PipeWire (modules/pi/audio.nix).
+        PAMName = "login";
+        TTYPath = "/dev/tty1";
+        TTYReset = true;
+        TTYVHangup = true;
+        TTYVTDisallocate = true;
+        StandardInput = "tty-fail";
+        StandardOutput = "journal";
+        StandardError = "journal";
+        UtmpIdentifier = "tty1";
+        UtmpMode = "user";
+        Restart = "on-failure";
+        RestartSec = "2s";
+      };
     };
-  };
 in
 {
   config = lib.mkIf config.lanbat.piTvFrontend {
