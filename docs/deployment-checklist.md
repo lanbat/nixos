@@ -528,6 +528,8 @@ automatically and registers the Authentik provider.  No further steps needed.
   Documentaries, Audiobooks, Books, Gym, Games, Misc
 - Plugins: Open Subtitles, Trakt, SSO Authentication
 - Authentik OIDC provider (`authentik`) from `authentik-oidc-secrets.age`
+- Realtime monitoring disabled (NFS cannot use inotify); library scan every 2 hours
+  plus a full scan on each bootstrap run
 
 Grant users access to the **Jellyfin** application in Authentik.  Adult content
 is only available via the hidden Samba `private` share (`@private` group).
