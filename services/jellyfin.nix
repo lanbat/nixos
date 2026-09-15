@@ -23,6 +23,12 @@
 #   We declare a hard BindsTo dependency so systemd stops Jellyfin when
 #   the mount disappears and restarts it when the mount returns.
 #
+# Discovery
+# ---------
+# TV and mobile apps find the server via UDP broadcast on port 7359 (not mDNS).
+# Caddy serves HTTPS on 443; discovery must advertise that URL so clients do
+# not fall back to the blocked local HTTP port 8096.
+#
 # First-run onboarding, media libraries, plugins, and Authentik SSO are
 # completed automatically by jellyfin-bootstrap.
 {
@@ -40,6 +46,7 @@ in
   lanbat.services.jellyfin = {
     subdomain = "media";
     port = 8096;
+    extraPorts = [ 7359 ]; # UDP auto-discovery for TV and mobile apps
     apiClients = true; # TV and mobile apps
     tier = "workload";
     state = [ "jellyfin" ];
@@ -82,8 +89,13 @@ in
     serviceConfig = {
       Restart = "on-failure";
       RestartSec = "15s";
+      Environment = [
+        "JELLYFIN_PublishedServerUrl=https://media.${domain}"
+      ];
     };
   };
+
+  networking.firewall.allowedUDPPorts = [ 7359 ];
 
   systemd.services.jellyfin-bootstrap = {
     description = "Complete Jellyfin setup (wizard, libraries, plugins, SSO)";
