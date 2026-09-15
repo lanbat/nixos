@@ -97,6 +97,8 @@
     name = "Pi Satellite";
     uri = "tcp://0.0.0.0:10700";
     room = config.lanbat.voiceRooms.pi;
+    # Pipeline Piper audio on the TV is faster than voice_reply → Music Assistant.
+    alwaysPlayLocally = true;
     # Through Caddy, which lets /api/* past Authentik for Home Assistant.
     homeAssistant = {
       url = "https://ha.${config.lanbat.domain}";

@@ -27,6 +27,8 @@ LLM_DOMAIN="extended_openai_conversation"
 LLM_TITLE="Voice LLM"
 # Home Assistant names the agent's entity after the title.
 LLM_ENTITY="conversation.voice_llm"
+LLM_MAX_TOKENS="${LLM_MAX_TOKENS:-60}"
+LLM_USE_TOOLS="${LLM_USE_TOOLS:-false}"
 
 PIPELINES="${HASS_CONFIG}/.storage/assist_pipeline.pipelines"
 PIPELINE_NAME="Voice"
@@ -205,16 +207,46 @@ Answer questions about the home from the device states above. When asked to chan
 PROMPT
 }
 
+llm_conversation_json() {
+  jq -n --arg id "$(new_entry_id)" --arg title "$LLM_TITLE" \
+    --arg model "$LLM_MODEL" --arg prompt "$(llm_prompt)" \
+    --argjson max_tokens "$LLM_MAX_TOKENS" --argjson use_tools "$LLM_USE_TOOLS" '[{
+      subentry_id: $id,
+      subentry_type: "conversation",
+      title: $title,
+      unique_id: null,
+      data: {
+        prompt: $prompt,
+        chat_model: $model,
+        max_tokens: $max_tokens,
+        top_p: 1,
+        temperature: 0.5,
+        max_function_calls_per_conversation: 1,
+        attach_username: false,
+        use_tools: $use_tools,
+        context_threshold: 13000,
+        context_truncate_strategy: "clear"
+      }
+    }]'
+}
+
 # True when the agent's entry is missing, or its key, URL or model is out of date.
 llm_needed() {
   llm_enabled || return 1
   jq -e --rawfile key "$LLM_API_KEY_FILE" --arg url "$LLM_BASE_URL" --arg model "$LLM_MODEL" \
-    --arg domain "$LLM_DOMAIN" --arg title "$LLM_TITLE" '
+    --arg domain "$LLM_DOMAIN" --arg title "$LLM_TITLE" \
+    --argjson max_tokens "$LLM_MAX_TOKENS" --argjson use_tools "$LLM_USE_TOOLS" \
+    --arg prompt "$(llm_prompt)" '
     [.data.entries[] | select(.domain == $domain and .title == $title)] as $entries
     | ($entries | length) == 1
       and $entries[0].data.api_key == ($key | rtrimstr("\n"))
       and $entries[0].data.base_url == $url
-      and any($entries[0].subentries[]; .subentry_type == "conversation" and .data.chat_model == $model)
+      and any($entries[0].subentries[];
+          .subentry_type == "conversation"
+          and .data.chat_model == $model
+          and .data.max_tokens == $max_tokens
+          and .data.use_tools == $use_tools
+          and .data.prompt == $prompt)
   ' "$CONFIG_ENTRIES" >/dev/null && return 1
   return 0
 }
@@ -227,13 +259,21 @@ ensure_llm() {
     log "updating the conversation agent (${LLM_BASE_URL}, ${LLM_MODEL})"
     tmp="$(mktemp)"
     jq --rawfile key "$LLM_API_KEY_FILE" --arg url "$LLM_BASE_URL" --arg model "$LLM_MODEL" \
-      --arg domain "$LLM_DOMAIN" --arg title "$LLM_TITLE" --arg now "$(now_utc)" '
+      --arg domain "$LLM_DOMAIN" --arg title "$LLM_TITLE" --arg now "$(now_utc)" \
+      --arg prompt "$(llm_prompt)" --argjson max_tokens "$LLM_MAX_TOKENS" \
+      --argjson use_tools "$LLM_USE_TOOLS" '
       .data.entries |= map(
         if .domain == $domain and .title == $title then
           .data.api_key = ($key | rtrimstr("\n"))
           | .data.base_url = $url
           | .modified_at = $now
-          | .subentries |= map(if .subentry_type == "conversation" then .data.chat_model = $model else . end)
+          | .subentries |= map(
+              if .subentry_type == "conversation" then
+                .data.chat_model = $model
+                | .data.prompt = $prompt
+                | .data.max_tokens = $max_tokens
+                | .data.use_tools = $use_tools
+              else . end)
         else . end)
     ' "$CONFIG_ENTRIES" > "$tmp"
     install -o hass -g hass -m 0600 "$tmp" "$CONFIG_ENTRIES"
@@ -250,25 +290,7 @@ ensure_llm() {
       base_url: $url,
       skip_authentication: true,
       api_provider: "openai"
-    }')" 2 "$(jq -n --arg id "$(new_entry_id)" --arg title "$LLM_TITLE" \
-    --arg model "$LLM_MODEL" --arg prompt "$(llm_prompt)" '[{
-      subentry_id: $id,
-      subentry_type: "conversation",
-      title: $title,
-      unique_id: null,
-      data: {
-        prompt: $prompt,
-        chat_model: $model,
-        max_tokens: 150,
-        top_p: 1,
-        temperature: 0.5,
-        max_function_calls_per_conversation: 1,
-        attach_username: false,
-        use_tools: true,
-        context_threshold: 13000,
-        context_truncate_strategy: "clear"
-      }
-    }]')"
+    }')" 2 "$(llm_conversation_json)"
 }
 
 pipeline_json() {

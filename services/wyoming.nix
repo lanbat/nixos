@@ -19,14 +19,15 @@
 #
 # Services
 # --------
-# openwakeword (10300) — detects the wake word ("okay nabu", model okay_nabu).
-#   Uses bundled models; no download needed.
-#   Alternative wake words: hey_jarvis, hey_mycroft, alexa.
+# openwakeword (10300) — detects the wake word ("hey nabu", custom model).
+#   The model file must be named hey_nabu.tflite (see pkgs/hey-nabu-wakeword-model).
+#   Bundled alternatives: okay_nabu, hey_jarvis, hey_mycroft, alexa.
 #
 # faster-whisper (10301) — speech-to-text.
-#   Downloads the model on first start (~100 MB for small-int8).
-#   "small-int8" is a good CPU trade-off; use "base-int8" if the
-#   server is slow to respond, or "medium-int8" for higher accuracy.
+#   Downloads the model on first start (~40 MB for base-int8).
+#   base-int8 is the voice default: noticeably faster than small-int8 on CPU
+#   with enough accuracy for short commands. Use small-int8 if transcripts
+#   are often wrong.
 #
 # piper (10302) — text-to-speech (British English).
 #   Downloads the voice model on first start (~60 MB).
@@ -53,6 +54,10 @@
 
 let
   serverSatellite = config.lanbat.voiceSatelliteServer;
+  heyNabuModel = pkgs.fetchurl {
+    url = "https://raw.githubusercontent.com/fwartner/home-assistant-wakewords-collection/main/en/hey_nabu/hey_nabu_v2.tflite";
+    hash = "sha256-zhi2nhvd+1bnD+c51soPQj9wpucQ8Fs3a69qNiVokjQ=";
+  };
 in
 {
   lanbat.services.wyoming.extraPorts = [
@@ -68,9 +73,18 @@ in
   services.wyoming.openwakeword = {
     enable = true;
     uri = "tcp://127.0.0.1:10300";
-    # preloadModels was removed in wyoming-openwakeword 2.0 — models are now
-    # loaded on demand when a wake-word detection request arrives.
+    # preloadModels was removed in wyoming-openwakeword 2.0 — models load when
+    # HA requests them, but only from dirs passed via --custom-model-dir.
+    extraArgs = [
+      "--custom-model-dir"
+      "/var/lib/openwakeword/custom-models"
+    ];
   };
+
+  systemd.tmpfiles.rules = [
+    "d /var/lib/openwakeword/custom-models 0755 root root -"
+    "L+ /var/lib/openwakeword/custom-models/hey_nabu.tflite - - - - ${heyNabuModel}"
+  ];
 
   # ---------------------------------------------------------------------------
   # Speech-to-text
@@ -78,7 +92,7 @@ in
   services.wyoming.faster-whisper.servers."main" = {
     enable = true;
     uri = "tcp://127.0.0.1:10301";
-    model = "small-int8"; # ~100 MB; good CPU accuracy/speed balance
+    model = "base-int8"; # faster CPU STT for voice commands
     language = "en";
     device = "cpu";
   };
