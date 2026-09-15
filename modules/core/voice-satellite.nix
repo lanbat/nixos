@@ -78,6 +78,9 @@ let
     ${coreutils}/bin/rm -f ${announced}
     message=$(${coreutils}/bin/cat)
     [[ -n $message ]] || exit 0
+    if [[ "${toString cfg.alwaysPlayLocally}" == "1" ]]; then
+      exit 0
+    fi
     if [[ ! -s ${runtimeDir}/ha-token ]]; then
       echo "voice-satellite: no Home Assistant token (ha-voice-token.age), playing the reply here" >&2
       exit 0
@@ -153,6 +156,17 @@ in
         Home Assistant area the satellite is in. Its replies then play on the
         area's Music Assistant players, and on its own speaker only when the
         area has none.
+      '';
+    };
+
+    alwaysPlayLocally = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Play the pipeline's Piper audio on this satellite immediately, instead
+        of handing the reply to Home Assistant's voice_reply script for Music
+        Assistant room speakers. Skips an HTTPS round trip and a second TTS
+        pass, which cuts perceived latency.
       '';
     };
 

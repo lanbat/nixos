@@ -179,10 +179,13 @@ in
         export PIPELINE_STT_LANGUAGE="${config.services.wyoming.faster-whisper.servers.main.language}"
         export PIPELINE_TTS_LANGUAGE="${lib.head (lib.splitString "-" piper.voice)}"
         export PIPELINE_TTS_VOICE="${piper.voice}"
+        export PIPELINE_WAKE_WORD="hey_nabu"
         ${lib.optionalString (llm != null) ''
           export LLM_BASE_URL="${llm.baseUrl}"
           export LLM_MODEL="${llm.model}"
           export LLM_API_KEY_FILE="${config.age.secrets.ha-llm-api-key.path}"
+          export LLM_MAX_TOKENS="60"
+          export LLM_USE_TOOLS="false"
         ''}
         ${lib.optionalString voiceRooms ''
           export VOICE_TOKEN_RECORD_FILE="${config.age.secrets.ha-voice-refresh-token.path}"
@@ -424,6 +427,36 @@ in
             ];
           }
         ];
+      };
+    };
+
+    systemd.services.runpod-ha-llm-keepalive = lib.mkIf (llm != null) {
+      description = "Ping RunPod HA LLM to avoid scale-to-zero cold starts";
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+      };
+      path = [
+        pkgs.curl
+        pkgs.coreutils
+      ];
+      script = ''
+        key=$(cat ${config.age.secrets.ha-llm-api-key.path})
+        curl -sS --max-time 45 \
+          -H "Authorization: Bearer $key" \
+          -H "Content-Type: application/json" \
+          -d '{"model":"${llm.model}","messages":[{"role":"user","content":"ping"}],"max_tokens":1,"chat_template_kwargs":{"enable_thinking":false}}' \
+          "${llm.baseUrl}/chat/completions" >/dev/null || true
+      '';
+    };
+
+    systemd.timers.runpod-ha-llm-keepalive = lib.mkIf (llm != null) {
+      description = "Keep RunPod HA LLM worker warm between voice commands";
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec = "3min";
+        OnUnitActiveSec = "4min";
+        AccuracySec = "1min";
       };
     };
 
