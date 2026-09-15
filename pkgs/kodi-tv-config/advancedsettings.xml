@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<advancedsettings>
+  <video>
+    <adjustrefreshrate>
+      <override>
+        <fpsmin>23.966</fpsmin>
+        <fpsmax>23.986</fpsmax>
+        <refreshmin>23.966</refreshmin>
+        <refreshmax>23.986</refreshmax>
+      </override>
+      <override>
+        <fpsmin>24.0</fpsmin>
+        <fpsmax>24.0</fpsmax>
+        <refreshmin>24.0</refreshmin>
+        <refreshmax>24.0</refreshmax>
+      </override>
+      <override>
+        <fpsmin>29.966</fpsmin>
+        <fpsmax>29.986</fpsmax>
+        <refreshmin>29.966</refreshmin>
+        <refreshmax>29.986</refreshmax>
+      </override>
+      <override>
+        <fpsmin>50.0</fpsmin>
+        <fpsmax>50.0</fpsmax>
+        <refreshmin>50.0</refreshmin>
+        <refreshmax>50.0</refreshmax>
+      </override>
+    </adjustrefreshrate>
+    <displaylatency>100</displaylatency>
+  </video>
+
+  <cache>
+    <memcachesize>256</memcachesize>
+    <readfactor>4.0</readfactor>
+  </cache>
+
+  <videolibrary>
+    <updateonstartup>true</updateonstartup>
+    <cleanonupdate>true</cleanonupdate>
+    <scanonstartup>false</scanonstartup>
+  </videolibrary>
+
+  <musiclibrary>
+    <updateonstartup>true</updateonstartup>
+    <scanonstartup>false</scanonstartup>
+  </musiclibrary>
+</advancedsettings>

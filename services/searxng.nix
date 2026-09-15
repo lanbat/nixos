@@ -37,7 +37,7 @@ in
   };
 
   virtualisation.oci-containers.containers."searxng" = {
-    image = "docker.io/searxng/searxng:2025.5.12-7a4efb280";
+    image = "docker.io/searxng/searxng:2025.5.12-5d99373";
 
     volumes = [
       "/var/lib/searxng:/etc/searxng"
@@ -95,12 +95,16 @@ in
           pool_maxsize: 10
         YAML
                 chown -R searxng:searxng /var/lib/searxng
+                # 0755: uwsgi workers run as the container's searxng user, not root.
+                # Rootless podman maps the host searxng uid to container root, so 0750
+                # would leave workers unable to read settings.yml.
+                chmod 755 /var/lib/searxng
       '';
       RemainAfterExit = true;
     };
   };
 
   systemd.tmpfiles.rules = [
-    "d /var/lib/searxng 0750 searxng searxng -"
+    "d /var/lib/searxng 0755 searxng searxng -"
   ];
 }
