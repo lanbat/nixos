@@ -99,8 +99,22 @@ let
         type: openvino
         device: AUTO
 
+    # LPR uses YOLOv9 plate detection + PaddleOCR on detected cars/motorcycles.
+    # Requires car/motorcycle in objects.track — do not add license_plate (Frigate+ only).
     lpr:
       enabled: true
+      detection_threshold: 0.55
+      min_area: 800
+      recognition_threshold: 0.85
+      min_plate_length: 7
+      match_distance: 1
+      format: "^[A-Z]{2}[0-9]{2} ?[A-Z]{3}$"
+      debug_save_plates: true
+      replace_rules:
+        - pattern: "O"
+          replacement: "0"
+        - pattern: "I"
+          replacement: "1"
 
     # go2rtc ingests camera feeds and re-serves them as local RTSP.
     # http-flv is the recommended transport for Reolink ≤5 MP cameras.
@@ -132,6 +146,10 @@ let
           min_initialized: 2
         lpr:
           enabled: true
+          # Overhead first-storey view — mild enhancement helps OCR without blurring.
+          enhancement: 3
+          # Lower than global default; plates are smaller at driveway distance.
+          min_area: 600
         zones:
           driveway:
             coordinates: 0,0.928,0,0.298,0.328,0.124,0.586,0.044,0.712,0.014,0.793,0,1,0,1,1,0.435,1,0.438,0.922,0.012,0.92,0.012,0.978,0.441,0.978,0.433,1,0,1

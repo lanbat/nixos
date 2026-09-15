@@ -104,6 +104,16 @@ library_exists() {
   api_call "${JELLYFIN_URL}/Library/VirtualFolders" | jq -e --arg name "$name" '.[] | select(.Name == $name)' >/dev/null
 }
 
+library_options_json() {
+  local path="$1"
+  jq -n --arg path "$path" '{
+    LibraryOptions: {
+      PathInfos: [{Path: $path}],
+      EnableRealtimeMonitor: false
+    }
+  }'
+}
+
 add_library() {
   local collection_type="$1"
   local name="$2"
@@ -122,7 +132,7 @@ add_library() {
   api_call -X POST \
     "${JELLYFIN_URL}/Library/VirtualFolders?collectionType=${collection_type}&name=$(jq -rn --arg v "$name" '$v|@uri')&refreshLibrary=true" \
     -H 'Content-Type: application/json' \
-    -d "$(jq -n --arg path "$path" '{LibraryOptions: {PathInfos: [{Path: $path}]}}')" \
+    -d "$(library_options_json "$path")" \
     -o /dev/null
 }
 
@@ -163,6 +173,65 @@ refresh_all_libraries() {
   log "triggering full library scan"
   api_call -X POST "${JELLYFIN_URL}/Library/Refresh" -o /dev/null || \
     log "library refresh request failed (may already be scanning)"
+}
+
+# Real-time library monitoring uses inotify, which does not work on NFS mounts.
+# Pi storage is written by qBittorrent on the server; Jellyfin never sees those
+# events. Disable realtime monitoring and rely on scheduled + bootstrap scans.
+configure_nfs_libraries() {
+  local folders updated=false
+  folders="$(api_call "${JELLYFIN_URL}/Library/VirtualFolders")"
+
+  while IFS= read -r library; do
+    [[ -n "$library" ]] || continue
+    local id name options
+    id="$(jq -r '.ItemId // empty' <<< "$library")"
+    name="$(jq -r '.Name // empty' <<< "$library")"
+    [[ -n "$id" && -n "$name" ]] || continue
+
+    if [[ "$(jq -r '.LibraryOptions.EnableRealtimeMonitor // true' <<< "$library")" == "false" ]]; then
+      continue
+    fi
+
+    options="$(jq '.LibraryOptions | .EnableRealtimeMonitor = false' <<< "$library")"
+    log "disabling realtime monitor on ${name} (NFS mount)"
+    api_call -X POST "${JELLYFIN_URL}/Library/VirtualFolders/LibraryOptions" \
+      -H 'Content-Type: application/json' \
+      -d "$(jq -n --arg id "$id" --argjson opts "$options" '{Id: $id, LibraryOptions: $opts}')" \
+      -o /dev/null
+    updated=true
+  done < <(jq -c '.[] | select(.LibraryOptions != null)' <<< "$folders")
+
+  if [[ "$updated" == true ]]; then
+    log "realtime monitoring disabled on NFS libraries"
+  fi
+}
+
+# Default Jellyfin scan interval is 12 hours; shorten it because NFS has no
+# realtime monitoring. 2 hours = 72_000_000_000 .NET ticks.
+configure_scheduled_scan() {
+  local task_id interval_ticks=72000000000
+  task_id="$(api_call "${JELLYFIN_URL}/ScheduledTasks" | jq -r '
+    .[] | select(.Key == "RefreshLibrary") | .Id
+  ')"
+  if [[ -z "$task_id" ]]; then
+    log "RefreshLibrary scheduled task not found"
+    return 0
+  fi
+
+  local current_interval
+  current_interval="$(api_call "${JELLYFIN_URL}/ScheduledTasks" | jq -r --arg id "$task_id" '
+    .[] | select(.Id == $id) | .Triggers[0].IntervalTicks // empty
+  ')"
+  if [[ "$current_interval" == "$interval_ticks" ]]; then
+    return 0
+  fi
+
+  log "configuring library scan every 2 hours (NFS has no realtime monitoring)"
+  api_call -X POST "${JELLYFIN_URL}/ScheduledTasks/${task_id}/Triggers" \
+    -H 'Content-Type: application/json' \
+    -d "[{\"Type\":\"IntervalTrigger\",\"IntervalTicks\":${interval_ticks}}]" \
+    -o /dev/null
 }
 
 uri_encode() {
@@ -354,6 +423,20 @@ repair_media_permissions() {
       chown qbt:media "$path" 2>/dev/null || true
       chmod 2775 "$path" 2>/dev/null || true
     fi
+
+    # Jellyfin runs as the media group. qBittorrent should inherit that via
+    # setgid directories, but older downloads may block traversal or reads.
+    local fixed_dirs fixed_files wrong_group
+    fixed_dirs="$(find "$path" -type d \( ! -perm -2000 -o ! -perm -g+x \) -print 2>/dev/null | wc -l)"
+    fixed_files="$(find "$path" -type f ! -perm -g+r -print 2>/dev/null | wc -l)"
+    wrong_group="$(find "$path" \( -type f -o -type d \) -user qbt ! -group media -print 2>/dev/null | wc -l)"
+    if [[ "$fixed_dirs" -gt 0 || "$fixed_files" -gt 0 || "$wrong_group" -gt 0 ]]; then
+      log "repairing ${path} permissions (${fixed_dirs} dirs, ${fixed_files} files unreadable by media group, ${wrong_group} wrong group)"
+      find "$path" -type d -user qbt ! -group media -exec chown qbt:media {} + 2>/dev/null || true
+      find "$path" -type f -user qbt ! -group media -exec chgrp media {} + 2>/dev/null || true
+      find "$path" -type d \( ! -perm -2000 -o ! -perm -g+x \) -exec chmod 2775 {} + 2>/dev/null || true
+      find "$path" -type f ! -perm -g+r -exec chmod g+r {} + 2>/dev/null || true
+    fi
   done
 }
 
@@ -362,6 +445,8 @@ run_configuration() {
   harden_adult_permissions
   api_auth
   setup_libraries
+  configure_nfs_libraries
+  configure_scheduled_scan
   setup_plugins
   setup_sso
   setup_branding
@@ -376,6 +461,9 @@ if [[ -f "$CONFIG_STATE_FILE" ]] && wizard_complete && configuration_complete 2>
   harden_adult_permissions
   api_auth
   setup_libraries
+  configure_nfs_libraries
+  configure_scheduled_scan
+  refresh_all_libraries
   log "configuration already complete"
   exit 0
 fi

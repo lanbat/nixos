@@ -2,7 +2,9 @@
   lib,
   stdenv,
   makeWrapper,
+  coreutils,
   curl,
+  findutils,
   jq,
   systemd,
 }:
@@ -22,7 +24,9 @@ stdenv.mkDerivation {
     wrapProgram $out/bin/jellyfin-bootstrap \
       --prefix PATH : "${
         lib.makeBinPath [
+          coreutils
           curl
+          findutils
           jq
           systemd
         ]
