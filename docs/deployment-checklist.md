@@ -704,6 +704,10 @@ Assistant to the snapserver, so every Snapcast client becomes a player.
 > **Tip:** faster-whisper and piper download their models on first start, and
 > an LLM endpoint that scales to zero is slow to answer its first request after
 > being idle. Commands Home Assistant understands itself don't wait for the LLM.
+> `home-assistant-post-setup` sets each satellite's **Finished speaking
+> detection** to **Aggressive** (0.25 s silence after a command). If a satellite
+> still feels slow to react, check that setting under **Settings → Devices &
+> services → Wyoming → Pi Satellite**.
 
 ### 3m. Music Assistant
 

@@ -88,6 +88,9 @@ in
   };
 
   lanbat.voiceSatellite.speaker = "pipewire";
+  lanbat.voiceSatellite.awakeSound = lib.mkDefault (
+    "${pkgs.callPackage ../../pkgs/voice-satellite-awake-chime { }}/awake.wav"
+  );
 
   services.wyoming.satellite.extraArgs = lib.mkIf satellite.enable [
     # Home Assistant heard the wake word.

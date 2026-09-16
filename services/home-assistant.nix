@@ -184,7 +184,7 @@ in
           export LLM_BASE_URL="${llm.baseUrl}"
           export LLM_MODEL="${llm.model}"
           export LLM_API_KEY_FILE="${config.age.secrets.ha-llm-api-key.path}"
-          export LLM_MAX_TOKENS="60"
+          export LLM_MAX_TOKENS="150"
           export LLM_USE_TOOLS="false"
         ''}
         ${lib.optionalString voiceRooms ''

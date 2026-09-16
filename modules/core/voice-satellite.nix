@@ -170,6 +170,17 @@ in
       '';
     };
 
+    awakeSound = mkOption {
+      type = types.nullOr types.path;
+      default = null;
+      example = "/nix/store/…-voice-satellite-awake-chime/awake.wav";
+      description = ''
+        WAV file played on the speaker when Home Assistant detects the wake word
+        (wyoming-satellite --awake-wav). Use a short clip (~0.2 s) at 22.05 kHz
+        mono so the mic is not muted for long before command capture.
+      '';
+    };
+
     homeAssistant = {
       url = mkOption {
         type = types.str;
@@ -208,16 +219,27 @@ in
       inherit (cfg) name uri;
       user = "wyoming-satellite";
       group = "wyoming-satellite";
-      microphone.command = "${micCommand}";
+      microphone = {
+        command = "${micCommand}";
+        # Home Assistant runs its own VAD and optional noise processing on the
+        # stream; satellite-side WebRTC gain/suppression adds latency only.
+        autoGain = 0;
+        noiseSuppression = 0;
+      };
       # Home Assistant detects the wake word, so the satellite streams all the
       # time. Its own VAD can't run here anyway: pysilero-vad takes 512-sample
       # chunks only, and the webrtc processing re-chunks the audio.
       vad.enable = false;
       sound.command = "${soundCommand}";
-      extraArgs = lib.optionals (cfg.room != null) [
-        "--synthesize-command"
-        "${replyCommand}"
-      ];
+      extraArgs =
+        lib.optionals (cfg.room != null && !cfg.alwaysPlayLocally) [
+          "--synthesize-command"
+          "${replyCommand}"
+        ]
+        ++ lib.optionals (cfg.awakeSound != null) [
+          "--awake-wav"
+          cfg.awakeSound
+        ];
     };
 
     systemd.services.wyoming-satellite.serviceConfig = {

@@ -31,8 +31,8 @@
 #
 # piper (10302) — text-to-speech (British English).
 #   Downloads the voice model on first start (~60 MB).
-#   Voice "en_GB-alba-medium" is a natural-sounding British English
-#   female voice.  See https://rhasspy.github.io/piper-samples/ for
+#   Voice "en_GB-alan-medium" is a natural-sounding British English
+#   male voice.  See https://rhasspy.github.io/piper-samples/ for
 #   all available voices.
 #
 # satellite (10700) — this server's microphone and speaker
@@ -73,11 +73,13 @@ in
   services.wyoming.openwakeword = {
     enable = true;
     uri = "tcp://127.0.0.1:10300";
+    threshold = 0.35;
     # preloadModels was removed in wyoming-openwakeword 2.0 — models load when
     # HA requests them, but only from dirs passed via --custom-model-dir.
     extraArgs = [
       "--custom-model-dir"
       "/var/lib/openwakeword/custom-models"
+      "--debug"
     ];
   };
 
@@ -103,7 +105,7 @@ in
   services.wyoming.piper.servers."main" = {
     enable = true;
     uri = "tcp://127.0.0.1:10302";
-    voice = "en_GB-alba-medium"; # see https://rhasspy.github.io/piper-samples/
+    voice = "en_GB-alan-medium"; # see https://rhasspy.github.io/piper-samples/
   };
 
   # ---------------------------------------------------------------------------
