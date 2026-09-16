@@ -46,7 +46,7 @@
 
 let
   musicLibrary = "/srv/storage/b/media/music";
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
   setup = pkgs.callPackage ../pkgs/music-assistant-setup {
     inherit pkgs;
   };

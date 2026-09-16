@@ -74,7 +74,7 @@
       # Match the host qbt account so NFS media dirs (qbt:media, mode 2775) are writable.
       PUID = toString config.lanbat.services.qbittorrent.account.uid;
       PGID = toString config.users.groups.media.gid;
-      TZ = config.lanbat.timezone;
+      TZ = config.lanbat.deployment.timezone;
       WEBUI_PORT = "8090";
     };
 
@@ -119,7 +119,7 @@
         set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
         # Host networking: Caddy connects via loopback (127.0.0.1). Bridge/pasta
         # used to rewrite the source to the server IP — keep both.
-        set_pref 'WebUI\AuthSubnetWhitelist' '127.0.0.1/32, ::1/128, ${config.lanbat.serverIp}/32, ::ffff:${config.lanbat.serverIp}/128'
+        set_pref 'WebUI\AuthSubnetWhitelist' '127.0.0.1/32, ::1/128, ${config.lanbat.deployment.serverIp}/32, ::ffff:${config.lanbat.deployment.serverIp}/128'
       ''}"
     ];
     Restart = lib.mkForce "on-failure";

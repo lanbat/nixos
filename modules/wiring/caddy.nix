@@ -17,7 +17,7 @@
 { config, lib, ... }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
   authentikPort = config.lanbat.services.authentik.port;
 
   # OAuth callback after login — must hit the outpost, not the backend app.

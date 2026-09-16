@@ -45,7 +45,7 @@
 }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
 
   # ── Blueprint 1: Proxy providers (Caddy forward-auth) ─────────────────────
   proxyBlueprint = pkgs.writeText "10-proxy-providers.yaml" ''

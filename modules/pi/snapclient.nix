@@ -32,7 +32,7 @@
     wants = [ "pipewire.socket" ];
     environment.PIPEWIRE_RUNTIME_DIR = "/run/pipewire";
     serviceConfig = {
-      ExecStart = "${pkgs.snapcast}/bin/snapclient --host ${config.lanbat.serverIp} --port 1704 --player pipewire";
+      ExecStart = "${pkgs.snapcast}/bin/snapclient --host ${config.lanbat.deployment.serverIp} --port 1704 --player pipewire";
       Restart = "on-failure";
       RestartSec = "5s";
       User = "snapclient";

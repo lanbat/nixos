@@ -2,10 +2,14 @@
 
 [![check](https://github.com/lanbat/nixos/actions/workflows/check.yml/badge.svg)](https://github.com/lanbat/nixos/actions/workflows/check.yml)
 
-NixOS configuration for a two-machine homelab:
+Extensible NixOS configuration for homelab deployments. Each **deployment profile**
+is a site (home lab, cabin, staging, …) with its own domain, hosts, and plugins.
+Within a profile, hosts take **roles** (server, storage-pi, voice-pi) and enable
+**plugins** (services, TV frontend, voice satellite, or external flake inputs).
 
-- **server** — main compute host, all services, reverse proxy, identity/SSO
-- **pi** — encrypted storage appliance + TV/gaming frontend (Raspberry Pi 5)
+See [docs/extensibility.md](docs/extensibility.md) for multi-site and multi-machine
+patterns, and flake apps for validation (`nix run .#validate-deploy`) and deploy
+queries (`nix run .#hosts`, `nix run .#deploy-query -- server-ip`).
 
 ## Quick links
 
@@ -48,22 +52,19 @@ lanbat.services.jellyfin = {
 ## Repository structure
 
 ```
-flake.nix                 hosts, deploy-rs nodes, checks, dev shell
-local.nix.example         template for your settings (copy to local.nix, gitignored)
-hosts/
-  example-settings.nix    placeholder settings for the example hosts CI evaluates
-  server/                 default.nix (imports, networking), disk.nix (disko layout), hardware.nix
-  pi/                     default.nix, hardware.nix
-services/                 one file per server service, each describing itself in lanbat.services
-modules/
-  core/                   settings, the service interface, base system, SSH, shared accounts
-  wiring/                 vhosts, workload gating, NFS, on-demand, accounts, secrets, checks
-  server/                 control LUKS layer and Tang gating, backups
-  pi/                     Clevis unlock, storage, NFS exports, TV frontend, audio, voice, metrics
-tests/                    assertion tests and the workload-gate VM test
-pkgs/                     CA landing page, ES-DE and TV sessions, on-demand activator, helper scripts
-secrets/                  agenix-encrypted secrets
-docs/                     design, operations and deployment guides
+flake.nix                 dynamic hosts from deployment profiles, deploy-rs, checks
+deploy.nix.example        root manifest listing active profiles (copy to deploy.nix)
+deployments/
+  example/deploy.nix      CI example profile
+  homelab/deploy.nix.example   template for one site
+lib/                      host builder, roles, plugin loader
+plugins/                  built-in plugins (services, tv, voice)
+services/                 one file per server service
+modules/                  core, wiring, server, pi infrastructure
+hosts/server/             hardware.nix, disk.nix (disko layout)
+hosts/pi/                 hardware.nix (Raspberry Pi 5)
+tests/                    assertion tests and VM tests
+docs/                     architecture, extensibility, plugins, migration
 ```
 
 ## Services
@@ -112,18 +113,18 @@ Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) fo
 ```bash
 nix develop               # deploy (deploy-rs), agenix, nixos-anywhere
 
-# Deploy from your workstation; rolls back if the new system breaks SSH
-deploy path:.#server
-deploy path:.#pi
+# Set up profiles (see docs/migration.md), then deploy with path: reference:
+deploy path:.#homelab-server
+deploy path:.#homelab-pi-storage
 ```
 
-The real `server` and `pi` configurations only exist when `local.nix` (copied from
-`local.nix.example`) is present, and only a `path:` flake reference includes that
-gitignored file. The server is installed with nixos-anywhere, which partitions its
-disk from `hosts/server/disk.nix`. Hosts also auto-upgrade nightly from a local
-clone at `/etc/nixos`; run `nix flake update`, push, or deploy immediately. See
-[docs/deployment-checklist.md](docs/deployment-checklist.md) for the full
-step-by-step guide.
+Host names are `<profile>-<host-key>` (e.g. `homelab-server`). A single-profile
+setup that inlines `{ deployment, hosts }` in `deploy.nix` without a `profiles`
+wrapper uses unprefixed names (`server`, `pi-storage`).
+
+Configurations only exist when `deploy.nix` is present (gitignored). CI evaluates
+the checked-in `deployments/example` profile as `example-server` and
+`example-pi-storage`. See [docs/deployment-checklist.md](docs/deployment-checklist.md).
 
 ## Design principles
 

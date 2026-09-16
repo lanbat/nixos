@@ -44,16 +44,16 @@
 }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
   authHeaderComponent = pkgs.callPackage ../pkgs/home-assistant-auth-header { };
   bootstrap = pkgs.callPackage ../pkgs/home-assistant-bootstrap { };
   postSetup = pkgs.callPackage ../pkgs/home-assistant-post-setup { };
-  llm = config.lanbat.haLlm;
+  llm = config.lanbat.deployment.haLlm;
   llmComponent = pkgs.callPackage ../pkgs/home-assistant-extended-openai-conversation { };
   satellite = config.lanbat.voiceSatellite;
   piper = config.services.wyoming.piper.servers.main;
   # A satellite with a room hands its replies to the voice_reply script.
-  voiceRooms = lib.any (room: room != null) (lib.attrValues config.lanbat.voiceRooms);
+  voiceRooms = config.lanbat.deployment.voiceRooms != { };
 in
 {
   options.lanbat.homeAssistant = {
@@ -172,7 +172,7 @@ in
         export MQTT_PASSWORD="$(cat ${config.age.secrets.mosquitto-ha-pass.path})"
         export FRIGATE_URL="http://127.0.0.1:5000/"
         export MUSIC_ASSISTANT_URL="http://127.0.0.1:8095"
-        export PI_HOST="${config.lanbat.piIp}"
+        export PI_HOST="${config.lanbat.deployment.storageIp}"
         ${lib.optionalString satellite.enable ''
           export LOCAL_SATELLITE_PORT="${lib.last (lib.splitString ":" satellite.uri)}"
         ''}
@@ -257,11 +257,11 @@ in
 
         homeassistant = {
           name = "Home";
-          latitude = config.lanbat.haLatitude;
-          longitude = config.lanbat.haLongitude;
-          elevation = config.lanbat.haElevation;
+          latitude = config.lanbat.deployment.haLatitude;
+          longitude = config.lanbat.deployment.haLongitude;
+          elevation = config.lanbat.deployment.haElevation;
           unit_system = "metric";
-          time_zone = config.lanbat.timezone;
+          time_zone = config.lanbat.deployment.timezone;
           external_url = "https://ha.${domain}";
           # Music Assistant fetches tts_proxy URLs server-side; use loopback so
           # announcements are not blocked by ip_ban when MA calls 192.168.1.10.

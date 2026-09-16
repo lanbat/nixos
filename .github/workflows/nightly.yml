@@ -1,0 +1,29 @@
+name: nightly
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server-vm:
+    name: server-vm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Enable KVM
+        run: |
+          if [ ! -e /dev/kvm ]; then
+            echo "::error::This runner has no /dev/kvm; the server VM test needs KVM."
+            exit 1
+          fi
+          sudo chmod 0666 /dev/kvm
+          ls -l /dev/kvm
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: system-features = nixos-test benchmark big-parallel kvm
+      - name: Boot the full server configuration
+        run: nix build -L .#checks.x86_64-linux.server

@@ -28,7 +28,7 @@
 }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
 
   # "home.example.com" → "home\.example\.com" for the regex below.
   domainRe = builtins.replaceStrings [ "." ] [ "\\." ] domain;

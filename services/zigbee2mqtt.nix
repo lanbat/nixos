@@ -104,8 +104,8 @@
 
   # udev rule — creates /dev/zigbee symlink, group-owned by "ha".
   services.udev.extraRules = ''
-    SUBSYSTEM=="tty", ATTRS{idVendor}=="${config.lanbat.zigbeeVendorId}", \
-      ATTRS{idProduct}=="${config.lanbat.zigbeeProductId}", \
+    SUBSYSTEM=="tty", ATTRS{idVendor}=="${config.lanbat.deployment.zigbeeVendorId}", \
+      ATTRS{idProduct}=="${config.lanbat.deployment.zigbeeProductId}", \
       SYMLINK+="zigbee", GROUP="ha", MODE="0660"
   '';
 }

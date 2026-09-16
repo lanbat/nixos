@@ -22,17 +22,21 @@ echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
   nix develop
   ```
 - [ ] Generate your SSH keypair if you don't have one: `ssh-keygen -t ed25519`
-- [ ] Create your local settings file: `cp local.nix.example local.nix`
-- [ ] Fill in all values in `local.nix` (gitignored — never commit it). None have
-  defaults; the options are documented in `modules/core/settings.nix`.
-  - **Network:** `serverIp`, `piIp`, `gatewayIp`, `lanSubnet`, `serverHostname`, `piHostname`
-  - **DNS:** `domain` (e.g. `"home.example.com"`), `rootDomain` (e.g. `"example.com"`)
-  - **NFS:** `nfsIdmapdDomain` (any string, e.g. `"home.lan"`)
-  - **System:** `timezone`, `phoneRegion`
+- [ ] Create your deployment files:
+  ```bash
+  cp deploy.nix.example deploy.nix
+  mkdir -p deployments/homelab
+  cp deployments/homelab/deploy.nix.example deployments/homelab/deploy.nix
+  ```
+- [ ] Fill in all values in `deploy.nix` and `deployments/homelab/deploy.nix` (gitignored — never commit them). None have
+  defaults; the options are documented in `modules/core/settings.nix` and `docs/extensibility.md`.
+  - **Deployment:** `domain`, `rootDomain`, `gatewayIp`, `lanSubnet`, `timezone`, `adminSshKey`, …
+  - **Server host** (`hosts.server`): `networking.ip`, `networking.interface`, `disks.system`
+  - **Storage Pi host** (`hosts.pi-storage`): `networking`, `storage.drives.a/b`
   - **Home Assistant location:** `haLatitude`, `haLongitude`, `haElevation`
-  - **Server disk:** `serverDisk` — filled in at step 1b
-  - **Raspberry Pi drives:** `piStorageDriveA`, `piStorageDriveB` — filled in at step 2c
-  - **Access:** `adminSshKey` (`cat ~/.ssh/id_ed25519.pub`)
+  - **Server disk:** `hosts.server.disks.system` — filled in at step 1b
+  - **Raspberry Pi drives:** `hosts.pi-storage.storage.drives` — filled in at step 2c
+  - **Access:** `adminSshKey` in `deployment` (`cat ~/.ssh/id_ed25519.pub`)
   - **Zigbee dongle:** plug it into any Linux machine and run `lsusb`:
     ```
     Bus 001 Device 003: ID 10c4:ea60 Silicon Labs CP210x UART Bridge
@@ -47,12 +51,12 @@ echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
 > safe to commit. Evaluation needs every declared `.age` file to exist; decryption
 > only happens on the real machines.
 
-Create your `secrets/secrets.nix` (gitignored — like `local.nix`):
+Create your `secrets/secrets.nix` (gitignored — like `deploy.nix`):
 ```bash
 cp secrets/secrets.nix.example secrets/secrets.nix
 ```
 Fill in your workstation public key (`cat ~/.ssh/id_ed25519.pub`) as `admin`. The
-`server` and `pi` keys are filled in at steps 1c and 2e.
+`server` and `pi-storage` keys are filled in at steps 1c and 2e.
 
 Generate all purely-random secrets automatically:
 ```bash
@@ -135,7 +139,7 @@ ssh nixos@<installer-ip> lsblk -o NAME,SIZE,MODEL
 ssh nixos@<installer-ip> ls -l /dev/disk/by-id/
 ```
 
-Set `serverDisk` in `local.nix` to the whole-disk entry (no `-partN` suffix), e.g.
+Set `serverDisk` in `deployments/homelab/deploy.nix` to the whole-disk entry (no `-partN` suffix), e.g.
 `"/dev/disk/by-id/nvme-Samsung_SSD_990_PRO_2TB_S7KHNJ0W123456"`. Don't pick the USB
 installer.
 
@@ -145,7 +149,7 @@ The layout gives the host root 150 GiB, the control layer 1 GiB and the workload
 they don't suit your disk. Check that the configuration builds:
 
 ```bash
-nix build path:.#nixosConfigurations.server.config.system.build.toplevel
+nix build path:.#nixosConfigurations.homelab-server.config.system.build.toplevel
 ```
 
 ### 1c. Create the server's SSH host key
@@ -181,7 +185,7 @@ These are the passphrases you type for `unlock-control` and `unlock-workload`:
 ### 1e. Install
 
 ```bash
-nixos-anywhere --flake path:.#server \
+nixos-anywhere --flake path:.#homelab-server \
   --target-host nixos@<installer-ip> \
   --disk-encryption-keys /tmp/control.key /tmp/control.key \
   --disk-encryption-keys /tmp/workload.key /tmp/workload.key \
@@ -198,7 +202,7 @@ The server reboots into the installed system.
 
 The server boots without any passphrase. Both LUKS layers stay locked.
 
-- SSH in: `ssh admin@<serverIp>`.
+- SSH in: `ssh admin@<server-ip>` (from `hosts.server.networking.ip`).
 - Always-on services start; workload-gated services wait for `unlock-workload`.
 - Check: `sudo server-health`
 
@@ -211,7 +215,7 @@ sudo cryptsetup luksHeaderBackup /dev/lanbat/workload --header-backup-file /tmp/
 sudo chown admin /tmp/server-*-luks-header.img
 
 # From your workstation:
-scp admin@<serverIp>:/tmp/server-*-luks-header.img ~/
+scp admin@<server-ip>:/tmp/server-*-luks-header.img ~/
 # Store these files OFFLINE (USB drive, secure physical location).
 # A lost header means the volume is unrecoverable even with the passphrase.
 ```
@@ -253,7 +257,7 @@ systemctl status caddy podman-authentik-server postgresql
 The root CA cert is pinned in the repo and available at boot (`/etc/caddy/ca-root.crt`);
 Caddy does not need time to generate it.
 
-From now on, deploy changes from your workstation with `deploy path:.#server`.
+From now on, deploy changes from your workstation with `deploy path:.#homelab-server`.
 
 ---
 
@@ -329,7 +333,7 @@ sudo cryptsetup luksOpen /dev/disk/by-id/DRIVE_B_ID storage-b
 sudo mkfs.xfs -L storage-b /dev/mapper/storage-b
 ```
 
-Set `piStorageDriveA` and `piStorageDriveB` in `local.nix` to the by-id filenames
+Set `piStorageDriveA` and `piStorageDriveB` in `deployments/homelab/deploy.nix` to the by-id filenames
 (without the `/dev/disk/by-id/` prefix).
 
 ### 2d. Bind Clevis to Tang
@@ -355,8 +359,9 @@ ssh root@<pi-ip> cat /etc/ssh/ssh_host_ed25519_key.pub
 The installer keeps this key when you switch to your configuration in step 2f, because
 it stays on the card.
 
-Put it in `secrets/secrets.nix` as `pi`, add `pi` to the recipients of
-`telegraf-token.age`, then re-encrypt and commit:
+Put it in `secrets/secrets.nix` as `pi-storage` (matching `hosts.pi-storage`),
+ensure `telegraf-token.age` and `ha-voice-token.age` use `allKeys`, then
+re-encrypt and commit:
 ```bash
 (cd secrets && agenix -r)
 git add secrets/*.age && git commit -m "secrets: add pi host key"
@@ -369,7 +374,7 @@ your configuration in place rather than reinstalling. It has no `admin` user yet
 first switch logs in as root and builds on the Pi itself (no emulation needed):
 
 ```bash
-nix run nixpkgs#nixos-rebuild -- switch --flake path:.#pi \
+nix run nixpkgs#nixos-rebuild -- switch --flake path:.#homelab-pi-storage \
   --target-host root@<pi-ip> --build-host root@<pi-ip>
 ```
 
@@ -378,19 +383,19 @@ nixos-raspberrypi's Raspberry Pi 5 modules and sets
 `boot.loader.raspberry-pi.bootloader = "kernel"`. The Pi is built with nixos-raspberrypi's
 pinned nixpkgs (see `flake.nix`), so its kernel comes from that project's binary cache.
 
-Set `piInterface` in `local.nix` first (the Pi 5's on-board Ethernet is `end0`). If
-`piIp` differs from the installer's DHCP address, use `boot` instead of `switch` and
+Set `hosts.pi-storage.networking.interface` in `deployments/homelab/deploy.nix` first (the Pi 5's on-board Ethernet is `end0`). If
+`hosts.pi-storage.networking.ip` differs from the installer's DHCP address, use `boot` instead of `switch` and
 reboot, so the address doesn't change in the middle of the SSH session:
 
 ```bash
-nix run nixpkgs#nixos-rebuild -- boot --flake path:.#pi \
+nix run nixpkgs#nixos-rebuild -- boot --flake path:.#homelab-pi-storage \
   --target-host root@<pi-ip> --build-host root@<pi-ip>
 ssh root@<pi-ip> reboot
 ```
 
-After the reboot, log in as `admin` on `piIp`; the configuration disables root login.
+After the reboot, log in as `admin` on the Pi's static IP; the configuration disables root login.
 
-From now on, deploy with `deploy path:.#pi`.
+From now on, deploy with `deploy path:.#homelab-pi-storage`.
 
 ### 2g. First Pi boot
 
@@ -398,8 +403,9 @@ From now on, deploy with `deploy path:.#pi`.
 - Verify: `lsblk` should show storage-a and storage-b as open mappers.
 - Verify NFS: `showmount -e localhost`
 - Verify Snapclient: `systemctl status snapclient`
-- With `piTvFrontend` on, Kodi should appear on HDMI (if a screen is attached). Holding a
-  controller's Guide button for 2 seconds switches to EmulationStation and back.
+- With the TV plugin (`lanbatPlugins.tv`) enabled on the storage Pi, Kodi should
+  appear on HDMI (if a screen is attached). Holding a controller's Guide button
+  for 2 seconds switches to EmulationStation and back.
 
 ### 2h. Clone the config repo on each machine
 
@@ -410,12 +416,14 @@ Clone it on both machines now:
 # On the server
 ssh admin@server
 sudo git clone <your-repo-url> /etc/nixos
-sudo cp /path/to/local.nix /etc/nixos/local.nix
+sudo cp /path/to/deploy.nix /etc/nixos/deploy.nix
+sudo cp -r /path/to/deployments/homelab /etc/nixos/deployments/homelab
 
 # On the Pi
 ssh admin@pi5
 sudo git clone <your-repo-url> /etc/nixos
-sudo cp /path/to/local.nix /etc/nixos/local.nix
+sudo cp /path/to/deploy.nix /etc/nixos/deploy.nix
+sudo cp -r /path/to/deployments/homelab /etc/nixos/deployments/homelab
 ```
 
 Set the upstream branch on each clone (use your default branch name):
@@ -450,8 +458,8 @@ SSH host key, update `secrets/secrets.nix`, then:
 
 ```bash
 (cd secrets && agenix -r)
-deploy path:.#server
-deploy path:.#pi
+deploy path:.#homelab-server
+deploy path:.#homelab-pi-storage
 ```
 
 ### 3b. Authentik initial setup
@@ -480,7 +488,7 @@ The script prints the client credentials needed for Home Assistant and Jellyfin
 Deploy to apply the new secrets:
 
 ```bash
-deploy path:.#server
+deploy path:.#homelab-server
 ```
 
 After the deploy, Authentik restarts and the blueprints run automatically.
@@ -508,7 +516,7 @@ automatically and registers the Authentik provider.  No further steps needed.
    ```
 
 2. Add Authentik usernames that should land in HA without a second login to
-   `lanbat.homeAssistant.ssoUsers` in `local.nix` (default: `[ "akadmin" ]`).
+   `lanbat.homeAssistant.ssoUsers` in `deployments/homelab/deploy.nix` (default: `[ "akadmin" ]`).
    Usernames must match Authentik exactly.
 
 3. Deploy.  `home-assistant-bootstrap` completes first-run onboarding and
@@ -599,7 +607,7 @@ rm /tmp/rclone.conf
 After setting the Authentik OIDC client secret in `grafana-env.age` (covered in step 3b):
 
 ```bash
-deploy path:.#server
+deploy path:.#homelab-server
 ```
 
 Visit `https://grafana.<domain>` — the InfluxDB datasource is provisioned
@@ -611,7 +619,7 @@ Telegraf needs a write-only InfluxDB token (separate from the operator token
 used by Grafana).
 
 1. Open the InfluxDB UI through an SSH tunnel (it is not exposed via Caddy):
-   `ssh -L 8086:localhost:8086 admin@<serverIp>`, then `http://localhost:8086`.
+   `ssh -L 8086:localhost:8086 admin@<server-ip>`, then `http://localhost:8086`.
 2. **Data → API Tokens → Generate API Token → Custom API Token**
    - Description: `telegraf`
    - Buckets: Write → `metrics`
@@ -624,8 +632,8 @@ used by Grafana).
    ```
 5. Deploy:
    ```bash
-   deploy path:.#server
-   deploy path:.#pi
+   deploy path:.#homelab-server
+   deploy path:.#homelab-pi-storage
    ```
 6. Verify both agents are running and writing:
    ```bash
@@ -762,7 +770,7 @@ and stops after 30 minutes idle.
 
 ## Phase 4 — Ongoing
 
-- Deploy changes immediately: `deploy path:.#server` / `deploy path:.#pi`.
+- Deploy changes immediately: `deploy path:.#homelab-server` / `deploy path:.#homelab-pi-storage`.
 - Update inputs: `nix flake update`, commit `flake.lock`, `git push`
   (`docs/operations.md` § Updating). Hosts auto-upgrade nightly from `/etc/nixos`.
 - Back up the Tang key directory: `docs/runbook.md` § Backing up Tang keys.

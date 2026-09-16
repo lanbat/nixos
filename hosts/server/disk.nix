@@ -43,7 +43,7 @@ in
   disko.devices = {
     disk.system = {
       type = "disk";
-      device = config.lanbat.serverDisk;
+      device = config.lanbat.hosts.${config.lanbat.hostKey}.disks.system;
       content = {
         type = "gpt";
         partitions = {

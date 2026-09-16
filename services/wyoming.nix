@@ -53,7 +53,12 @@
 }:
 
 let
-  serverSatellite = config.lanbat.voiceSatelliteServer;
+  hostLib = import ../lib/host.nix { inherit lib; };
+  serverKey = config.lanbat.deployment.primaryServer;
+  serverSatellite =
+    serverKey != null
+    && lib.elem serverKey (lib.attrValues config.lanbat.deployment.voiceRooms);
+  serverRoom = hostLib.voiceRoomForHost config.lanbat.deployment.voiceRooms serverKey;
   heyNabuModel = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/fwartner/home-assistant-wakewords-collection/main/en/hey_nabu/hey_nabu_v2.tflite";
     hash = "sha256-zhi2nhvd+1bnD+c51soPQj9wpucQ8Fs3a69qNiVokjQ=";
@@ -119,7 +124,7 @@ in
     speaker = "plughw:CARD=PCH,DEV=0";
     # The codec's Master control starts muted.
     mixer = [ "-c PCH sset Master 80% unmute" ];
-    room = config.lanbat.voiceRooms.server;
+    room = serverRoom;
     homeAssistant.url = "http://127.0.0.1:8123";
   };
 }

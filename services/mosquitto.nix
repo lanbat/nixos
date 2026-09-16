@@ -57,32 +57,40 @@
           "topic readwrite #"
         ];
 
-        users = {
-          # Home Assistant user.
-          # agenix secret file must contain the plaintext password (one line).
-          homeassistant = {
-            passwordFile = config.age.secrets.mosquitto-ha-pass.path;
-            acl = [ "readwrite #" ];
-          };
+        users =
+          {
+            # Home Assistant user.
+            # agenix secret file must contain the plaintext password (one line).
+            homeassistant = {
+              passwordFile = config.age.secrets.mosquitto-ha-pass.path;
+              acl = [ "readwrite #" ];
+            };
 
-          # Frigate user.
-          frigate = {
-            passwordFile = config.age.secrets.mosquitto-frigate-pass.path;
-            acl = [
-              "readwrite frigate/#"
-              "readwrite homeassistant/#"
-            ];
-          };
+            # Frigate user.
+            frigate = {
+              passwordFile = config.age.secrets.mosquitto-frigate-pass.path;
+              acl = [
+                "readwrite frigate/#"
+                "readwrite homeassistant/#"
+              ];
+            };
 
-          # Zigbee2MQTT user.
-          zigbee2mqtt = {
-            passwordFile = config.age.secrets.mosquitto-z2m-pass.path;
-            acl = [
-              "readwrite zigbee2mqtt/#"
-              "readwrite homeassistant/#"
-            ];
-          };
-        };
+            # Zigbee2MQTT user.
+            zigbee2mqtt = {
+              passwordFile = config.age.secrets.mosquitto-z2m-pass.path;
+              acl = [
+                "readwrite zigbee2mqtt/#"
+                "readwrite homeassistant/#"
+              ];
+            };
+          }
+          // lib.mapAttrs (
+            name: user:
+            {
+              passwordFile = user.passwordFile;
+              acl = user.acl;
+            }
+          ) config.lanbat.mosquitto.extraUsers;
       }
     ];
   };
@@ -94,13 +102,13 @@
   # ACCEPT rules (each -I pushes earlier insertions down).
   # extraStopCommands removes the rules on reload to prevent accumulation.
   networking.firewall.extraCommands = ''
-    iptables -I INPUT -p tcp --dport 1883 ! -s ${config.lanbat.lanSubnet} -j DROP
-    iptables -I INPUT -p tcp --dport 1883 -s ${config.lanbat.lanSubnet} -j ACCEPT
+    iptables -I INPUT -p tcp --dport 1883 ! -s ${config.lanbat.deployment.lanSubnet} -j DROP
+    iptables -I INPUT -p tcp --dport 1883 -s ${config.lanbat.deployment.lanSubnet} -j ACCEPT
     iptables -I INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT
   '';
   networking.firewall.extraStopCommands = ''
     iptables -D INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 1883 -s ${config.lanbat.lanSubnet} -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 1883 ! -s ${config.lanbat.lanSubnet} -j DROP 2>/dev/null || true
+    iptables -D INPUT -p tcp --dport 1883 -s ${config.lanbat.deployment.lanSubnet} -j ACCEPT 2>/dev/null || true
+    iptables -D INPUT -p tcp --dport 1883 ! -s ${config.lanbat.deployment.lanSubnet} -j DROP 2>/dev/null || true
   '';
 }

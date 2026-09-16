@@ -86,7 +86,7 @@
         enabled = true;
         port = 1780;
         bind_to_address = "127.0.0.1";
-        host = config.lanbat.serverIp;
+        host = config.lanbat.deployment.serverIp;
       };
 
       # Idle "default" stream — MA sets groups back here when playback stops.

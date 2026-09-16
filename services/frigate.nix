@@ -121,9 +121,9 @@ let
     go2rtc:
       streams:
         c1:
-          - "ffmpeg:http://c1.${config.lanbat.rootDomain}/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}#video=copy#audio=copy#audio=opus"
+          - "ffmpeg:http://c1.${config.lanbat.deployment.rootDomain}/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}#video=copy#audio=copy#audio=opus"
         c1_sub:
-          - "ffmpeg:http://c1.${config.lanbat.rootDomain}/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}"
+          - "ffmpeg:http://c1.${config.lanbat.deployment.rootDomain}/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}"
 
     ffmpeg:
       # Disable auto-detected vaapi hwaccel — fails in rootless Podman without DRM access.

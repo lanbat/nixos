@@ -77,7 +77,7 @@
       INVITATIONS_ALLOWED = true;
 
       # Public URL — must match what Caddy exposes.
-      DOMAIN = "https://vault.${config.lanbat.domain}";
+      DOMAIN = "https://vault.${config.lanbat.deployment.domain}";
 
       # Log level: warn is quiet enough for daily use.
       LOG_LEVEL = "warn";

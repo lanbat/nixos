@@ -1,5 +1,11 @@
-# Per-deployment local settings (see local.nix.example)
+# Per-deployment settings (see deploy.nix.example)
+deploy.nix
+deployments/*/deploy.nix
+!deployments/example/deploy.nix
 local.nix
+
+# Agent session scratch (not part of the flake)
+.superpowers/
 
 # Per-deployment agenix recipients (see secrets/secrets.nix.example)
 secrets/secrets.nix

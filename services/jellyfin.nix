@@ -39,7 +39,7 @@
 }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
   bootstrap = pkgs.callPackage ../pkgs/jellyfin-bootstrap { };
 in
 {

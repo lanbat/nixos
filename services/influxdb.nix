@@ -103,7 +103,7 @@
   networking.firewall = {
     allowedTCPPorts = [ 8086 ];
     extraCommands = ''
-      iptables -I INPUT -p tcp --dport 8086 ! -i lo ! -s ${config.lanbat.piIp} -j DROP
+      iptables -I INPUT -p tcp --dport 8086 ! -i lo ! -s ${config.lanbat.deployment.storageIp} -j DROP
     '';
   };
 }

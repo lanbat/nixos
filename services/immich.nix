@@ -40,7 +40,7 @@
 
 let
   immichVersion = "v1.136.8";
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
   bootstrap = pkgs.callPackage ../pkgs/immich-bootstrap { };
   # immich-db-password.age exports POSTGRES_PASSWORD for postgres init; Immich v3
   # reads DB_PASSWORD at runtime.
@@ -54,10 +54,8 @@ let
 in
 {
   config = {
-    # The option is declared in modules/core/settings.nix, since local.nix is
-    # shared by both hosts.
-    lanbat.immich.adminEmail = lib.mkDefault (
-      "${lib.elemAt config.lanbat.homeAssistant.ssoUsers 0}@${config.lanbat.rootDomain}"
+    lanbat.deployment.immich.adminEmail = lib.mkDefault (
+      "${lib.elemAt config.lanbat.homeAssistant.ssoUsers 0}@${config.lanbat.deployment.rootDomain}"
     );
 
     lanbat.services.immich = {
@@ -249,7 +247,7 @@ in
         . ${config.age.secrets.hass-bootstrap-env.path}
         set +a
         export IMMICH_URL="http://127.0.0.1:2283"
-        export ADMIN_EMAIL="${config.lanbat.immich.adminEmail}"
+        export ADMIN_EMAIL="${config.lanbat.deployment.immich.adminEmail}"
         export ADMIN_NAME="$OWNER_USERNAME"
         export ADMIN_PASSWORD="$OWNER_PASSWORD"
         exec immich-bootstrap

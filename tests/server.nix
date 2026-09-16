@@ -1,22 +1,15 @@
 # tests/server.nix
 #
-# VM test of the whole server configuration (hosts/server) with the example
-# settings and test-only secrets:
-#   - it boots with both LUKS layers locked, and the always-on services start,
-#   - Grafana is served through Caddy with the internal CA,
-#   - Home Assistant records its history in the always-on PostgreSQL,
-#   - unlock-control brings up Tang,
-#   - unlock-workload brings up the workload PostgreSQL on the encrypted layer,
-#   - lock-workload stops the workload layer and leaves the always-on side up.
-#
-# Container images can't be pulled without network access, so the container
-# services aren't checked. Run with: nix build -L .#checks.x86_64-linux.server
+# VM test of the server role with deploy.example settings and test-only secrets.
 {
   pkgs,
   agenix,
   disko,
 }:
 
+let
+  servicesPlugin = import ../plugins/services;
+in
 pkgs.testers.runNixOSTest {
   name = "server";
 
@@ -28,10 +21,16 @@ pkgs.testers.runNixOSTest {
       imports = [
         agenix.nixosModules.default
         disko.nixosModules.disko
-        ../hosts/server
-        ../hosts/example-settings.nix
+        ../modules/core
+        ../lib/roles/server.nix
+        ../hosts/server/hardware.nix
+        ../hosts/server/disk.nix
+        ../modules/server/control-layer.nix
+        ../modules/wiring/workload-gate.nix
+        ./lib/example-host-context.nix
         ./lib/test-secrets.nix
-      ];
+      ]
+      ++ servicesPlugin.modules;
 
       nixpkgs.config.allowUnfree = true;
 
@@ -39,12 +38,10 @@ pkgs.testers.runNixOSTest {
         memorySize = 8192;
         cores = 4;
         diskSize = 8192;
-        # /dev/vdb: control volume, /dev/vdc: workload volume.
         emptyDiskImages = [
           64
           2048
         ];
-        # Test VMs replace fileSystems with virtualisation.fileSystems.
         fileSystems = config.lanbat.layers.controlFileSystems // config.lanbat.layers.workloadFileSystems;
       };
 
@@ -53,8 +50,6 @@ pkgs.testers.runNixOSTest {
         workloadDevice = lib.mkForce "/dev/vdc";
       };
 
-      # The test VM can't pull container images, and a container that keeps
-      # restarting keeps its start job, and multi-user.target, pending forever.
       systemd.services = lib.mapAttrs' (
         name: _: lib.nameValuePair "podman-${name}" { wantedBy = lib.mkForce [ ]; }
       ) config.virtualisation.oci-containers.containers;
@@ -113,8 +108,6 @@ pkgs.testers.runNixOSTest {
 
     server.start()
 
-    # Log the pending jobs while boot is incomplete, so a unit that holds up
-    # multi-user.target shows in the log instead of a bare timeout.
     for _ in range(30):
         if server.execute("systemctl is-active multi-user.target")[0] == 0:
             break
@@ -177,8 +170,6 @@ pkgs.testers.runNixOSTest {
         )
 
     with subtest("unlock-control brings up Tang with its keys on the control layer"):
-        # Servers installed before the move to /var/lib/private/tang have an
-        # empty stub directory at /var/lib/tang; unlock-control replaces it.
         server.succeed("rm /var/lib/tang", "install -d -m 0 /var/lib/tang")
         server.succeed("printf test | unlock-control")
         server.wait_for_unit("control-online.target")

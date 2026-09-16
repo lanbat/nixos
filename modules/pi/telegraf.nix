@@ -34,6 +34,7 @@
 
 let
   lanbat = config.lanbat;
+  storageDrives = lanbat.hosts.${lanbat.hostKey}.storage.drives or { };
 in
 
 {
@@ -54,7 +55,7 @@ in
 
       outputs.influxdb_v2 = [
         {
-          urls = [ "http://${config.lanbat.serverIp}:8086" ];
+          urls = [ "http://${config.lanbat.deployment.serverIp}:8086" ];
           token = "$TELEGRAF_INFLUXDB_TOKEN";
           organization = "homelab";
           bucket = "metrics";
@@ -99,7 +100,7 @@ in
 
       inputs.ping = [
         {
-          urls = [ lanbat.serverIp ];
+          urls = [ lanbat.deployment.serverIp ];
         }
       ];
 
@@ -110,9 +111,9 @@ in
           use_sudo = false;
           path_smartctl = "${pkgs.smartmontools}/bin/smartctl";
           path_nvme = "${pkgs.nvme-cli}/bin/nvme";
-          devices = [
-            "/dev/disk/by-id/${lanbat.piStorageDriveA}"
-            "/dev/disk/by-id/${lanbat.piStorageDriveB}"
+          devices = lib.optionals (storageDrives ? a && storageDrives ? b) [
+            "/dev/disk/by-id/${storageDrives.a}"
+            "/dev/disk/by-id/${storageDrives.b}"
           ];
         }
       ];

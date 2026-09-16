@@ -1,13 +1,12 @@
 # Contributing
 
-This repository is the NixOS configuration of a real two-machine homelab:
-
-- **server**: x86_64, main compute and services
-- **pi**: Raspberry Pi 5 (aarch64), encrypted bulk storage and TV frontend
+This repository is an extensible NixOS homelab configuration. Each **deployment profile**
+is a site with its own domain, hosts, and plugins. Hosts take **roles** (server,
+storage-pi, voice-pi) and enable **plugins** (services, TV, voice, or external flake
+inputs). See [docs/extensibility.md](docs/extensibility.md).
 
 It is published as a reference. You are welcome to borrow from it and to send pull
-requests with fixes, documentation improvements and ideas. It is not a supported
-framework: adapting it to your own hardware and network is up to you.
+requests with fixes, documentation improvements and ideas.
 
 ## Before you start
 
@@ -21,20 +20,21 @@ framework: adapting it to your own hardware and network is up to you.
 
 ## Checking your change
 
-You need [Nix](https://nixos.org/download/) with flakes enabled. No `local.nix` or
-secrets are required: you evaluate the `example-server` and `example-pi`
-configurations, which take placeholder settings from `hosts/example-settings.nix`.
+You need [Nix](https://nixos.org/download/) with flakes enabled. No `deploy.nix` or
+secrets are required: CI evaluates the `example` profile as `example-server` and
+`example-pi-storage` from `deployments/example/deploy.nix`.
 
 ```bash
 nix fmt                                   # format all .nix files
 nix flake check --no-build --all-systems  # evaluate the example hosts and the checks
-nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql}  # wiring tests
+nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql,plugins,settings-guard,validate-deploy,load-deployments,deploy-rs-fixture}
 ```
 
-The workload-gate and postgresql tests boot VMs and need KVM. CI runs all three on every pull request.
+The workload-gate and postgresql tests boot VMs and need KVM. CI runs them on every pull request.
 
-Two slower tests boot the complete host configurations. CI only evaluates them, so run
-them when you change a host, a service's tier or the unlock scripts:
+The full server VM test boots the complete server configuration and is too slow for every
+PR. CI runs it nightly (03:00 UTC) and on manual dispatch via the **nightly** workflow.
+Run it locally when you change a host, a service's tier or the unlock scripts:
 
 ```bash
 nix build -L .#checks.x86_64-linux.server  # KVM, about 10 GB of free memory, 15–45 minutes
@@ -45,7 +45,7 @@ nix build -L .#checks.aarch64-linux.pi     # an aarch64 machine with KVM, such a
 
 - Keep each pull request focused on one change.
 - Say how you tested it. Evaluation only is fine; mention it if you also deployed the change.
-- Never commit `local.nix`, real IP addresses, domains, SSH keys or plaintext secrets.
+- Never commit `deploy.nix`, `deployments/*/deploy.nix`, real IP addresses, domains, SSH keys or plaintext secrets.
 - Secrets are [agenix](https://github.com/ryantm/agenix) files encrypted to the
   maintainer's keys. If your change needs a new secret, commit an empty placeholder file
   at the referenced `secrets/<name>.age` path so evaluation passes, and say so in the pull
@@ -69,8 +69,10 @@ Please don't open public issues for vulnerabilities. See [SECURITY.md](SECURITY.
   rejects inconsistent descriptions (`checks.nix`). `services/homepage.nix` builds the
   dashboard from them.
 - `modules/core/`: settings and configuration shared by both hosts.
-- `modules/server/`: the control LUKS layer and backups. `modules/pi/`: the Pi's roles.
-- `hosts/server/`, `hosts/pi/`: imports, networking, hardware and the server's disk layout.
+- `lib/roles/`: host role modules (server, storage-pi, voice-pi).
+- `plugins/`: built-in plugins; enable per host in `deploy.nix`.
+- `deployments/`: one `deploy.nix` per site/profile.
+- `hosts/server/`, `hosts/pi/`: hardware and the server's disk layout (disko).
 
 ## Adding a new service
 
@@ -90,7 +92,7 @@ Follow this checklist every time:
      };
    };
    ```
-2. **Import** it in `hosts/server/default.nix`.
+2. **Add** it to `plugins/services/default.nix` (or ship as an external plugin).
 3. **Describe what applies** (all fields are documented in `modules/core/services.nix`):
 
    | Field | Set it when the service |
@@ -127,51 +129,33 @@ Follow this checklist every time:
 
 ## Patterns to follow
 
-### Local deployment settings
+### Deployment settings
 
-Deployment-specific values (IPs, keys, timezone, etc.) are `lanbat.*` options declared
-in `modules/core/settings.nix`, set in `local.nix` (gitignored). They have no defaults,
-so a missing value fails evaluation. The real `server` and `pi` configurations only exist
-when `local.nix` does, and only a `path:` flake reference includes it
-(`deploy path:.#server`). When adding a deployment-time value:
+Deployment-specific values live in `deployments/<profile>/deploy.nix` (gitignored for
+real sites) and are injected as `config.lanbat.deployment.*` and `config.lanbat.hosts.*`.
+See [docs/extensibility.md](docs/extensibility.md) and [docs/migration.md](docs/migration.md).
 
-1. Add the option to `modules/core/settings.nix` without a default. Use a `strMatching`
-   type when the format is known, so malformed values fail early.
-2. Add a placeholder to `hosts/example-settings.nix` (documentation IP ranges, `example.com`).
-3. Add the entry to `local.nix.example`.
-4. Reference it as `config.lanbat.<option>`.
+When adding a deployment-time value:
+
+1. Add the option to `modules/core/settings.nix` under `lanbat.deployment` or the host submodule.
+2. Add a placeholder to `deployments/example/deploy.nix`.
+3. Add the entry to `deployments/homelab/deploy.nix.example`.
+4. Reference it as `config.lanbat.deployment.<option>` or `config.lanbat.hosts.<key>.<option>`.
 
 | Option | Used for |
 |---|---|
-| `config.lanbat.domain` | All service hostnames |
-| `config.lanbat.rootDomain` | Parent DNS zone |
-| `config.lanbat.serverIp` | Server IPv4 address, deploy-rs target |
-| `config.lanbat.piIp` | Pi IPv4 address, deploy-rs target |
-| `config.lanbat.gatewayIp` | Default gateway |
-| `config.lanbat.lanSubnet` | LAN-only firewall rules |
-| `config.lanbat.serverHostname` | Server hostname |
-| `config.lanbat.serverInterface` | Server network interface for the static address |
-| `config.lanbat.piHostname` | NFS mount target / Pi hostname |
-| `config.lanbat.piInterface` | Pi network interface for the static address |
-| `config.lanbat.nfsIdmapdDomain` | NFSv4 ID mapping domain (must match on both hosts) |
-| `config.lanbat.timezone` | System timezone + service TZ env vars |
-| `config.lanbat.phoneRegion` | Phone number formatting (Nextcloud) |
-| `config.lanbat.haLatitude` | Home Assistant home latitude |
-| `config.lanbat.haLongitude` | Home Assistant home longitude |
-| `config.lanbat.haElevation` | Home Assistant home elevation (metres) |
-| `config.lanbat.serverDisk` | Server system disk, partitioned by `hosts/server/disk.nix` |
-| `config.lanbat.piStorageDriveA` | Pi NVMe drive A by-id filename |
-| `config.lanbat.piStorageDriveB` | Pi NVMe drive B by-id filename |
-| `config.lanbat.piTvFrontend` | Whether the Pi runs the TV frontend (Kodi and EmulationStation) |
-| `config.lanbat.haLlm` | Home Assistant's conversation agent: an OpenAI-compatible API's base URL and model (optional) |
-| `config.lanbat.voiceRooms` | Home Assistant areas of the voice satellites, whose Music Assistant speakers play the replies (optional) |
-| `config.lanbat.adminSshKey` | Admin SSH public key (both hosts) |
-| `config.lanbat.zigbeeVendorId` | Zigbee dongle USB vendor ID |
-| `config.lanbat.zigbeeProductId` | Zigbee dongle USB product ID |
+| `config.lanbat.deployment.domain` | All service hostnames |
+| `config.lanbat.deployment.serverIp` | Primary server IPv4 (computed) |
+| `config.lanbat.deployment.storageIp` | Primary storage-pi IPv4 (computed) |
+| `config.lanbat.deployment.gatewayIp` | Default gateway |
+| `config.lanbat.hosts.<key>.networking.ip` | Per-host static address |
+| `config.lanbat.hosts.<key>.disks.system` | Server system disk path |
+| `config.lanbat.hosts.<key>.storage.drives` | Pi NVMe by-id filenames |
+| `config.lanbat.deployment.voiceRooms` | Area name → host key for voice satellites |
 
 For the domain specifically, the common pattern in service files is:
 ```nix
-let domain = config.lanbat.domain; in
+let domain = config.lanbat.deployment.domain; in
 ```
 
 ### Service tiers
@@ -225,7 +209,7 @@ derived from the UID.
 ### NFS-dependent services
 Any service that reads/writes Pi storage (`/srv/storage/a` or `/srv/storage/b`) declares it:
 ```nix
-lanbat.services.<name>.nfs.drives = [ "a" ];  # or [ "b" ] or [ "a" "b" ]
+lanbat.services.<name>.nfs = { drives = [ "a" ]; storageHost = "pi-storage"; };
 ```
 Its `units` then bind to the NFS mounts, stop when Pi storage disappears and restart when
 it comes back. Use `nfs.units` when only some units touch the storage. The unit name of a
@@ -279,7 +263,7 @@ throw a duplicate attribute error. Merge all rules into a single list.
 
 ## Things to avoid
 
-- **Hardcoding the domain** — use `config.lanbat.domain`
+- **Hardcoding the domain** — use `config.lanbat.deployment.domain`
 - **Wiring a service by hand** — Caddy vhosts, workload stubs and bind mounts, NFS
   dependencies, service accounts and `age.secrets` come from `lanbat.services.<name>`
 - **Declaring unused secrets** — only declare what a service actually uses

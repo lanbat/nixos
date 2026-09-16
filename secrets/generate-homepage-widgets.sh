@@ -7,7 +7,7 @@
 # Usage:
 #   bash secrets/generate-homepage-widgets.sh [server-host]
 #
-# The script SSHes to the server (default: admin@192.168.1.10 from local.nix),
+# The script SSHes to the server (default: admin@<server-ip> from deploy.nix),
 # creates or reuses service API keys where possible, then writes
 # secrets/homepage-widgets-env.age via agenix.
 
@@ -18,13 +18,11 @@ cd "$ROOT/secrets"
 
 SERVER_HOST="${1:-}"
 if [[ -z "$SERVER_HOST" ]]; then
-  if [[ -f ../local.nix ]]; then
-    SERVER_IP="$(sed -n 's/.*serverIp *= *"\([^"]*\)".*/\1/p' ../local.nix | head -1)"
-    SERVER_HOST="admin@${SERVER_IP:-192.168.1.10}"
-  else
-    SERVER_HOST="admin@192.168.1.10"
-  fi
+  SERVER_IP="$(bash "$(dirname "$0")/lib/read-deploy.sh" server-ip 2>/dev/null || true)"
+  SERVER_HOST="admin@${SERVER_IP:-192.168.1.10}"
 fi
+
+FLAKE_SERVER="$(bash "$(dirname "$0")/lib/read-deploy.sh" flake-server 2>/dev/null || echo server)"
 
 AGENIX="agenix"
 if ! command -v agenix &>/dev/null; then
@@ -61,10 +59,7 @@ write_env_value() {
 
 ENV_LINES=()
 
-IMMICH_ADMIN_EMAIL=""
-if [[ -f ../local.nix ]]; then
-  IMMICH_ADMIN_EMAIL="$(sed -n 's/.*adminEmail *= *"\([^"]*\)".*/\1/p' ../local.nix | head -1)"
-fi
+IMMICH_ADMIN_EMAIL="$(bash "$(dirname "$0")/lib/read-deploy.sh" immich-admin-email 2>/dev/null || true)"
 
 echo "Collecting Homepage widget credentials from ${SERVER_HOST}..."
 echo
@@ -132,7 +127,7 @@ EOF
 write_env_value "IMMICH_API_KEY" "$IMMICH_KEY"
 
 # ---- Home Assistant ----
-DOMAIN="$(sed -n 's/.*domain *= *"\([^"]*\)".*/\1/p' ../local.nix | head -1)"
+DOMAIN="$(bash "$(dirname "$0")/lib/read-deploy.sh" domain 2>/dev/null || true)"
 HA_OWNER_USERNAME="$(read_secret_file hass-bootstrap-env OWNER_USERNAME || true)"
 HA_OWNER_PASSWORD="$(read_secret_file hass-bootstrap-env OWNER_PASSWORD || true)"
 HA_TOKEN=""
@@ -216,5 +211,5 @@ printf '%s' "$CONTENT" | $AGENIX -e homepage-widgets-env.age
 echo
 echo "Wrote secrets/homepage-widgets-env.age"
 echo "Redeploy the server, then restart Homepage:"
-echo "  nixos-rebuild switch --flake .#server --target-host ${SERVER_HOST} --impure"
+echo "  deploy path:.#${FLAKE_SERVER}"
 echo "  ssh ${SERVER_HOST} sudo systemctl restart podman-homepage"

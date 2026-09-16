@@ -37,7 +37,7 @@
 }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
 in
 
 {
@@ -137,7 +137,7 @@ in
     settings = {
       trusted_proxies = [ "127.0.0.1" ];
       overwrite.cli.url = "https://cloud.${domain}";
-      default_phone_region = config.lanbat.phoneRegion;
+      default_phone_region = config.lanbat.deployment.phoneRegion;
     };
   };
 
