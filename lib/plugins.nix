@@ -13,13 +13,12 @@ let
   validatePlugin =
     plugin:
     let
-      missing =
-        lib.filter (field: !(plugin ? ${field})) [
-          "name"
-          "version"
-          "roles"
-          "modules"
-        ];
+      missing = lib.filter (field: !(plugin ? ${field})) [
+        "name"
+        "version"
+        "roles"
+        "modules"
+      ];
     in
     if missing != [ ] then
       builtins.throw "lanbat plugin '${plugin.name or "unknown"}' is missing fields: ${lib.concatStringsSep ", " missing}"
@@ -32,8 +31,7 @@ let
     hostRole: plugins:
     let
       validated = map validatePlugin plugins;
-      incompatible =
-        lib.filter (p: !(lib.elem hostRole p.roles)) validated;
+      incompatible = lib.filter (p: !(lib.elem hostRole p.roles)) validated;
     in
     if incompatible != [ ] then
       builtins.throw (

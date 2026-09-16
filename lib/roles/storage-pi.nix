@@ -1,7 +1,12 @@
 # lib/roles/storage-pi.nix
 #
 # Storage Pi role: encrypted NVMe drives, NFS export, optional TV/voice plugins.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   host = config.lanbat.hosts.${config.lanbat.hostKey};

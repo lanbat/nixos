@@ -24,14 +24,11 @@ in
   lanbat.hostKey = lib.mkDefault hostKey;
   lanbat.deployment = lib.mkDefault deploy.deployment;
   lanbat.hosts = lib.mkDefault (
-    lib.mapAttrs (
-      name: host:
-      {
-        role = host.role;
-        networking = host.networking;
-        disks = host.disks or { };
-        storage = host.storage or { };
-      }
-    ) deploy.hosts
+    lib.mapAttrs (name: host: {
+      role = host.role;
+      networking = host.networking;
+      disks = host.disks or { };
+      storage = host.storage or { };
+    }) deploy.hosts
   );
 }

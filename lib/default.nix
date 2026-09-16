@@ -22,11 +22,17 @@ let
   validateLib = import ./validate-deploy.nix { inherit lib; };
 
   hostFlakeName =
-    profileName: hostName:
-    if profileName == "default" then hostName else "${profileName}-${hostName}";
+    profileName: hostName: if profileName == "default" then hostName else "${profileName}-${hostName}";
 
   deployQueryLib = import ./deploy-query.nix {
-    inherit lib profiles hasDeploy root hostLib hostFlakeName;
+    inherit
+      lib
+      profiles
+      hasDeploy
+      root
+      hostLib
+      hostFlakeName
+      ;
   };
 
   mkHost =
@@ -49,11 +55,13 @@ let
   mkProfile =
     profileName: deploy:
     let
-      deploy' = validateLib.validateDeploy { inherit profileName; deploy = deploy; };
+      deploy' = validateLib.validateDeploy {
+        inherit profileName;
+        deploy = deploy;
+      };
       hosts = lib.mapAttrs (name: cfg: mkHost profileName deploy' name cfg) deploy'.hosts;
       configurations = lib.mapAttrs' (
-        name: cfg:
-        lib.nameValuePair (hostFlakeName profileName name) cfg
+        name: cfg: lib.nameValuePair (hostFlakeName profileName name) cfg
       ) hosts;
       deployNodes = lib.mapAttrs' (
         name: hostCfg:
@@ -107,7 +115,14 @@ let
 
 in
 {
-  inherit (hostLib) hostsWithRole primaryHost hostIp hostHostname hostInterface voiceRoomForHost;
+  inherit (hostLib)
+    hostsWithRole
+    primaryHost
+    hostIp
+    hostHostname
+    hostInterface
+    voiceRoomForHost
+    ;
   inherit (pluginLib) knownRoles validatePlugin resolvePlugins;
 
   mkHost = mkHost;

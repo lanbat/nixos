@@ -34,8 +34,7 @@ in
     assertions = [
       {
         assertion =
-          config.lanbat.deployment.primaryServer == null
-          || hosts ? ${config.lanbat.deployment.primaryServer};
+          config.lanbat.deployment.primaryServer == null || hosts ? ${config.lanbat.deployment.primaryServer};
         message = "lanbat.deployment.primaryServer must be a host key in lanbat.hosts";
       }
       {

@@ -56,8 +56,7 @@ let
   hostLib = import ../lib/host.nix { inherit lib; };
   serverKey = config.lanbat.deployment.primaryServer;
   serverSatellite =
-    serverKey != null
-    && lib.elem serverKey (lib.attrValues config.lanbat.deployment.voiceRooms);
+    serverKey != null && lib.elem serverKey (lib.attrValues config.lanbat.deployment.voiceRooms);
   serverRoom = hostLib.voiceRoomForHost config.lanbat.deployment.voiceRooms serverKey;
   heyNabuModel = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/fwartner/home-assistant-wakewords-collection/main/en/hey_nabu/hey_nabu_v2.tflite";

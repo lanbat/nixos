@@ -1,7 +1,12 @@
 # lib/roles/voice-pi.nix
 #
 # Voice Pi role: lightweight host for a Wyoming voice satellite endpoint.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   host = config.lanbat.hosts.${config.lanbat.hostKey};

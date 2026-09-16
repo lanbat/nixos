@@ -1,7 +1,12 @@
 # lib/roles/server.nix
 #
 # Server role: main compute host, reverse proxy, databases, containers.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   host = config.lanbat.hosts.${config.lanbat.hostKey};

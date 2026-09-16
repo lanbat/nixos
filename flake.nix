@@ -42,7 +42,9 @@
       };
 
       inputsWithSelf = inputs // {
-        self = self // { inherit lanbatPlugins; };
+        self = self // {
+          inherit lanbatPlugins;
+        };
       };
 
       loadDeployments = import ./lib/load-deployments.nix { inherit lib; };
@@ -111,8 +113,7 @@
 
       nixosConfigurations = lanbatLib.configurations;
 
-      deploy.nodes =
-        if hasDeploy then lanbatLib.deployNodes else { };
+      deploy.nodes = if hasDeploy then lanbatLib.deployNodes else { };
 
       checks.x86_64-linux = {
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };

@@ -23,7 +23,9 @@ let
   };
 
   inputsWithSelf = inputs // {
-    self = self // { inherit lanbatPlugins; };
+    self = self // {
+      inherit lanbatPlugins;
+    };
   };
 
   fixture = import ./fixtures/multi-profile-deploy.nix {
@@ -53,11 +55,13 @@ let
     else
       throw "expected homelab-server deploy node";
 in
-pkgs.runCommand "deploy-rs-fixture" {
-  nativeBuildInputs = [
-    checks.deploy-activate
-    checks.deploy-schema
-  ];
-} ''
-  touch $out
-''
+pkgs.runCommand "deploy-rs-fixture"
+  {
+    nativeBuildInputs = [
+      checks.deploy-activate
+      checks.deploy-schema
+    ];
+  }
+  ''
+    touch $out
+  ''

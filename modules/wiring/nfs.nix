@@ -7,9 +7,7 @@ let
   hosts = config.lanbat.hosts;
   defaultStorageHost = config.lanbat.deployment.primaryStorage;
 
-  storageHostFor =
-    svc:
-    svc.nfs.storageHost or defaultStorageHost;
+  storageHostFor = svc: svc.nfs.storageHost or defaultStorageHost;
 
   storageHostname = host: hosts.${host}.networking.hostname;
   storageIp = host: hosts.${host}.networking.ip;
@@ -45,7 +43,9 @@ let
     ) dependents
   );
 
-  storageHosts = lib.unique (lib.filter (h: h != null) (map storageHostFor (lib.attrValues dependents)));
+  storageHosts = lib.unique (
+    lib.filter (h: h != null) (map storageHostFor (lib.attrValues dependents))
+  );
 
   hostResolutions = lib.concatLists (
     map (

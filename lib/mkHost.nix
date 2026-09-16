@@ -29,15 +29,12 @@ let
       lanbat.profile = profileName;
       lanbat.hostKey = hostName;
       lanbat.deployment = deployment;
-      lanbat.hosts = lib.mapAttrs (
-        name: host:
-        {
-          role = host.role;
-          networking = host.networking;
-          disks = host.disks or { };
-          storage = host.storage or { };
-        }
-      ) hosts;
+      lanbat.hosts = lib.mapAttrs (name: host: {
+        role = host.role;
+        networking = host.networking;
+        disks = host.disks or { };
+        storage = host.storage or { };
+      }) hosts;
     };
 
   commonModules = [
@@ -49,11 +46,9 @@ let
   ++ getRoleModules hostCfg.role
   ++ pluginModules;
 
-  raspberryPiModules =
-    commonModules
-    ++ [
-      ../hosts/pi/hardware.nix
-    ];
+  raspberryPiModules = commonModules ++ [
+    ../hosts/pi/hardware.nix
+  ];
 
   genericModules =
     commonModules
@@ -61,11 +56,7 @@ let
       disko.nixosModules.disko
     ];
 
-  modules =
-    if platform == "raspberry-pi" then
-      raspberryPiModules
-    else
-      genericModules;
+  modules = if platform == "raspberry-pi" then raspberryPiModules else genericModules;
 
   nixosSystem =
     if platform == "raspberry-pi" then
@@ -85,6 +76,7 @@ let
         };
       };
 in
-nixosSystem // {
+nixosSystem
+// {
   lanbatModules = modules;
 }

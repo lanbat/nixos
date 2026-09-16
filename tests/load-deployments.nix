@@ -23,7 +23,9 @@ let
   };
 
   inputsWithSelf = inputs // {
-    self = self // { inherit lanbatPlugins; };
+    self = self // {
+      inherit lanbatPlugins;
+    };
   };
 
   fixture = import ./fixtures/multi-profile-deploy.nix {
@@ -58,10 +60,30 @@ let
     if result.success then null else "mkProfile ${profileName} threw: ${result.value}";
 
   failures = lib.filter (x: x != null) [
-    (if profiles ? homelab && profiles ? cabin then null else "normalize: expected homelab and cabin keys")
-    (if hostFlakeName "homelab" "server" == "homelab-server" then null else "hostFlakeName homelab/server mismatch")
-    (if hostFlakeName "default" "server" == "server" then null else "hostFlakeName default/server mismatch")
-    (if homelabFlake != cabinFlake then null else "hostFlakeName: homelab and cabin must produce distinct flake attrs")
+    (
+      if profiles ? homelab && profiles ? cabin then
+        null
+      else
+        "normalize: expected homelab and cabin keys"
+    )
+    (
+      if hostFlakeName "homelab" "server" == "homelab-server" then
+        null
+      else
+        "hostFlakeName homelab/server mismatch"
+    )
+    (
+      if hostFlakeName "default" "server" == "server" then
+        null
+      else
+        "hostFlakeName default/server mismatch"
+    )
+    (
+      if homelabFlake != cabinFlake then
+        null
+      else
+        "hostFlakeName: homelab and cabin must produce distinct flake attrs"
+    )
     (expectMkProfile "homelab")
     (expectMkProfile "cabin")
   ];

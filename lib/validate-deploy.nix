@@ -49,9 +49,9 @@ let
       else if !(host.storage.drives ? a) || !(host.storage.drives ? b) then
         builtins.throw "${ctx}: storage-pi role requires storage.drives.a and storage.drives.b"
       else
-        builtins.seq
-          (requireNonEmptyString profileName hostName "storage.drives.a" host.storage.drives.a)
-          (requireNonEmptyString profileName hostName "storage.drives.b" host.storage.drives.b)
+        builtins.seq (requireNonEmptyString profileName hostName "storage.drives.a" host.storage.drives.a) (
+          requireNonEmptyString profileName hostName "storage.drives.b" host.storage.drives.b
+        )
     else if host.role == "voice-pi" then
       null
     else
@@ -65,11 +65,11 @@ let
     if !(host ? networking) then
       builtins.throw "${ctx}: missing 'networking'"
     else
-      builtins.seq
-        (requireNonEmptyString profileName name "networking.ip" host.networking.ip)
-        (builtins.seq
-          (requireNonEmptyString profileName name "networking.interface" host.networking.interface)
-          (requireNonEmptyString profileName name "networking.hostname" host.networking.hostname));
+      builtins.seq (requireNonEmptyString profileName name "networking.ip" host.networking.ip) (
+        builtins.seq (requireNonEmptyString profileName name "networking.interface"
+          host.networking.interface
+        ) (requireNonEmptyString profileName name "networking.hostname" host.networking.hostname)
+      );
 
   validateHost =
     profileName: hosts: name: host:
@@ -77,26 +77,22 @@ let
       builtins.seq (requireField profileName name "system" host) (
         builtins.seq (validateNetworking profileName name host) (
           builtins.seq (validateRoleRequirements profileName name host) (
-            pluginLib.resolvePlugins host.role (host.plugins or [])
+            pluginLib.resolvePlugins host.role (host.plugins or [ ])
           )
         )
       )
     );
 
   hasVoicePlugin =
-    host:
-    lib.any (plugin: (plugin.name or "") == "lanbat-voice") (host.plugins or []);
+    host: lib.any (plugin: (plugin.name or "") == "lanbat-voice") (host.plugins or [ ]);
 
-  hasVoiceCapability =
-    host:
-    hasVoicePlugin host || host.role == "server";
+  hasVoiceCapability = host: hasVoicePlugin host || host.role == "server";
 
   validateHosts =
     profileName: deploy:
-    lib.foldl'
-      (_: name: validateHost profileName deploy.hosts name deploy.hosts.${name})
-      null
-      (lib.attrNames deploy.hosts);
+    lib.foldl' (_: name: validateHost profileName deploy.hosts name deploy.hosts.${name}) null (
+      lib.attrNames deploy.hosts
+    );
 
   validateVoiceRooms =
     profileName: deploy:
@@ -104,22 +100,19 @@ let
       voiceRooms = deploy.deployment.voiceRooms or { };
       hosts = deploy.hosts;
     in
-    lib.foldl'
-      (
-        _: room:
-        let
-          hostKey = voiceRooms.${room};
-          ctx = "profile '${profileName}', voiceRooms.${room}";
-        in
-        if !(hosts ? ${hostKey}) then
-          builtins.throw "${ctx}: references unknown host '${hostKey}'"
-        else if !(hasVoiceCapability hosts.${hostKey}) then
-          builtins.throw "${ctx}: host '${hostKey}' must include lanbat-voice plugin or have role 'server'"
-        else
-          null
-      )
-      null
-      (lib.attrNames voiceRooms);
+    lib.foldl' (
+      _: room:
+      let
+        hostKey = voiceRooms.${room};
+        ctx = "profile '${profileName}', voiceRooms.${room}";
+      in
+      if !(hosts ? ${hostKey}) then
+        builtins.throw "${ctx}: references unknown host '${hostKey}'"
+      else if !(hasVoiceCapability hosts.${hostKey}) then
+        builtins.throw "${ctx}: host '${hostKey}' must include lanbat-voice plugin or have role 'server'"
+      else
+        null
+    ) null (lib.attrNames voiceRooms);
 
   validatePrimaryHosts =
     profileName: deploy:
@@ -144,9 +137,9 @@ let
       builtins.throw "profile '${profileName}': hosts must not be empty"
     else
       builtins.seq (validateHosts profileName deploy) (
-        builtins.seq
-          (validateVoiceRooms profileName deploy)
-          (builtins.seq (validatePrimaryHosts profileName deploy) deploy)
+        builtins.seq (validateVoiceRooms profileName deploy) (
+          builtins.seq (validatePrimaryHosts profileName deploy) deploy
+        )
       );
 
 in

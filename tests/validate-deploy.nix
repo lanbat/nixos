@@ -11,33 +11,49 @@ let
   };
 
   baseDeploy = import ../deployments/example/deploy.nix {
-    inputs = { self = { inherit lanbatPlugins; }; };
+    inputs = {
+      self = { inherit lanbatPlugins; };
+    };
   };
 
   expectThrow =
     name: deploy:
     let
-      result = builtins.tryEval (validate.validateDeploy { profileName = "test"; deploy = deploy; });
+      result = builtins.tryEval (
+        validate.validateDeploy {
+          profileName = "test";
+          deploy = deploy;
+        }
+      );
     in
     if result.success then "expected ${name} to throw" else null;
 
   expectPass =
     name: deploy:
     let
-      result = builtins.tryEval (validate.validateDeploy { profileName = "test"; deploy = deploy; });
+      result = builtins.tryEval (
+        validate.validateDeploy {
+          profileName = "test";
+          deploy = deploy;
+        }
+      );
     in
     if result.success then null else "expected ${name} to pass";
 
   badVoiceRooms = baseDeploy // {
     deployment = baseDeploy.deployment // {
-      voiceRooms = { "Office" = "no-such-host"; };
+      voiceRooms = {
+        "Office" = "no-such-host";
+      };
     };
   };
 
   missingDrives = baseDeploy // {
     hosts = baseDeploy.hosts // {
       pi-storage = baseDeploy.hosts.pi-storage // {
-        storage = { drives = { }; };
+        storage = {
+          drives = { };
+        };
       };
     };
   };
@@ -50,7 +66,9 @@ let
 
   voiceRoomOnServer = baseDeploy // {
     deployment = baseDeploy.deployment // {
-      voiceRooms = { "Office" = "server"; };
+      voiceRooms = {
+        "Office" = "server";
+      };
     };
   };
 

@@ -18,10 +18,7 @@ let
     version = 1;
     roles = [ "storage-pi" ];
     modules = [
-      (
-        { ... }:
-        { }
-      )
+      ({ ... }: { })
     ];
   };
 
@@ -30,18 +27,11 @@ let
     let
       result = builtins.tryEval thunk;
     in
-    if result.success then
-      "expected ${name} to throw, but it succeeded"
-    else
-      null;
+    if result.success then "expected ${name} to throw, but it succeeded" else null;
 
   cases = [
     (expectThrow "empty modules" (pluginLib.validatePlugin badPlugin))
-    (
-      expectThrow "incompatible role" (
-        pluginLib.resolvePlugins "server" [ wrongRolePlugin ]
-      )
-    )
+    (expectThrow "incompatible role" (pluginLib.resolvePlugins "server" [ wrongRolePlugin ]))
   ];
 
   failures = lib.filter (x: x != null) cases;

@@ -219,7 +219,9 @@ in
     ];
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${pkgs.callPackage ../../pkgs/scripts { domain = cfg.deployment.domain; }}/bin/backup-server";
+      ExecStart = "${
+        pkgs.callPackage ../../pkgs/scripts { domain = cfg.deployment.domain; }
+      }/bin/backup-server";
     };
   };
 

@@ -4,9 +4,7 @@
 { lib }:
 
 let
-  hostsWithRole =
-    hosts: role:
-    lib.filter (name: hosts.${name}.role == role) (lib.attrNames hosts);
+  hostsWithRole = hosts: role: lib.filter (name: hosts.${name}.role == role) (lib.attrNames hosts);
 
   primaryHost =
     hosts: role:
@@ -27,5 +25,12 @@ let
 
 in
 {
-  inherit hostsWithRole primaryHost hostIp hostHostname hostInterface voiceRoomForHost;
+  inherit
+    hostsWithRole
+    primaryHost
+    hostIp
+    hostHostname
+    hostInterface
+    voiceRoomForHost
+    ;
 }

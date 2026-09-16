@@ -5,11 +5,9 @@
 { lib }:
 
 let
-  isProfile =
-    value: value ? deployment && value ? hosts;
+  isProfile = value: value ? deployment && value ? hosts;
 
-  isMulti =
-    value: value ? profiles;
+  isMulti = value: value ? profiles;
 
   normalize =
     raw:

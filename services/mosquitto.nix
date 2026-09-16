@@ -57,40 +57,36 @@
           "topic readwrite #"
         ];
 
-        users =
-          {
-            # Home Assistant user.
-            # agenix secret file must contain the plaintext password (one line).
-            homeassistant = {
-              passwordFile = config.age.secrets.mosquitto-ha-pass.path;
-              acl = [ "readwrite #" ];
-            };
+        users = {
+          # Home Assistant user.
+          # agenix secret file must contain the plaintext password (one line).
+          homeassistant = {
+            passwordFile = config.age.secrets.mosquitto-ha-pass.path;
+            acl = [ "readwrite #" ];
+          };
 
-            # Frigate user.
-            frigate = {
-              passwordFile = config.age.secrets.mosquitto-frigate-pass.path;
-              acl = [
-                "readwrite frigate/#"
-                "readwrite homeassistant/#"
-              ];
-            };
+          # Frigate user.
+          frigate = {
+            passwordFile = config.age.secrets.mosquitto-frigate-pass.path;
+            acl = [
+              "readwrite frigate/#"
+              "readwrite homeassistant/#"
+            ];
+          };
 
-            # Zigbee2MQTT user.
-            zigbee2mqtt = {
-              passwordFile = config.age.secrets.mosquitto-z2m-pass.path;
-              acl = [
-                "readwrite zigbee2mqtt/#"
-                "readwrite homeassistant/#"
-              ];
-            };
-          }
-          // lib.mapAttrs (
-            name: user:
-            {
-              passwordFile = user.passwordFile;
-              acl = user.acl;
-            }
-          ) config.lanbat.mosquitto.extraUsers;
+          # Zigbee2MQTT user.
+          zigbee2mqtt = {
+            passwordFile = config.age.secrets.mosquitto-z2m-pass.path;
+            acl = [
+              "readwrite zigbee2mqtt/#"
+              "readwrite homeassistant/#"
+            ];
+          };
+        }
+        // lib.mapAttrs (name: user: {
+          passwordFile = user.passwordFile;
+          acl = user.acl;
+        }) config.lanbat.mosquitto.extraUsers;
       }
     ];
   };

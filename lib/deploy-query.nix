@@ -2,26 +2,27 @@
 #
 # Query deployment values for scripts and flake apps. Reads normalized profiles
 # (same source as flake.nix: deploy.nix or deployments/example/deploy.nix).
-{ lib, profiles, hasDeploy, root, hostLib, hostFlakeName }:
+{
+  lib,
+  profiles,
+  hasDeploy,
+  root,
+  hostLib,
+  hostFlakeName,
+}:
 
 let
   profileNames = lib.attrNames profiles;
 
-  defaultProfile =
-    if profiles ? homelab then
-      "homelab"
-    else
-      lib.head profileNames;
+  defaultProfile = if profiles ? homelab then "homelab" else lib.head profileNames;
 
   resolveProfile =
-    optionalProfile:
-    if optionalProfile == null then defaultProfile else optionalProfile;
+    optionalProfile: if optionalProfile == null then defaultProfile else optionalProfile;
 
   deployFor = profileName: profiles.${profileName};
 
   serverHostName =
-    deploy:
-    deploy.deployment.primaryServer or (hostLib.primaryHost deploy.hosts "server");
+    deploy: deploy.deployment.primaryServer or (hostLib.primaryHost deploy.hosts "server");
 
   deployFilePath =
     profileName:
@@ -34,28 +35,24 @@ let
     else
       root + "/deploy.nix";
 
-  hostLines =
-    lib.concatStringsSep "\n" (
-      lib.flatten (
+  hostLines = lib.concatStringsSep "\n" (
+    lib.flatten (
+      lib.mapAttrsToList (
+        profileName: deploy:
         lib.mapAttrsToList (
-          profileName: deploy:
-          lib.mapAttrsToList (
-            hostName: host:
-            "${hostFlakeName profileName hostName} ${host.networking.ip}"
-          ) deploy.hosts
-        ) profiles
-      )
-    );
+          hostName: host: "${hostFlakeName profileName hostName} ${host.networking.ip}"
+        ) deploy.hosts
+      ) profiles
+    )
+  );
 
-  hostIpLines =
-    lib.concatStringsSep "\n" (
-      lib.flatten (
-        lib.mapAttrsToList (
-          profileName: deploy:
-          lib.mapAttrsToList (hostName: host: host.networking.ip) deploy.hosts
-        ) profiles
-      )
-    );
+  hostIpLines = lib.concatStringsSep "\n" (
+    lib.flatten (
+      lib.mapAttrsToList (
+        profileName: deploy: lib.mapAttrsToList (hostName: host: host.networking.ip) deploy.hosts
+      ) profiles
+    )
+  );
 
   query = {
     "server-ip" =
@@ -65,9 +62,7 @@ let
       in
       hostLib.hostIp deploy.hosts (serverHostName deploy);
 
-    domain =
-      optionalProfile:
-      (deployFor (resolveProfile optionalProfile)).deployment.domain;
+    domain = optionalProfile: (deployFor (resolveProfile optionalProfile)).deployment.domain;
 
     profile = resolveProfile;
 
@@ -89,9 +84,7 @@ let
 
     "host-ips" = _: hostIpLines;
 
-    "deploy-file" =
-      optionalProfile:
-      toString (deployFilePath (resolveProfile optionalProfile));
+    "deploy-file" = optionalProfile: toString (deployFilePath (resolveProfile optionalProfile));
   };
 
 in

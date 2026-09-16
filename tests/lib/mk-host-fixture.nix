@@ -20,7 +20,9 @@ let
   };
 
   inputsWithSelf = inputs // {
-    self = (inputs.self or { }) // { inherit lanbatPlugins; };
+    self = (inputs.self or { }) // {
+      inherit lanbatPlugins;
+    };
   };
 
   mkHost = import ../../lib/mkHost.nix;
@@ -104,7 +106,8 @@ let
     };
   };
 
-  mkHostFor = hostName: hostCfg:
+  mkHostFor =
+    hostName: hostCfg:
     mkHost {
       inherit
         lib
