@@ -5,6 +5,7 @@ set -euo pipefail
 HASS_CONFIG="${HASS_CONFIG:-/var/lib/hass}"
 CONFIG_ENTRIES="${HASS_CONFIG}/.storage/core.config_entries"
 AREA_REGISTRY="${HASS_CONFIG}/.storage/core.area_registry"
+RESTORE_STATE="${HASS_CONFIG}/.storage/core.restore_state"
 STATE_DIR="${HASS_CONFIG}/.lanbat-post-setup"
 
 MQTT_BROKER="${MQTT_BROKER:-127.0.0.1}"
@@ -27,15 +28,19 @@ LLM_DOMAIN="extended_openai_conversation"
 LLM_TITLE="Voice LLM"
 # Home Assistant names the agent's entity after the title.
 LLM_ENTITY="conversation.voice_llm"
-LLM_MAX_TOKENS="${LLM_MAX_TOKENS:-60}"
+LLM_MAX_TOKENS="${LLM_MAX_TOKENS:-150}"
 LLM_USE_TOOLS="${LLM_USE_TOOLS:-false}"
+
+# Seconds of silence after a command before speech-to-text runs (Home Assistant
+# "Finished speaking detection"): aggressive 0.25, default 0.7, relaxed 1.25.
+SATELLITE_VAD="${SATELLITE_VAD:-aggressive}"
 
 PIPELINES="${HASS_CONFIG}/.storage/assist_pipeline.pipelines"
 PIPELINE_NAME="Voice"
 PIPELINE_LANGUAGE="${PIPELINE_LANGUAGE:-en}"
 PIPELINE_STT_LANGUAGE="${PIPELINE_STT_LANGUAGE:-en}"
 PIPELINE_TTS_LANGUAGE="${PIPELINE_TTS_LANGUAGE:-en_GB}"
-PIPELINE_TTS_VOICE="${PIPELINE_TTS_VOICE:-en_GB-alba-medium}"
+PIPELINE_TTS_VOICE="${PIPELINE_TTS_VOICE:-en_GB-alan-medium}"
 PIPELINE_WAKE_WORD="${PIPELINE_WAKE_WORD:-okay_nabu}"
 
 # The voice satellites' token (lanbat.voiceRooms): a long-lived access token of
@@ -341,6 +346,39 @@ ensure_pipeline() {
   mark_done "$key"
 }
 
+satellite_vad_state_key() {
+  echo "satellite-vad-${SATELLITE_VAD}"
+}
+
+# Home Assistant defaults Wyoming satellites to relaxed VAD, which waits 1.25 s
+# of silence after each command before STT — noticeably slow in a living room.
+ensure_satellite_vad() {
+  local key tmp count
+  key="$(satellite_vad_state_key)"
+  if state_done "$key"; then return 0; fi
+  [[ -f "$RESTORE_STATE" ]] || return 0
+  count="$(jq -r --arg vad "$SATELLITE_VAD" '
+    [.data[]
+      | select(.state.entity_id | test("_finished_speaking_detection$"))
+      | select(.state.state != $vad)] | length
+  ' "$RESTORE_STATE")"
+  if (( count == 0 )); then
+    mark_done "$key"
+    return 0
+  fi
+  log "setting satellite finished speaking detection to ${SATELLITE_VAD}"
+  tmp="$(mktemp)"
+  jq --arg vad "$SATELLITE_VAD" '
+    .data = [.data[]
+      | if (.state.entity_id | test("_finished_speaking_detection$")) then
+          .state.state = $vad
+        else . end]
+  ' "$RESTORE_STATE" > "$tmp"
+  install -o hass -g hass -m 0600 "$tmp" "$RESTORE_STATE"
+  rm "$tmp"
+  mark_done "$key"
+}
+
 # True when the token's record is missing from Home Assistant or out of date.
 # The record goes to jq as a file, so its signing key stays out of the process
 # list.
@@ -464,6 +502,7 @@ done
 if [[ -n "$LOCAL_SATELLITE_PORT" ]] && wyoming_needed server-satellite; then needs_work=true; fi
 if llm_needed; then needs_work=true; fi
 if ! state_done "$(pipeline_state_key)"; then needs_work=true; fi
+if ! state_done "$(satellite_vad_state_key)"; then needs_work=true; fi
 if voice_token_needed; then needs_work=true; fi
 
 if [[ "$needs_work" != true ]]; then
@@ -486,6 +525,7 @@ if [[ -n "$LOCAL_SATELLITE_PORT" ]]; then
 fi
 ensure_llm
 ensure_pipeline
+ensure_satellite_vad
 ensure_voice_token
 ensure_areas
 
