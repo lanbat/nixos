@@ -7,17 +7,20 @@
 
 ## Deploying changes
 
-Deploy from your workstation with a `path:` flake reference. `local.nix` is gitignored
-and only a `path:` reference includes it; without it the `server` and `pi`
-configurations don't exist.
+Deploy from your workstation with a `path:` flake reference. `deploy.nix` and profile
+files under `deployments/` are gitignored and only a `path:` reference includes them.
 
 ```bash
-deploy path:.#server
-deploy path:.#pi          # builds on the Pi itself
+deploy path:.#homelab-server
+deploy path:.#homelab-pi-storage   # builds on the Pi itself
 
 # Build without deploying, to check for errors
-nix build path:.#nixosConfigurations.server.config.system.build.toplevel
+nix build path:.#nixosConfigurations.homelab-server.config.system.build.toplevel
 ```
+
+Host names are `<profile>-<host-key>`. A single-profile setup that inlines
+`{ deployment, hosts }` in `deploy.nix` without a `profiles` wrapper uses unprefixed
+names (`server`, `pi-storage`).
 
 deploy-rs activates the new system, then confirms it over a fresh SSH connection. If
 activation fails or the host becomes unreachable, it rolls back to the previous
@@ -45,8 +48,8 @@ nix flake check --no-build path:.
 git commit -m "flake.lock: update" flake.lock
 git push
 # Hosts pick up the change on the next nightly run, or deploy now:
-deploy path:.#server
-deploy path:.#pi
+deploy path:.#homelab-server
+deploy path:.#homelab-pi-storage
 ```
 
 Check the last upgrade:
@@ -157,7 +160,7 @@ sudo systemctl restart podman-immich-server
 Samba uses local password storage (smbpasswd). Users must be Linux users first.
 
 ```bash
-# Add a new user (declare the Linux account in hosts/server/default.nix first)
+# Add a new user (declare the Linux account in modules/core/human-users.nix first)
 sudo smbpasswd -a alice        # sets Samba password
 sudo smbpasswd -e alice        # enable if disabled
 
@@ -167,7 +170,7 @@ sudo smbpasswd -x alice
 # List Samba users
 sudo pdbedit -L
 
-# Add a human user (declare in hosts/server/default.nix):
+# Add a human user (declare in modules/core/human-users.nix):
 #   lanbat.humanUsers.alice = { uid = 1002; groups = [ "media" ]; };
 # Deploy server + Pi, then set Samba password (above).
 # Per-user dirs and XFS quotas are applied by human-users.nix and
@@ -332,7 +335,7 @@ Authentik is pinned to a specific version in `services/authentik/default.nix`
 1. Check the [Authentik release notes](https://docs.goauthentik.io/docs/releases) —
    Authentik requires sequential upgrades (do not skip major versions).
 2. Update `authentikVersion`.
-3. Deploy: `deploy path:.#server`
+3. Deploy: `deploy path:.#homelab-server`
 
 ### Adding a user
 

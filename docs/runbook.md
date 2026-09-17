@@ -156,7 +156,7 @@ without them.
 
 1. Edit `services/nextcloud.nix`: bump `package = pkgs.nextcloudNN` by one major
    (currently `pkgs.nextcloud32`; next step is `pkgs.nextcloud33`).
-2. From the workstation: `deploy path:.#server`.
+2. From the workstation: `deploy path:.#homelab-server`.
 3. On the server, watch migration units:
    ```bash
    journalctl -u nextcloud-setup -u nextcloud-update-db -f
@@ -427,7 +427,7 @@ installer, recreate the root filesystem and install onto the existing layout:
 
 ```bash
 ssh nixos@<installer-ip> sudo mkfs.ext4 -F /dev/lanbat/root
-nixos-anywhere --flake path:.#server --target-host nixos@<installer-ip> \
+nixos-anywhere --flake path:.#homelab-server --target-host nixos@<installer-ip> \
   --disko-mode mount --extra-files /tmp/server-root
 ```
 

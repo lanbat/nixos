@@ -40,7 +40,7 @@
 { config, ... }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
 in
 
 {

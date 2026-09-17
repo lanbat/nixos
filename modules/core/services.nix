@@ -186,6 +186,14 @@ let
 
         # ── Pi storage (modules/wiring/nfs.nix) ───────────────────────────────
         nfs = {
+          storageHost = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            description = ''
+              Host key of the storage-pi that exports the drives. Defaults to
+              deployment.primaryStorage when null.
+            '';
+          };
           drives = mkOption {
             type = types.listOf (
               types.enum [

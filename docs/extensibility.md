@@ -1,0 +1,231 @@
+# Extensibility
+
+The lanbat NixOS flake is structured in three layers:
+
+| Layer | What it is | Where it lives |
+|---|---|---|
+| **Deployment profile** | One site or environment (domain, hosts, secrets scope) | `deployments/<profile>/deploy.nix` |
+| **Role** | Host-type infrastructure (server, storage-pi, voice-pi) | `lib/roles/` |
+| **Plugin** | Optional features enabled per host | `plugins/` or external flake inputs |
+
+## Deployment profiles (multi-site)
+
+A **profile** is a self-contained site: its own domain, IP addresses, disks, and host list. You can run several profiles from one flake — a home lab and a vacation cabin, staging and production, two unrelated sites.
+
+### Layout
+
+```
+deploy.nix                          # root manifest (gitignored) — lists active profiles
+deployments/
+  example/deploy.nix                # CI example (checked in)
+  homelab/deploy.nix                # your primary site (gitignored)
+  cabin/deploy.nix                  # second site (gitignored)
+```
+
+### Root manifest
+
+```nix
+# deploy.nix
+{ inputs, ... }: {
+  profiles = {
+    homelab = import ./deployments/homelab/deploy.nix { inherit inputs; };
+    cabin   = import ./deployments/cabin/deploy.nix   { inherit inputs; };
+  };
+}
+```
+
+Each profile file has the same shape as before: `{ deployment = { ... }; hosts = { ... }; }`.
+
+### Flake output names
+
+Hosts are exposed as `<profile>-<host-key>`:
+
+| Profile | Host key | Flake attribute | deploy-rs node |
+|---|---|---|---|
+| `homelab` | `server` | `homelab-server` | `homelab-server` |
+| `homelab` | `pi-storage` | `homelab-pi-storage` | `homelab-pi-storage` |
+| `cabin` | `server` | `cabin-server` | `cabin-server` |
+
+```bash
+deploy path:.#homelab-server
+deploy path:.#cabin-pi-storage
+```
+
+A single-profile setup that inlines `{ deployment, hosts }` directly in `deploy.nix` (without a `profiles` wrapper) uses the implicit profile name `default`, so host names stay `server` and `pi-storage`.
+
+### Isolation between profiles
+
+Each profile is fully independent:
+
+- Separate `deployment.*` settings (domain, gateway, SSH key, …)
+- Separate host keys and IP addresses
+- Separate `nixosConfigurations` and `deploy.nodes` entries
+- Hosts in one profile only see other hosts **in the same profile** via `config.lanbat.hosts` (cross-profile references are not supported)
+
+Secrets (`secrets/*.age`) are still shared at the repo level; encrypt each secret for the agenix host keys of every profile that needs it.
+
+## Roles
+
+Roles bundle infrastructure modules for a host type. They are not optional — every host declares `role = "server"` (or `storage-pi`, `voice-pi`).
+
+| Role | Purpose |
+|---|---|
+| `server` | LUKS layers, Caddy, databases, containers |
+| `storage-pi` | Encrypted NVMe, NFS export, optional TV/voice plugins |
+| `voice-pi` | Lightweight Wyoming satellite endpoint |
+
+Add a new role by creating `lib/roles/<name>.nix` and registering it in `lib/roles.nix` and `modules/core/settings.nix`.
+
+## Plugins
+
+Plugins add optional features to compatible roles. Built-in plugins:
+
+| Plugin | Roles | What it enables |
+|---|---|---|
+| `lanbatPlugins.services` | `server` | All homelab services |
+| `lanbatPlugins.tv` | `storage-pi` | Kodi + EmulationStation |
+| `lanbatPlugins.voice` | `storage-pi`, `voice-pi` | Wyoming satellite |
+
+### External plugins
+
+Add a flake input and reference it in a host's `plugins` list:
+
+```nix
+# flake.nix inputs
+lanbat-media.url = "github:you/lanbat-media";
+
+# deployments/homelab/deploy.nix
+hosts.server.plugins = [
+  inputs.self.lanbatPlugins.services
+  inputs.lanbat-media.lanbatPlugin
+];
+```
+
+See [plugins.md](plugins.md) for the plugin author contract.
+
+## Multiple machines per profile
+
+Within one profile you can declare any number of hosts:
+
+```nix
+hosts = {
+  server = { role = "server"; ... };
+  pi-storage = { role = "storage-pi"; ... };
+  pi-bedroom = { role = "voice-pi"; ... };
+  pi-garage   = { role = "voice-pi"; ... };
+};
+```
+
+Services that use Pi storage declare which storage host to mount from:
+
+```nix
+lanbat.services.jellyfin.nfs = {
+  storageHost = "pi-storage";  # defaults to primary storage-pi
+  drives = [ "a" "b" ];
+};
+```
+
+Voice satellites map Home Assistant areas to host keys:
+
+```nix
+deployment.voiceRooms = {
+  "Living Room" = "pi-storage";
+  "Bedroom"     = "pi-bedroom";
+  "Office"      = "server";
+};
+```
+
+### Example: storage Pi + bedroom voice Pi
+
+A profile with one storage host and one voice satellite:
+
+```nix
+# deployments/homelab/deploy.nix
+hosts = {
+  server = {
+    role = "server";
+    plugins = [ inputs.self.lanbatPlugins.services ];
+    # ...
+  };
+  pi-storage = {
+    role = "storage-pi";
+    plugins = [
+      inputs.self.lanbatPlugins.tv
+      inputs.self.lanbatPlugins.voice
+    ];
+    # ...
+  };
+  pi-bedroom = {
+    role = "voice-pi";
+    plugins = [ inputs.self.lanbatPlugins.voice ];
+    # ...
+  };
+};
+
+deployment.voiceRooms = {
+  "Living Room" = "pi-storage";
+  "Bedroom"     = "pi-bedroom";
+};
+```
+
+Services on the server that mount Pi storage point at the storage host explicitly:
+
+```nix
+# services/jellyfin.nix (or any lanbat.services.*.nfs)
+lanbat.services.jellyfin.nfs = {
+  storageHost = "pi-storage";
+  drives = [ "a" "b" ];
+};
+```
+
+Match agenix recipients in `secrets/secrets.nix` to those host keys:
+
+```nix
+let
+  server     = "ssh-ed25519 ..."; # hosts.server
+  pi-storage = "ssh-ed25519 ..."; # hosts.pi-storage
+  pi-bedroom = "ssh-ed25519 ..."; # hosts.pi-bedroom
+  admin      = "ssh-ed25519 ...";
+
+  serverKeys = [ server admin ];
+  allPis     = [ pi-storage pi-bedroom ];
+  allKeys    = serverKeys ++ allPis;
+in
+{
+  "telegraf-token.age".publicKeys = allKeys;
+  "ha-voice-token.age".publicKeys = allKeys;
+  # everything else → serverKeys
+}
+```
+
+Deploy each host independently:
+
+```bash
+deploy path:.#homelab-server
+deploy path:.#homelab-pi-storage
+deploy path:.#homelab-pi-bedroom
+```
+
+See [secrets/README.md](../secrets/README.md) for multi-Pi and multi-profile
+recipient patterns.
+
+## Tooling
+
+Flake apps help validate deployment files and query values from scripts:
+
+| Command | Purpose |
+|---|---|
+| `nix run .#validate-deploy` | Run deploy/profile validation checks (same as the CI check) |
+| `nix run .#hosts` | List flake host names and IPs across active profiles |
+| `nix run .#deploy-query -- server-ip` | Print the primary server IP (optional second arg: profile name) |
+
+Other `deploy-query` keys: `domain`, `profile`, `flake-server`, `immich-admin-email`,
+`host-ips`, `deploy-file`. Example:
+
+```bash
+nix run .#deploy-query -- domain homelab
+nix run .#deploy-query -- deploy-file cabin
+```
+
+`secrets/lib/read-deploy.sh` and other scripts delegate to `deploy-query` instead
+of parsing `deploy.nix` by hand.

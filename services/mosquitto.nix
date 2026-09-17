@@ -82,7 +82,11 @@
               "readwrite homeassistant/#"
             ];
           };
-        };
+        }
+        // lib.mapAttrs (name: user: {
+          passwordFile = user.passwordFile;
+          acl = user.acl;
+        }) config.lanbat.mosquitto.extraUsers;
       }
     ];
   };
@@ -94,13 +98,13 @@
   # ACCEPT rules (each -I pushes earlier insertions down).
   # extraStopCommands removes the rules on reload to prevent accumulation.
   networking.firewall.extraCommands = ''
-    iptables -I INPUT -p tcp --dport 1883 ! -s ${config.lanbat.lanSubnet} -j DROP
-    iptables -I INPUT -p tcp --dport 1883 -s ${config.lanbat.lanSubnet} -j ACCEPT
+    iptables -I INPUT -p tcp --dport 1883 ! -s ${config.lanbat.deployment.lanSubnet} -j DROP
+    iptables -I INPUT -p tcp --dport 1883 -s ${config.lanbat.deployment.lanSubnet} -j ACCEPT
     iptables -I INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT
   '';
   networking.firewall.extraStopCommands = ''
     iptables -D INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 1883 -s ${config.lanbat.lanSubnet} -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 1883 ! -s ${config.lanbat.lanSubnet} -j DROP 2>/dev/null || true
+    iptables -D INPUT -p tcp --dport 1883 -s ${config.lanbat.deployment.lanSubnet} -j ACCEPT 2>/dev/null || true
+    iptables -D INPUT -p tcp --dport 1883 ! -s ${config.lanbat.deployment.lanSubnet} -j DROP 2>/dev/null || true
   '';
 }

@@ -28,23 +28,25 @@ before the first install. The solution:
 
 ### 1. Create your secrets.nix
 
-`secrets/secrets.nix` is gitignored (like `local.nix`) — it contains real
+`secrets/secrets.nix` is gitignored (like `deploy.nix`) — it contains real
 SSH public keys that identify your machines and should not be committed.
 
 ```bash
 cp secrets/secrets.nix.example secrets/secrets.nix
 ```
 
-Fill in the three keys:
+Fill in the keys (one per host in your profile, plus your workstation key):
 
 ```nix
-server = "ssh-ed25519 AAAA...";   # from: ssh admin@server cat /etc/ssh/ssh_host_ed25519_key.pub
-pi     = "ssh-ed25519 AAAA...";   # from: ssh admin@pi5    cat /etc/ssh/ssh_host_ed25519_key.pub
-admin  = "ssh-ed25519 AAAA...";   # from: cat ~/.ssh/id_ed25519.pub
+server     = "ssh-ed25519 AAAA...";   # hosts.server
+pi-storage = "ssh-ed25519 AAAA...";   # hosts.pi-storage
+pi-bedroom = "ssh-ed25519 AAAA...";   # hosts.pi-bedroom (optional voice-pi)
+admin      = "ssh-ed25519 AAAA...";   # from: cat ~/.ssh/id_ed25519.pub
 ```
 
 Fill in `admin` first and add the host keys at steps 1c and 2e of the deployment
-checklist.
+checklist. See `secrets/secrets.nix.example` for the recipient groups
+(`serverKeys`, `storagePiKeys`, `allKeys`, …).
 
 ### 2. Create all required secrets
 
@@ -158,6 +160,60 @@ If you reinstall a machine with a new SSH host key, update `secrets/secrets.nix`
 ```bash
 agenix -r
 ```
+
+## Multiple Pis
+
+When a profile has more than one Pi, add each host's SSH public key to
+`secrets/secrets.nix` and group recipients like the example:
+
+```nix
+let
+  server     = "...";
+  pi-storage = "...";
+  pi-bedroom = "...";  # optional voice-pi
+  admin      = "...";
+
+  serverKeys    = [ server admin ];
+  storagePiKeys = [ pi-storage admin ];
+  voicePiKeys   = [ pi-bedroom admin ];
+  allPis        = [ pi-storage pi-bedroom ];
+  allKeys       = serverKeys ++ allPis;
+in
+{
+  "telegraf-token.age".publicKeys = allKeys;
+  "ha-voice-token.age".publicKeys = allKeys;
+  # server-only secrets stay on serverKeys
+}
+```
+
+Secrets shared across hosts (Telegraf token, voice satellite token) use `allKeys`.
+Server-only secrets stay on `serverKeys`. Drop `pi-bedroom` from `allPis` if you
+have no voice-pi host.
+
+## Multiple profiles (homelab + cabin)
+
+Secrets live at the repo root (`secrets/*.age`) and are shared across all
+deployment profiles. Encrypt each `.age` file to the **union** of host keys from
+every profile that needs that secret:
+
+```nix
+# homelab server + cabin server both need Grafana
+serverKeys = [ homelab-server cabin-server admin ];
+"grafana-env.age".publicKeys = serverKeys;
+```
+
+This means the same encrypted file works on every profile that is a recipient.
+The tradeoff is duplication: a cabin-only secret still sits beside homelab secrets,
+and you must re-run `agenix -r` when any profile's host key changes.
+
+## Future: per-profile secrets
+
+The desired end state is `deployments/<profile>/secrets.nix` with profile-scoped
+`.age` files, so homelab and cabin never share recipient lists. That layout is
+**not implemented yet** — track progress in
+[docs/superpowers/plans/2026-09-16-post-restructure-hardening.md](../docs/superpowers/plans/2026-09-16-post-restructure-hardening.md).
+
+Until then, use the union-of-keys pattern above.
 
 ## Notes
 

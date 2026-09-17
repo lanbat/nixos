@@ -13,7 +13,7 @@
 # each service's lanbat.services.<name>.account on the server.
 #
 # Security note: restrict exports to the server's IP only.
-# The Pi firewall (hosts/pi/default.nix) also drops NFS from other sources.
+# The Pi firewall (lib/roles/storage-pi.nix) also drops NFS from other sources.
 {
   config,
   pkgs,
@@ -22,7 +22,7 @@
 }:
 
 let
-  serverIp = config.lanbat.serverIp;
+  serverIp = config.lanbat.deployment.serverIp;
 
   # Common NFS export options. mp exports a drive only while it is mounted, so
   # a locked drive is never served as the empty directory on the SD card.
@@ -58,7 +58,7 @@ in
   # NFSv4 ID mapping domain — must match server config.
   services.nfs.idmapd.settings = {
     General = {
-      Domain = config.lanbat.nfsIdmapdDomain; # same on both machines
+      Domain = config.lanbat.deployment.nfsIdmapdDomain;
     };
   };
 }

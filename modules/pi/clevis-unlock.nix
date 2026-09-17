@@ -83,6 +83,8 @@
 
 let
   cfg = config.lanbat;
+  host = cfg.hosts.${cfg.hostKey};
+  storageDrives = host.storage.drives;
 
   # Unlock + mount script for one drive.
   # Arguments: $1 = by-id path, $2 = mapper name, $3 = mount point.
@@ -184,7 +186,7 @@ in
 
       # Retried by storage-a-unlock.timer (see below).
 
-      ExecStart = "${unlockScript} ${cfg.piStorageDriveA} storage-a /mnt/storage-a";
+      ExecStart = "${unlockScript} ${storageDrives.a} storage-a /mnt/storage-a";
       ExecStop = "${stopScript} storage-a /mnt/storage-a";
     };
   };
@@ -205,7 +207,7 @@ in
       RemainAfterExit = true;
       # Retried by storage-b-unlock.timer (see below).
 
-      ExecStart = "${unlockScript} ${cfg.piStorageDriveB} storage-b /mnt/storage-b";
+      ExecStart = "${unlockScript} ${storageDrives.b} storage-b /mnt/storage-b";
       ExecStop = "${stopScript} storage-b /mnt/storage-b";
     };
   };

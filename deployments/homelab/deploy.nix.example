@@ -1,0 +1,80 @@
+# deployments/homelab/deploy.nix — one site/profile. Not tracked by git.
+#
+# Copy to deploy.nix in this directory, then reference it from the root
+# deploy.nix manifest (see deploy.nix.example at the repo root).
+{ inputs, ... }:
+{
+  deployment = {
+    domain = "CHANGE_ME";
+    rootDomain = "CHANGE_ME";
+    gatewayIp = "CHANGE_ME";
+    lanSubnet = "CHANGE_ME";
+    nfsIdmapdDomain = "home.lan";
+    timezone = "Europe/London";
+    phoneRegion = "GB";
+    haLatitude = "51.5074";
+    haLongitude = "-0.1278";
+    haElevation = 11;
+    haLlm = {
+      baseUrl = "CHANGE_ME";
+      model = "CHANGE_ME";
+    };
+    voiceRooms = {
+      "Office" = "server";
+      "Living Room" = "pi-storage";
+    };
+    adminSshKey = "CHANGE_ME";
+    zigbeeVendorId = "CHANGE_ME";
+    zigbeeProductId = "CHANGE_ME";
+    immich.adminEmail = "CHANGE_ME";
+
+    # Optional — lanbat-justpark-parking plugin (JustPark + Frigate LPR alerts):
+    # parkingGuard = {
+    #   siteId = "CHANGE_ME";
+    #   cameras = [ "c1" ];
+    #   graceMinutes = 5;
+    #   cooldownMinutes = 30;
+    #   residentPlates = [ ];
+    # };
+  };
+
+  hosts = {
+    server = {
+      role = "server";
+      system = "x86_64-linux";
+      networking = {
+        ip = "CHANGE_ME";
+        interface = "CHANGE_ME";
+        hostname = "server";
+      };
+      disks = {
+        system = "/dev/disk/by-id/CHANGE_ME";
+      };
+      plugins = [
+        inputs.self.lanbatPlugins.services
+        # inputs.lanbat-justpark-parking.lanbatPlugin
+      ];
+    };
+
+    pi-storage = {
+      role = "storage-pi";
+      system = "aarch64-linux";
+      platform = "raspberry-pi";
+      networking = {
+        ip = "CHANGE_ME";
+        interface = "end0";
+        hostname = "pi5";
+      };
+      storage = {
+        drives = {
+          a = "CHANGE_ME";
+          b = "CHANGE_ME";
+        };
+      };
+      plugins = [
+        inputs.self.lanbatPlugins.tv
+        inputs.self.lanbatPlugins.voice
+      ];
+    };
+  };
+}

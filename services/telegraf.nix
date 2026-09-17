@@ -124,8 +124,8 @@ in
       inputs.ping = [
         {
           urls = [
-            lanbat.piIp
-            lanbat.gatewayIp
+            lanbat.deployment.storageIp
+            lanbat.deployment.gatewayIp
             "1.1.1.1"
           ];
         }

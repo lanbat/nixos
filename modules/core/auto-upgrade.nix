@@ -9,10 +9,10 @@
 # reference ("path:/etc/nixos#<host>") rather than a remote flake URL, for
 # two reasons:
 #
-#   1. local.nix is gitignored.  Remote flakes and git-based references
-#      (including a plain /etc/nixos inside a git clone) only include tracked
-#      files, so they would build with placeholder settings.  A path:
-#      reference copies the directory as it is, including local.nix.
+#   1. deploy.nix and deployments/*/deploy.nix are gitignored.  Remote flakes
+#      and git-based references only include tracked files, so they would
+#      build with placeholder settings.  A path: reference copies the
+#      directory as it is, including those files.
 #
 #   2. We can control exactly which commit is built by pulling git first.
 #
@@ -33,9 +33,10 @@
 #
 # Setup
 # -----
-# 1. Clone the repo on each machine and add its local.nix:
+# 1. Clone the repo on each machine and add deploy.nix + profile files:
 #      git clone <your-repo-url> /etc/nixos
-#      cp local.nix /etc/nixos/local.nix
+#      cp deploy.nix /etc/nixos/deploy.nix
+#      cp -r deployments/homelab /etc/nixos/deployments/homelab
 # 2. Configure a git remote so pull works (HTTPS token or SSH deploy key).
 #    See docs/deployment-checklist.md § "Clone config repo on each machine".
 # 3. Each host configures system.autoUpgrade in its own default.nix.

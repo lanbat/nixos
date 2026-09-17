@@ -6,14 +6,28 @@
 
 let
   eval = lib.evalModules {
-    modules = [ ../modules/core/settings.nix ];
+    modules = [
+      {
+        options.assertions = lib.mkOption {
+          default = [ ];
+        };
+      }
+      ../modules/core/settings.nix
+      ../modules/core/host-context.nix
+    ];
   };
 
   allowedWithDefault = [
-    "haLlm"
-    "voiceSatelliteServer"
-    "voiceRooms.server"
-    "voiceRooms.pi"
+    "profile"
+    "deployment.haLlm"
+    "deployment.voiceRooms"
+    "deployment.primaryServer"
+    "deployment.primaryStorage"
+    "deployment.serverIp"
+    "deployment.storageIp"
+    "deployment.storageHostname"
+    "hosts"
+    "mosquitto.extraUsers"
   ];
 
   collectOptions =

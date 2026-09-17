@@ -48,7 +48,7 @@
 }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
 
   # Authentik version — pin this and bump deliberately.
   authentikVersion = "2024.12.2";

@@ -1,5 +1,17 @@
 # Architecture
 
+Configuration is organized in three layers (see [extensibility.md](extensibility.md)):
+
+| Layer | Purpose | Location |
+|---|---|---|
+| **Deployment profile** | Site/environment (domain, hosts, plugins) | `deployments/<profile>/deploy.nix` |
+| **Role** | Host infrastructure bundle | `lib/roles/` (`server`, `storage-pi`, `voice-pi`) |
+| **Plugin** | Optional features per host | `plugins/` + external flake inputs |
+
+The flake builds one NixOS configuration per host in each active profile
+(`homelab-server`, `homelab-pi-storage`, …). A single-profile `deploy.nix` without
+a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
+
 ## Overview
 
 ```
@@ -168,3 +180,15 @@ If the mount disappears, the service is stopped. When the mount returns, the ser
 The mounts use soft NFS with a 30-second timeout,
 meaning the kernel gives up on a stalled NFS call after ~90 seconds rather than
 blocking forever.
+
+## Tooling
+
+Validate deployment files and query profile values from the flake:
+
+```bash
+nix run .#validate-deploy
+nix run .#hosts
+nix run .#deploy-query -- server-ip
+```
+
+See [extensibility.md](extensibility.md) for the full list of `deploy-query` keys.

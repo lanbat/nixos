@@ -1,0 +1,25 @@
+# deploy.nix — your deployment manifest. Not tracked by git.
+#
+# HOW TO USE
+# ----------
+# 1. cp deploy.nix.example deploy.nix
+# 2. Create one deploy.nix per site under deployments/<profile>/ (see
+#    deployments/homelab/deploy.nix.example).
+# 3. List the profiles you want active below.
+# 4. Deploy with a path: reference and the profile-prefixed host name:
+#      deploy path:.#homelab-server
+#      deploy path:.#homelab-pi-storage
+#      deploy path:.#cabin-server
+#
+# A single-profile setup can omit profiles and inline deployment + hosts
+# directly (see deployments/example/deploy.nix).
+{ inputs, ... }:
+{
+  profiles = {
+    homelab = import ./deployments/homelab/deploy.nix { inherit inputs; };
+
+    # Second site — copy deployments/homelab/deploy.nix.example to
+    # deployments/cabin/deploy.nix and uncomment:
+    # cabin = import ./deployments/cabin/deploy.nix { inherit inputs; };
+  };
+}

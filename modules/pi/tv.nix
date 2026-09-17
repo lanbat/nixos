@@ -1,6 +1,6 @@
 # modules/pi/tv.nix
 #
-# TV frontend on the Pi's HDMI output, when lanbat.piTvFrontend is set.
+# TV frontend on the Pi's HDMI output (loaded via the lanbat-tv plugin).
 #
 # Two sessions take turns on the screen. Each is a systemd service that runs
 # as the "media" user on tty1, and each conflicts with the other, so starting
@@ -189,7 +189,7 @@ let
     };
 in
 {
-  config = lib.mkIf config.lanbat.piTvFrontend {
+  config = {
     users.users.media = {
       uid = 1000;
       isNormalUser = true;

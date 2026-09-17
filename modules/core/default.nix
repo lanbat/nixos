@@ -5,6 +5,7 @@
 {
   imports = [
     ./settings.nix
+    ./host-context.nix
     ./services.nix
     ./base.nix
     ./auto-upgrade.nix

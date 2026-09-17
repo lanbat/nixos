@@ -44,7 +44,7 @@
 #       restic -r <control-repo>  init
 #       restic -r <workload-repo> init
 #
-#  5. Configure lanbat.backups.* in local.nix.
+#  5. Configure lanbat.backups.* in the deployment profile.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # LUKS HEADER BACKUPS (CRITICAL — DO MANUALLY)
@@ -219,7 +219,9 @@ in
     ];
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${pkgs.callPackage ../../pkgs/scripts { inherit (cfg) domain; }}/bin/backup-server";
+      ExecStart = "${
+        pkgs.callPackage ../../pkgs/scripts { domain = cfg.deployment.domain; }
+      }/bin/backup-server";
     };
   };
 
@@ -234,7 +236,7 @@ in
   };
 
   # ── Restic tracks (optional, off by default) ───────────────────────────────
-  # Uncomment and configure lanbat.backups.* repos in local.nix. Merge every
+  # Uncomment and configure lanbat.backups.* repos in the deployment profile. Merge every
   # enabled track into one systemd.services / systemd.timers attr each:
   #
   # systemd.services = lib.mkMerge [

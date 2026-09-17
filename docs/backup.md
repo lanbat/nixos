@@ -97,7 +97,7 @@ Add this as a weekly systemd timer.
    # etc.
    ```
 4. The Pi drives are intact and still encrypted to the same Tang key (which you restored).
-5. Deploy from the workstation: `deploy path:.#server`
+5. Deploy from the workstation: `deploy path:.#homelab-server`
 
 ### Tang key loss
 

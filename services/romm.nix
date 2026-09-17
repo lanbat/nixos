@@ -136,7 +136,7 @@ in
       ROMM_PORT = toString port;
       # The entrypoint also points nginx's upstream at it.
       DEV_PORT = toString backendPort;
-      ROMM_BASE_URL = "https://romm.${config.lanbat.domain}";
+      ROMM_BASE_URL = "https://romm.${config.lanbat.deployment.domain}";
       ROMM_SESSION_SECURE_COOKIE = "true";
       ROMM_DB_DRIVER = "postgresql";
       DB_HOST = "127.0.0.1";
@@ -151,7 +151,7 @@ in
       LAUNCHBOX_API_ENABLED = "true";
       # Picks up the zips romm-browser-romsets adds or replaces.
       ENABLE_RESCAN_ON_FILESYSTEM_CHANGE = "true";
-      TZ = config.lanbat.timezone;
+      TZ = config.lanbat.deployment.timezone;
     };
     environmentFiles = [
       config.age.secrets.romm-db-pass.path

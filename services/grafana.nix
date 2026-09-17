@@ -32,7 +32,7 @@
 { config, pkgs, ... }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
   dashboards = pkgs.callPackage ../pkgs/grafana-dashboards { };
 in
 

@@ -1,29 +1,21 @@
 {
-  description = "lanbat homelab — server + Raspberry Pi 5";
+  description = "lanbat homelab — extensible multi-machine NixOS";
 
   inputs = {
-    # nixpkgs of the server. The Pi uses nixos-raspberrypi's own pinned nixpkgs
-    # (see mkPi), because its binary cache only has the Raspberry Pi kernel and
-    # firmware built for that nixpkgs.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
-    # Raspberry Pi 5 support: vendor kernel, firmware and the firmware-partition
-    # bootloader. Doesn't follow our nixpkgs, to keep its binary cache usable.
     nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
 
-    # Secrets as age-encrypted files (secrets/).
     agenix = {
       url = "github:ryantm/agenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Declarative disk layout, applied by nixos-anywhere at install time.
     disko = {
       url = "github:nix-community/disko/latest";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Deploys from a workstation, with automatic rollback.
     deploy-rs = {
       url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -43,113 +35,154 @@
     let
       inherit (nixpkgs) lib;
 
-      # local.nix holds the real settings and is gitignored, so it is only
-      # visible through a path: flake reference (e.g. `deploy path:.#server`).
-      # Without it the real hosts don't exist, and deploying them fails early.
-      hasLocal = builtins.pathExists ./local.nix;
+      lanbatPlugins = {
+        services = import ./plugins/services;
+        tv = import ./plugins/tv;
+        voice = import ./plugins/voice;
+      };
 
-      mkHost =
-        settings: modules:
-        lib.nixosSystem {
-          specialArgs = { inherit inputs; };
-          modules = [
-            agenix.nixosModules.default
-            { nixpkgs.config.allowUnfree = true; }
-            settings
-          ]
-          ++ modules;
+      inputsWithSelf = inputs // {
+        self = self // {
+          inherit lanbatPlugins;
         };
+      };
 
-      mkServer =
-        settings:
-        mkHost settings [
-          disko.nixosModules.disko
-          ./hosts/server
-        ];
+      loadDeployments = import ./lib/load-deployments.nix { inherit lib; };
 
-      # nixos-raspberrypi's nixosSystem uses its pinned nixpkgs and trusts its
-      # binary cache, so the Pi downloads its kernel instead of compiling it.
-      mkPi =
-        settings:
-        nixos-raspberrypi.lib.nixosSystem {
-          specialArgs = { inherit inputs nixos-raspberrypi; };
-          modules = [
-            agenix.nixosModules.default
-            { nixpkgs.config.allowUnfree = true; }
-            settings
-            ./hosts/pi
-            ./hosts/pi/hardware.nix
-          ];
-        };
+      hasDeploy = builtins.pathExists ./deploy.nix;
+
+      deployRaw =
+        if hasDeploy then
+          import ./deploy.nix { inputs = inputsWithSelf; }
+        else
+          import ./deployments/example/deploy.nix { inputs = inputsWithSelf; };
+
+      profiles =
+        if hasDeploy then
+          loadDeployments.normalize deployRaw
+        else
+          {
+            example = import ./deployments/example/deploy.nix { inputs = inputsWithSelf; };
+          };
+
+      lanbatLib = import ./lib {
+        self = inputsWithSelf.self;
+        inputs = inputsWithSelf;
+        inherit
+          nixpkgs
+          nixos-raspberrypi
+          agenix
+          disko
+          deploy-rs
+          profiles
+          hasDeploy
+          ;
+        root = ./.;
+      };
 
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
-
-      # deploy-rs's library, with nixpkgs' deploy-rs, which is in the binary
-      # cache. The flake input's own package is built from source against our
-      # nixpkgs, and crates.io refuses to serve some of its dependencies.
-      deployLib =
-        system:
-        (import nixpkgs {
-          inherit system;
-          overlays = [
-            deploy-rs.overlays.default
-            (final: prev: {
-              deploy-rs = {
-                inherit (nixpkgs.legacyPackages.${system}) deploy-rs;
-                inherit (prev.deploy-rs) lib;
-              };
-            })
-          ];
-        }).deploy-rs.lib;
     in
     {
-      nixosConfigurations = {
-        example-server = mkServer ./hosts/example-settings.nix;
-        example-pi = mkPi ./hosts/example-settings.nix;
-      }
-      // lib.optionalAttrs hasLocal {
-        server = mkServer ./local.nix;
-        pi = mkPi ./local.nix;
+      inherit lanbatPlugins;
+
+      lib.lanbat = {
+        inherit (lanbatLib)
+          hostsWithRole
+          primaryHost
+          hostIp
+          hostHostname
+          hostInterface
+          voiceRoomForHost
+          validatePlugin
+          resolvePlugins
+          mkHost
+          mkProfile
+          hostFlakeName
+          deployLib
+          deployQuery
+          ;
+        loadDeployments = loadDeployments.normalize;
       };
 
-      deploy.nodes = lib.optionalAttrs hasLocal {
-        server = {
-          hostname = self.nixosConfigurations.server.config.lanbat.serverIp;
-          sshUser = "admin";
-          user = "root";
-          profiles.system.path = (deployLib "x86_64-linux").activate.nixos self.nixosConfigurations.server;
-        };
-        pi = {
-          hostname = self.nixosConfigurations.pi.config.lanbat.piIp;
-          sshUser = "admin";
-          user = "root";
-          # Build on the Pi itself rather than cross-compiling on the workstation.
-          remoteBuild = true;
-          profiles.system.path = (deployLib "aarch64-linux").activate.nixos self.nixosConfigurations.pi;
-        };
+      nixosModules = {
+        lanbat = ./modules/core;
+        lanbat-server = ./lib/roles/server.nix;
+        lanbat-storage-pi = ./lib/roles/storage-pi.nix;
+        lanbat-voice-pi = ./lib/roles/voice-pi.nix;
       };
+
+      nixosConfigurations = lanbatLib.configurations;
+
+      deploy.nodes = if hasDeploy then lanbatLib.deployNodes else { };
 
       checks.x86_64-linux = {
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };
         music-assistant = import ./tests/music-assistant.nix { inherit pkgs; };
         pkgs-build = import ./tests/pkgs-build.nix { inherit pkgs; };
+        plugins = import ./tests/plugins.nix { inherit lib pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
         settings-guard = import ./tests/settings-guard.nix { inherit lib pkgs; };
+        validate-deploy = import ./tests/validate-deploy.nix { inherit lib pkgs; };
+        load-deployments = import ./tests/load-deployments.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
+        deploy-rs-fixture = import ./tests/deploy-rs-fixture.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         server = import ./tests/server.nix {
           inherit pkgs;
           inherit (inputs) agenix disko;
         };
         workload-gate = import ./tests/workload-gate.nix { inherit pkgs; };
       }
-      // lib.optionalAttrs hasLocal ((deployLib "x86_64-linux").deployChecks self.deploy);
+      // lib.optionalAttrs hasDeploy (
+        (lanbatLib.deployLib "x86_64-linux").deployChecks { nodes = lanbatLib.deployNodes; }
+      );
 
-      # Runs on an aarch64 machine with KVM (the Pi itself), with the Pi's nixpkgs.
-      checks.aarch64-linux.pi = import ./tests/pi.nix {
-        pkgs = nixos-raspberrypi.inputs.nixpkgs.legacyPackages.aarch64-linux;
-        inherit (inputs) agenix;
+      checks.aarch64-linux = {
+        pi = import ./tests/pi.nix {
+          pkgs = nixos-raspberrypi.inputs.nixpkgs.legacyPackages.aarch64-linux;
+          inherit (inputs)
+            agenix
+            nixpkgs
+            nixos-raspberrypi
+            disko
+            ;
+          inputs = inputsWithSelf;
+        };
+
+        voice-pi = import ./tests/voice-pi.nix {
+          pkgs = nixos-raspberrypi.inputs.nixpkgs.legacyPackages.aarch64-linux;
+          inherit (inputs)
+            agenix
+            nixpkgs
+            nixos-raspberrypi
+            disko
+            ;
+          inputs = inputsWithSelf;
+        };
       };
 
-      # `nix develop` provides the deploy, install and secrets tools.
       devShells.x86_64-linux.default = pkgs.mkShell {
         packages = [
           pkgs.deploy-rs
@@ -158,9 +191,45 @@
         ];
       };
 
-      # `nix fmt` formats every tracked .nix file; CI runs `nix fmt -- --ci`.
       formatter = lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (
         system: nixpkgs.legacyPackages.${system}.nixfmt-tree
       );
+
+      apps.x86_64-linux = {
+        deploy-query = {
+          type = "app";
+          program = toString (
+            pkgs.writeShellScript "deploy-query" ''
+              set -euo pipefail
+              KEY="''${1:?usage: deploy-query <key> [profile]}"
+              PROFILE="''${2:-}"
+              REF=".#lib.lanbat.deployQuery.\"''${KEY}\""
+              if [ -n "''$PROFILE" ]; then
+                exec ${pkgs.nix}/bin/nix eval --raw --apply "f: f \"''$PROFILE\"" "''$REF"
+              else
+                exec ${pkgs.nix}/bin/nix eval --raw --apply "f: f null" "''$REF"
+              fi
+            ''
+          );
+        };
+
+        hosts = {
+          type = "app";
+          program = toString (
+            pkgs.writeShellScript "hosts" ''
+              exec ${pkgs.nix}/bin/nix eval --raw --apply "f: f null" .#lib.lanbat.deployQuery.hosts
+            ''
+          );
+        };
+
+        validate-deploy = {
+          type = "app";
+          program = toString (
+            pkgs.writeShellScript "validate-deploy" ''
+              exec ${pkgs.nix}/bin/nix build .#checks.x86_64-linux.validate-deploy --no-link
+            ''
+          );
+        };
+      };
     };
 }

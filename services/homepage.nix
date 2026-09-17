@@ -29,7 +29,7 @@
 }:
 
 let
-  domain = config.lanbat.domain;
+  domain = config.lanbat.deployment.domain;
   homepageConfig = pkgs.callPackage ../pkgs/homepage-config { };
   homepageStateDir = "/var/lib/homepage";
   homepageManifest = "${homepageStateDir}/manifest.json";
