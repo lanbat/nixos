@@ -13,11 +13,6 @@ let
   net = host.networking;
   networkLib = import ../network.nix { inherit lib; };
   prefixLength = networkLib.prefixLengthFromCidr config.lanbat.deployment.lanSubnet;
-  flakeAttr =
-    if config.lanbat.profile == "default" then
-      config.lanbat.hostKey
-    else
-      "${config.lanbat.profile}-${config.lanbat.hostKey}";
   serverIp =
     let
       serverKey = config.lanbat.deployment.primaryServer;
@@ -27,17 +22,10 @@ in
 {
   networking.hostName = net.hostname;
 
-  system.autoUpgrade = {
-    enable = true;
-    flake = "path:/etc/nixos#${flakeAttr}";
-    allowReboot = true;
-    rebootWindow = {
-      lower = "04:00";
-      upper = "06:00";
-    };
-    dates = "04:30";
-    randomizedDelaySec = "30min";
-  };
+  # Auto-upgrade is disabled: the Pi has no flake checkout (deployments are
+  # driven from the workstation via deploy-rs), so the built-in timer had nothing
+  # to build and failed every run. Upgrades are applied manually with `deploy`.
+  system.autoUpgrade.enable = false;
 
   networking = {
     useNetworkd = true;
