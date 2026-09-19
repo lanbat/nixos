@@ -177,6 +177,51 @@ in
         description = "Home Assistant conversation agent LLM. null uses HA's own agent.";
       };
 
+      parkingGuard = mkOption {
+        type = types.nullOr (
+          types.submodule {
+            options = {
+              siteId = mkOption {
+                type = types.str;
+                description = "JustPark site / location identifier for API sync.";
+              };
+              cameras = mkOption {
+                type = types.listOf types.str;
+                default = [ "c1" ];
+                description = "Frigate camera names to evaluate for LPR.";
+              };
+              graceMinutes = mkOption {
+                type = types.ints.positive;
+                default = 5;
+                description = "Minutes before booking start / after end to still treat as authorized.";
+              };
+              cooldownMinutes = mkOption {
+                type = types.ints.positive;
+                default = 30;
+                description = "Minutes between repeat alerts for the same plate.";
+              };
+              minScore = mkOption {
+                type = types.float;
+                default = 0.8;
+                description = "Minimum Frigate LPR confidence score to evaluate.";
+              };
+              residentPlates = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                description = "Always-authorized resident plates (manual allowlist).";
+              };
+              syncIntervalMinutes = mkOption {
+                type = types.ints.positive;
+                default = 5;
+                description = "How often to poll JustPark / re-import CSV.";
+              };
+            };
+          }
+        );
+        default = null;
+        description = "Parking guard settings when lanbat-justpark-parking is enabled on the server.";
+      };
+
       voiceRooms = mkOption {
         type = types.attrsOf types.str;
         default = { };

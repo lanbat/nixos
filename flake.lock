@@ -156,6 +156,26 @@
         "type": "github"
       }
     },
+    "lanbat-justpark-parking": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1789604691,
+        "narHash": "sha256-zajr3ptFIuX1r4/SOxOJwmk72Bw2SDZ3fxNPLvJJdUQ=",
+        "owner": "lanbat",
+        "repo": "lanbat-justpark-parking",
+        "rev": "98bc5fa4f78ebf108b5e708555d9546d9f7e25c0",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lanbat",
+        "repo": "lanbat-justpark-parking",
+        "type": "github"
+      }
+    },
     "nixos-images": {
       "inputs": {
         "nixos-stable": [
@@ -241,6 +261,7 @@
         "agenix": "agenix",
         "deploy-rs": "deploy-rs",
         "disko": "disko",
+        "lanbat-justpark-parking": "lanbat-justpark-parking",
         "nixos-raspberrypi": "nixos-raspberrypi",
         "nixpkgs": "nixpkgs_2"
       }

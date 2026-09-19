@@ -20,6 +20,11 @@
       url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    lanbat-justpark-parking = {
+      url = "github:lanbat/lanbat-justpark-parking";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
