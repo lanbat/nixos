@@ -67,6 +67,32 @@ tests/                    assertion tests and VM tests
 docs/                     architecture, extensibility, plugins, migration
 ```
 
+## First run
+
+Going from a fresh clone to a running site. The full step-by-step — disk layout
+(disko), secrets, and post-install — is in
+[docs/deployment-checklist.md](docs/deployment-checklist.md).
+
+1. **Enter the dev shell** — it provides `deploy` (deploy-rs), `agenix` and
+   `nixos-anywhere`:
+   ```bash
+   nix develop
+   ```
+2. **Create the local deploy files** from the checked-in templates. The real files
+   are gitignored, so your domain, IPs and plugins are never committed:
+   ```bash
+   cp deploy.nix.example deploy.nix
+   cp deployments/homelab/deploy.nix.example deployments/homelab/deploy.nix
+   ```
+   Then edit `deployments/homelab/deploy.nix` to set your domain, host IPs and the
+   plugins each host enables (see [docs/extensibility.md](docs/extensibility.md)).
+3. **Encrypt your secrets** — see [secrets/README.md](secrets/README.md).
+4. **Deploy** each host:
+   ```bash
+   deploy path:.#homelab-server
+   deploy path:.#homelab-pi-storage
+   ```
+
 ## Services
 
 Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) for the full design.
@@ -106,14 +132,20 @@ Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) fo
 
 | Service | URL | Notes |
 |---|---|---|
-| Bitmagnet | `bitmagnet.<domain>` | Starts on first request, stops after 3 days idle |
+| Bitmagnet | `bitmagnet.<domain>` | Starts on first request, stops after 3 days idle (DHT index needs uptime) |
+| RomM | `romm.<domain>` | Starts on first request, stops after 30 min idle |
+
+> **External plugin example:** the reference homelab adds *parking-guard* — Frigate-LPR
+> parking enforcement that alerts on unauthorised plates — as an external flake plugin,
+> wired in the gitignored `deploy.nix` (not one of the built-in services above). See
+> [docs/extensibility.md](docs/extensibility.md#external-plugins).
 
 ## Deploying
 
 ```bash
 nix develop               # deploy (deploy-rs), agenix, nixos-anywhere
 
-# Set up profiles (see docs/migration.md), then deploy with path: reference:
+# (First time? see "First run" above.) Deploy with a path: reference:
 deploy path:.#homelab-server
 deploy path:.#homelab-pi-storage
 ```

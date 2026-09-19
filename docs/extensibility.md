@@ -103,6 +103,40 @@ hosts.server.plugins = [
 
 See [plugins.md](plugins.md) for the plugin author contract.
 
+**Worked example — parking-guard.** The reference homelab adds
+[*parking-guard*](https://github.com/lanbat/lanbat-justpark-parking), a Frigate-LPR
+parking-enforcement service that watches Frigate plate detections and alerts when a
+plate is not on the allowlist (JustPark bookings, a Luna CSV export, or a resident
+list). It is wired entirely in the gitignored `deploy.nix`:
+
+```nix
+# flake.nix inputs
+lanbat-justpark-parking = {
+  url = "github:lanbat/lanbat-justpark-parking";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+
+# deployments/homelab/deploy.nix
+hosts.server.plugins = [
+  inputs.self.lanbatPlugins.services
+  inputs.lanbat-justpark-parking.lanbatPlugin
+];
+
+# plugin-specific options (schema in modules/core/settings.nix)
+deployment.parkingGuard = {
+  siteId = "…";              # JustPark site id
+  cameras = [ "driveway" ];  # Frigate camera names to watch
+  graceMinutes = 5;
+  cooldownMinutes = 30;
+  residentPlates = [ ];
+};
+```
+
+It runs as a small set of systemd units on the server: a continuous LPR evaluator
+(`parking-guard.service`), a JustPark/CSV allowlist sync timer
+(`parking-guard-sync.*`), and a CSV-import path unit
+(`parking-guard-csv-import.*`).
+
 ## Multiple machines per profile
 
 Within one profile you can declare any number of hosts:
