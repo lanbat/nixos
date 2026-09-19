@@ -13,22 +13,14 @@ let
   net = host.networking;
   networkLib = import ../network.nix { inherit lib; };
   prefixLength = networkLib.prefixLengthFromCidr config.lanbat.deployment.lanSubnet;
-  flakeAttr =
-    if config.lanbat.profile == "default" then
-      config.lanbat.hostKey
-    else
-      "${config.lanbat.profile}-${config.lanbat.hostKey}";
 in
 {
   networking.hostName = net.hostname;
 
-  system.autoUpgrade = {
-    enable = true;
-    flake = "path:/etc/nixos#${flakeAttr}";
-    allowReboot = false;
-    dates = "04:00";
-    randomizedDelaySec = "30min";
-  };
+  # Auto-upgrade is disabled: the server has no flake checkout (deployments are
+  # driven from the workstation via deploy-rs), so the built-in timer had nothing
+  # to build and failed every run. Upgrades are applied manually with `deploy`.
+  system.autoUpgrade.enable = false;
 
   boot.loader = {
     systemd-boot.enable = true;
