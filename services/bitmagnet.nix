@@ -89,9 +89,15 @@
     autoStart = false;
   };
 
-  # Ensure the DB is available before Bitmagnet starts.
+  # Ensure the DB is available and the user's systemd session (linger bus at
+  # /run/user/963) is up before Bitmagnet starts — crun's systemd cgroup
+  # manager needs that bus to place the pause process in its sandbox cgroup.
   systemd.services."podman-bitmagnet" = {
-    after = [ "postgresql.service" ];
+    after = [
+      "postgresql.service"
+      "user@963.service"
+    ];
+    wants = [ "user@963.service" ];
     requires = [ "postgresql.service" ];
     serviceConfig = {
       Restart = lib.mkForce "on-failure";

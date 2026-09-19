@@ -337,6 +337,11 @@ in
   # Write combined env file before container starts
   # ---------------------------------------------------------------------------
   systemd.services."podman-frigate" = {
+    # Order after the frigate user's systemd session (linger bus at
+    # /run/user/995) — crun's systemd cgroup manager needs that bus to place
+    # the pause process in its sandbox cgroup.
+    after = [ "user@995.service" ];
+    wants = [ "user@995.service" ];
     serviceConfig = {
       Restart = lib.mkForce "on-failure";
       RestartSec = "15s";
