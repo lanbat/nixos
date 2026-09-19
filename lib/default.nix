@@ -70,16 +70,17 @@ let
           cfg = hosts.${name}.config;
           hostIp = hostLib.hostIp cfg.lanbat.hosts name;
           remoteBuild = hostCfg.system == "aarch64-linux";
+          node = {
+            hostname = hostIp;
+            sshUser = "admin";
+            user = "root";
+            profiles.system.path = (deployLib hostCfg.system).activate.nixos hosts.${name};
+          }
+          // lib.optionalAttrs remoteBuild {
+            remoteBuild = true;
+          };
         in
-        lib.nameValuePair flakeName {
-          hostname = hostIp;
-          sshUser = "admin";
-          user = "root";
-          profiles.system.path = (deployLib hostCfg.system).activate.nixos hosts.${name};
-        }
-        // lib.optionalAttrs remoteBuild {
-          remoteBuild = true;
-        }
+        lib.nameValuePair flakeName node
       ) deploy'.hosts;
     in
     {
