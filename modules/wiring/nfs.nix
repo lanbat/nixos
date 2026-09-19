@@ -7,7 +7,10 @@ let
   hosts = config.lanbat.hosts;
   defaultStorageHost = config.lanbat.deployment.primaryStorage;
 
-  storageHostFor = svc: svc.nfs.storageHost or defaultStorageHost;
+  # `or` does not fall through on `null` (null or x == null), so use an
+  # explicit null check for the per-service override.
+  storageHostFor =
+    svc: if svc.nfs.storageHost == null then defaultStorageHost else svc.nfs.storageHost;
 
   storageHostname = host: hosts.${host}.networking.hostname;
   storageIp = host: hosts.${host}.networking.ip;
@@ -24,9 +27,6 @@ let
     "wsize=131072"
     "async"
     "noatime"
-    "x-systemd.automount"
-    "noauto"
-    "x-systemd.idle-timeout=600"
     "x-systemd.mount-timeout=30"
     "_netdev"
   ];
