@@ -265,7 +265,10 @@ let
       enabled: true
 
     semantic_search:
-      enabled: true
+      # Disabled — the CLIP embeddings manager was the container's #1 CPU user
+      # (~1.5 cores, dwarfing the YOLO detector). Natural-language clip search is
+      # not in use; detection/LPR/zones are unaffected.
+      enabled: false
       model_size: small
 
     face_recognition:
