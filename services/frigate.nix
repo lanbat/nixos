@@ -23,9 +23,9 @@
 # Storage
 # -------
 # All state is local (always-on tier):
-#   /var/lib/frigate/db/         — SQLite event metadata
-#   /var/lib/frigate/clips/      — review thumbnails + preview videos
-#   /var/lib/frigate/recordings/ — 24h rolling recordings
+ #   /var/lib/frigate/db/         — SQLite event metadata
+ #   /var/lib/frigate/clips/      — review snapshots/clips (14-day rolling)
+ #   /var/lib/frigate/recordings/ — 7-day motion-only recordings (sub stream)
 #   /var/cache/frigate/          — clip buffer (safe to lose)
 #
 # rclone cloud sync will be added later.
@@ -70,12 +70,11 @@ let
 
     record:
       enabled: true
-      detections:
-        retain:
-          days: 30
-      alerts:
-        retain:
-          days: 30
+      # 7-day rolling window, motion-only — idle segments are pruned so the
+      # retained volume stays bounded (was: no real retain + 5MP 24/7 = ~27G/day).
+      retain:
+        days: 7
+        mode: motion
 
     snapshots:
       enabled: true
@@ -133,11 +132,17 @@ let
       c1:
         ffmpeg:
           inputs:
-            # Main stream (2560x1920) downscaled for detect — sub stream is too
-            # soft for overhead/distant objects on Tennison Road.
+            # Main stream (2560x1920) for detection — sub stream is too soft for
+            # overhead/distant objects on Tennison Road.
             - path: rtsp://127.0.0.1:8554/c1
               input_args: preset-rtsp-restream
-              roles: [ detect, record ]
+              roles: [ detect ]
+            # Sub stream for recording — far smaller than the 5MP main, so the
+            # 7-day motion-only rolling window stays bounded. Detection (and all
+            # AI: LPR, zones, semantic search) still runs on the main stream.
+            - path: rtsp://127.0.0.1:8554/c1_sub
+              input_args: preset-rtsp-restream
+              roles: [ record ]
         detect:
           enabled: true
           width:  1280
@@ -206,6 +211,10 @@ let
               threshold: 0.65
         review:
           alerts:
+            # 14-day rolling window for review snapshots/clips (event "pictures").
+            # These are the 2nd data sink (~3.7G/day on the busy Tennison Road).
+            retain:
+              days: 14
             labels:
               - person
               - car
@@ -214,6 +223,8 @@ let
               - truck
               - bicycle
           detections:
+            retain:
+              days: 14
             labels:
               - person
               - car
