@@ -138,7 +138,8 @@ let
 
     cameras:
       c1:
-        inputs:
+        ffmpeg:
+          inputs:
             # Main stream (2560x1920) for detection — sub stream is too soft for
             # overhead/distant objects on Tennison Road.
             - path: rtsp://127.0.0.1:8554/c1
