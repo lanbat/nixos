@@ -70,11 +70,19 @@ let
 
     record:
       enabled: true
-      # 7-day rolling window, motion-only — idle segments are pruned so the
-      # retained volume stays bounded (was: no real retain + 5MP 24/7 = ~27G/day).
-      retain:
+      # Motion-only recording on the sub stream, 7-day rolling window. Time with
+      # no motion produces no recording, so the retained volume stays bounded
+      # (was: 5MP 24/7 with no real retain = ~27G/day).
+      motion:
         days: 7
-        mode: motion
+      # Retain detection/alert event clips + snapshots (the review "pictures")
+      # for 14 days — the 2nd data sink (~3.7G/day on the busy Tennison Road).
+      detections:
+        retain:
+          days: 14
+      alerts:
+        retain:
+          days: 14
 
     snapshots:
       enabled: true
@@ -211,10 +219,6 @@ let
               threshold: 0.65
         review:
           alerts:
-            # 14-day rolling window for review snapshots/clips (event "pictures").
-            # These are the 2nd data sink (~3.7G/day on the busy Tennison Road).
-            retain:
-              days: 14
             labels:
               - person
               - car
@@ -223,8 +227,6 @@ let
               - truck
               - bicycle
           detections:
-            retain:
-              days: 14
             labels:
               - person
               - car
