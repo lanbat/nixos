@@ -17,10 +17,9 @@ in
 {
   networking.hostName = net.hostname;
 
-  # Auto-upgrade is disabled: the server has no flake checkout (deployments are
-  # driven from the workstation via deploy-rs), so the built-in timer had nothing
-  # to build and failed every run. Upgrades are applied manually with `deploy`.
-  system.autoUpgrade.enable = false;
+  # The server cannot auto-reboot (manual LUKS unlock at boot), so allowReboot
+  # stays false: upgrades apply but take effect at the next manual reboot.
+  system.autoUpgrade.enable = true;
 
   boot.loader = {
     systemd-boot.enable = true;

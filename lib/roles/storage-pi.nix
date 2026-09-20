@@ -22,10 +22,16 @@ in
 {
   networking.hostName = net.hostname;
 
-  # Auto-upgrade is disabled: the Pi has no flake checkout (deployments are
-  # driven from the workstation via deploy-rs), so the built-in timer had nothing
-  # to build and failed every run. Upgrades are applied manually with `deploy`.
-  system.autoUpgrade.enable = false;
+  # The Pi reboots cleanly (Clevis/Tang unlocks LUKS), so it may auto-reboot
+  # within the nightly window.
+  system.autoUpgrade = {
+    enable = true;
+    allowReboot = true;
+    rebootWindow = {
+      lower = "04:00";
+      upper = "06:00";
+    };
+  };
 
   networking = {
     useNetworkd = true;

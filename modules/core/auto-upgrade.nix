@@ -16,38 +16,63 @@
 #
 #   2. We can control exactly which commit is built by pulling git first.
 #
-# Before nixos-upgrade.service runs, a companion service pulls the latest
-# changes from git.  If git pull fails (no network, auth error, merge
-# conflict), the upgrade continues from the currently-checked-out state —
-# which is always safe.
+# The flake reference and schedule are set below for every host; each role
+# only toggles `enable` and the reboot behaviour.  `machineName` mirrors
+# `hostFlakeName` in lib/default.nix so the #<attr> matches the
+# nixosConfigurations key.
+#
+# `nixos-rebuild --upgrade` is a no-op for flake-based systems, so a host
+# never bumps nixpkgs on its own.  Inputs change only when `nix flake update`
+# and a push happen on the workstation, which the hosts then pull.
+#
+# Before nixos-upgrade.service runs, the companion nixos-upgrade-pull service
+# pulls the latest changes from git.  If the pull fails (no network, auth
+# error, merge conflict), the upgrade continues from the currently-checked-out
+# state — which is always safe.
 #
 # Server vs Pi
 # ------------
-# The server CANNOT auto-reboot — it requires manual LUKS unlock at boot.
-# Set `system.autoUpgrade.allowReboot = false` (the default) on the server.
-# Upgrades apply at the next manual reboot.
+# The server CANNOT auto-reboot — it requires manual LUKS unlock at boot.  Its
+# role keeps `allowReboot = false` (the default), so upgrades apply but take
+# effect at the next manual reboot.
 #
 # The Pi CAN auto-reboot cleanly — Clevis/Tang handles LUKS unlock
-# automatically as long as the server is up.  Set `allowReboot = true` on
-# the Pi with a sensible `rebootWindow`.
+# automatically as long as the server is up.  Its role sets `allowReboot =
+# true` with a `rebootWindow` that contains the upgrade time (`dates`).
 #
 # Setup
 # -----
-# 1. Clone the repo on each machine and add deploy.nix + profile files:
+# 1. Clone the repo on each machine and add the gitignored deploy files:
 #      git clone <your-repo-url> /etc/nixos
 #      cp deploy.nix /etc/nixos/deploy.nix
-#      cp -r deployments/homelab /etc/nixos/deployments/homelab
-# 2. Configure a git remote so pull works (HTTPS token or SSH deploy key).
-#    See docs/deployment-checklist.md § "Clone config repo on each machine".
-# 3. Each host configures system.autoUpgrade in its own default.nix.
+#      cp -r deployments/<profile> /etc/nixos/deployments/<profile>
+# 2. Configure a git remote so pull works (SSH deploy key).  See
+#    docs/deployment-checklist.md § "Clone config repo on each machine".
+# 3. The host's role enables system.autoUpgrade (see lib/roles/).
 #
 {
   config,
+  lib,
   pkgs,
   ...
 }:
 
+let
+  # Mirrors hostFlakeName in lib/default.nix — keep the two in sync.
+  machineName =
+    if config.lanbat.profile == "default" then
+      config.lanbat.hostKey
+    else
+      "${config.lanbat.profile}-${config.lanbat.hostKey}";
+in
 {
+  # Build the locally-checked-out config for this host on a nightly schedule.
+  system.autoUpgrade = {
+    flake = lib.mkDefault "path:/etc/nixos#${machineName}";
+    # 04:40 falls inside the Pi reboot window (04:00–06:00) set by the Pi roles.
+    dates = lib.mkDefault "04:40";
+  };
+
   # Pull the latest config from git before each upgrade attempt.
   systemd.services.nixos-upgrade-pull = {
     description = "Pull latest NixOS configuration from git";
