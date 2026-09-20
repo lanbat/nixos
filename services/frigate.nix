@@ -139,6 +139,14 @@ let
     cameras:
       c1:
         ffmpeg:
+          # Cap the recording to 10 fps (sub stream is ~15-25) to shrink the
+          # motion recordings. output_args is camera-level; this applies to the
+          # record role (c1_sub) only. Detection runs on the main stream.
+          output_args:
+            record:
+              - preset-record-generic-aac
+              - -r
+              - "10"
           inputs:
             # Main stream (2560x1920) for detection — sub stream is too soft for
             # overhead/distant objects on Tennison Road.
@@ -151,13 +159,6 @@ let
             - path: rtsp://127.0.0.1:8554/c1_sub
               input_args: preset-rtsp-restream
               roles: [ record ]
-              # Cap the recording to 10 fps (sub stream is ~15-25) to shrink the
-              # motion recordings. Detection runs on the main stream, unaffected.
-              output_args:
-                record:
-                  - preset-record-generic-aac
-                  - -r
-                  - "10"
         detect:
           enabled: true
           width:  1280
