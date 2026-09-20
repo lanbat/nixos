@@ -138,16 +138,7 @@ let
 
     cameras:
       c1:
-        ffmpeg:
-          # Cap the recording to 10 fps (sub stream is ~15-25) to shrink the
-          # motion recordings. output_args is camera-level; this applies to the
-          # record role (c1_sub) only. Detection runs on the main stream.
-          output_args:
-            record:
-              - preset-record-generic-aac
-              - -r
-              - "10"
-          inputs:
+        inputs:
             # Main stream (2560x1920) for detection — sub stream is too soft for
             # overhead/distant objects on Tennison Road.
             - path: rtsp://127.0.0.1:8554/c1
@@ -155,7 +146,7 @@ let
               roles: [ detect ]
             # Sub stream for recording — far smaller than the 5MP main, so the
             # 7-day motion-only rolling window stays bounded. Detection (and all
-            # AI: LPR, zones, semantic search) still runs on the main stream.
+            # AI: LPR, zones) still runs on the main stream.
             - path: rtsp://127.0.0.1:8554/c1_sub
               input_args: preset-rtsp-restream
               roles: [ record ]
@@ -164,8 +155,8 @@ let
           width:  1280
           height: 960
           # 5 fps (Frigate default) is plenty for driveway/road traffic and cuts
-          # ~30% of YOLO inference CPU vs 7. Detection/LPR/zones/semantic search
-          # all still run; only the sampling rate drops.
+          # ~30% of YOLO inference CPU vs 7. Detection/LPR/zones all still run;
+          # only the sampling rate drops.
           fps:    5
           min_initialized: 2
         lpr:
