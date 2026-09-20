@@ -151,11 +151,21 @@ let
             - path: rtsp://127.0.0.1:8554/c1_sub
               input_args: preset-rtsp-restream
               roles: [ record ]
+              # Cap the recording to 10 fps (sub stream is ~15-25) to shrink the
+              # motion recordings. Detection runs on the main stream, unaffected.
+              output_args:
+                record:
+                  - preset-record-generic-aac
+                  - -r
+                  - "10"
         detect:
           enabled: true
           width:  1280
           height: 960
-          fps:    7
+          # 5 fps (Frigate default) is plenty for driveway/road traffic and cuts
+          # ~30% of YOLO inference CPU vs 7. Detection/LPR/zones/semantic search
+          # all still run; only the sampling rate drops.
+          fps:    5
           min_initialized: 2
         lpr:
           enabled: true
@@ -218,7 +228,11 @@ let
               min_score: 0.55
               threshold: 0.65
         review:
+          # Long cutoff merges nearby detections into a single event, cutting the
+          # per-event snapshot/thumbnail count (clips/ is ~99% images: jpg + webp).
+          # Labels are unchanged — only the event granularity gets coarser.
           alerts:
+            cutoff_time: 60
             labels:
               - person
               - car
@@ -227,6 +241,7 @@ let
               - truck
               - bicycle
           detections:
+            cutoff_time: 60
             labels:
               - person
               - car
