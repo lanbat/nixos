@@ -44,14 +44,17 @@ def resolve_fdroid(index: dict, package_id: str) -> dict:
     top = max(v["manifest"]["versionCode"] for v in versions)
     # A multi-ABI app publishes one version per ABI with adjacent version codes,
     # all under the same versionName. Group by versionName so every ABI variant
-    # of the newest release is kept.
+    # of the newest release is kept. When several entries in the group share an
+    # ABI, iterate in ascending versionCode order so the highest versionCode
+    # wins that ABI slot -- keeping the pinned APK in agreement with the
+    # versionCode recorded below.
     newest_name = next(
         v["manifest"]["versionName"] for v in versions if v["manifest"]["versionCode"] == top
     )
     chosen = [v for v in versions if v["manifest"]["versionName"] == newest_name]
 
     variants: dict[str, dict] = {}
-    for v in chosen:
+    for v in sorted(chosen, key=lambda v: v["manifest"]["versionCode"]):
         manifest = v["manifest"]
         abis = manifest.get("nativecode") or ["universal"]
         for abi in abis:
@@ -88,7 +91,7 @@ def apk_metadata(apk_bytes: bytes) -> dict:
     from pyaxmlparser import APK
 
     apk = APK(apk_bytes, raw=True)
-    with zipfile.ZipFile(io.BytesIO(apk_bytes)) as zf:  # io is still used here
+    with zipfile.ZipFile(io.BytesIO(apk_bytes)) as zf:
         abis = sorted(
             {
                 name[len(ABI_PREFIX):].split("/", 1)[0]
