@@ -8,6 +8,8 @@
 #
 #  Drive A (/dev/disk/by-id/<piStorageDriveA>):
 #    LUKS2 → XFS (pquota) → /mnt/storage-a
+#    (LUKS may be on the whole disk or on a partition; clevis-unlock.nix
+#     resolves whichever it is.)
 #    Directories:
 #      /mnt/storage-a/media/         — movies, TV, music videos (qBittorrent, Jellyfin)
 #      /mnt/storage-a/photos/        — Immich originals
