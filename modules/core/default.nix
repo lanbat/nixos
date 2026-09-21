@@ -8,6 +8,7 @@
     ./host-context.nix
     ./services.nix
     ./base.nix
+    ./gc.nix
     ./auto-upgrade.nix
     ./ssh.nix
     ./users.nix
