@@ -61,25 +61,25 @@ def load(path: str) -> Manifest:
     except (OSError, json.JSONDecodeError) as exc:
         raise ManifestError(f"cannot read manifest {path}: {exc}") from exc
 
-    settings: dict[str, dict[str, str]] = {}
-    for ns, table in (raw.get("settings") or {}).items():
-        if ns not in NAMESPACES:
-            raise ManifestError(
-                f"unknown settings namespace {ns!r}; expected one of {', '.join(NAMESPACES)}"
-            )
-        settings[ns] = {k: _as_setting_value(v) for k, v in table.items()}
-
-    owner_raw = raw.get("deviceOwner") or {"enable": False, "component": None}
-    owner = DeviceOwner(bool(owner_raw.get("enable")), owner_raw.get("component"))
-    if owner.enable and not owner.component:
-        raise ManifestError("deviceOwner.enable is set but component is missing")
-
-    obtainium_raw = raw.get("obtainium")
-    obtainium = (
-        Obtainium(obtainium_raw["path"], obtainium_raw["sha256"]) if obtainium_raw else None
-    )
-
     try:
+        settings: dict[str, dict[str, str]] = {}
+        for ns, table in (raw.get("settings") or {}).items():
+            if ns not in NAMESPACES:
+                raise ManifestError(
+                    f"unknown settings namespace {ns!r}; expected one of {', '.join(NAMESPACES)}"
+                )
+            settings[ns] = {k: _as_setting_value(v) for k, v in table.items()}
+
+        owner_raw = raw.get("deviceOwner") or {"enable": False, "component": None}
+        owner = DeviceOwner(bool(owner_raw.get("enable")), owner_raw.get("component"))
+        if owner.enable and not owner.component:
+            raise ManifestError("deviceOwner.enable is set but component is missing")
+
+        obtainium_raw = raw.get("obtainium")
+        obtainium = (
+            Obtainium(obtainium_raw["path"], obtainium_raw["sha256"]) if obtainium_raw else None
+        )
+
         return Manifest(
             device=raw["device"],
             host=raw["host"],
@@ -92,7 +92,9 @@ def load(path: str) -> Manifest:
             obtainium=obtainium,
             deviceOwner=owner,
         )
-    except (KeyError, TypeError) as exc:
+    except ManifestError:
+        raise
+    except (KeyError, TypeError, ValueError, AttributeError) as exc:
         raise ManifestError(f"malformed manifest {path}: {exc}") from exc
 
 

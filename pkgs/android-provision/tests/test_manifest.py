@@ -49,3 +49,27 @@ def test_load_rejects_device_owner_without_component(tmp_path):
     data = dict(MINIMAL, deviceOwner={"enable": True, "component": None})
     with pytest.raises(ManifestError, match="component"):
         load(write(tmp_path, data))
+
+
+def test_load_rejects_obtainium_missing_sha256(tmp_path):
+    data = dict(MINIMAL, obtainium={"path": "/x"})
+    with pytest.raises(ManifestError):
+        load(write(tmp_path, data))
+
+
+def test_load_rejects_settings_wrong_type(tmp_path):
+    data = dict(MINIMAL, settings="nonsense")
+    with pytest.raises(ManifestError):
+        load(write(tmp_path, data))
+
+
+def test_load_rejects_device_owner_wrong_type(tmp_path):
+    data = dict(MINIMAL, deviceOwner="yes")
+    with pytest.raises(ManifestError):
+        load(write(tmp_path, data))
+
+
+def test_load_rejects_port_non_numeric(tmp_path):
+    data = dict(MINIMAL, port="abc")
+    with pytest.raises(ManifestError):
+        load(write(tmp_path, data))
