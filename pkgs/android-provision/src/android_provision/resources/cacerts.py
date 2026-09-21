@@ -40,8 +40,24 @@ def _one(adb: Adb, cert: CaCert, *, apply: bool, force: bool) -> Outcome:
     remote = f"{REMOTE_DIR}/{cert.name}.crt"
     try:
         adb.push(cert.path, remote)
-        adb.shell("am", "start", "-a", INSTALL_ACTION, "-t", "application/x-x509-ca-cert",
-                  "-d", f"file://{remote}")
+        output = adb.shell(
+            "am", "start", "-a", INSTALL_ACTION, "-t", "application/x-x509-ca-cert",
+            "-d", f"file://{remote}",
+        )
+    except AdbError as exc:
+        return Outcome("cacert", cert.name, FAILED, str(exc))
+
+    # `am start` exits 0 even when nothing resolves the intent -- it only
+    # says so on stdout. This is the one resource whose real state can't be
+    # read back afterwards, so a failed launch must never self-certify by
+    # writing the marker.
+    if any(line.startswith("Error:") for line in output.splitlines()):
+        return Outcome(
+            "cacert", cert.name, FAILED,
+            f"install intent did not resolve: {output.strip()}",
+        )
+
+    try:
         adb.write_marker(marker)
     except AdbError as exc:
         return Outcome("cacert", cert.name, FAILED, str(exc))

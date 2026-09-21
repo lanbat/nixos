@@ -91,6 +91,11 @@ def shell(state, args):
         print(f"Success: Device owner set to package {args[2]}")
         return 0
     if args[0] == "am" and args[1] == "start":
+        if state.get("am_start_fails"):
+            # Real am: when nothing resolves the intent, this prints an
+            # "Error:" line on stdout and *still exits 0*.
+            print(f"Error: Activity not started, unable to resolve Intent {{ {' '.join(args[2:])} }}")
+            return 0
         state.setdefault("intents", []).append(args[2:])
         save(state)
         print("Starting: Intent { ... }")

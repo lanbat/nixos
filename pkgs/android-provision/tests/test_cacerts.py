@@ -57,3 +57,15 @@ def test_plan_mode_writes_no_marker(device, tmp_path):
     adb, outcomes = run(device, tmp_path, apply=False)
     assert outcomes[0].status == "changed"
     assert adb.marker_exists("cacerts/abc123") is False
+
+
+def test_unresolved_install_intent_is_failed_and_writes_no_marker(device, tmp_path):
+    # Real `am start`: when nothing resolves the intent, it prints an
+    # "Error:" line on stdout and still exits 0. This is the one resource
+    # whose real state can't be read back, so a failed install must never
+    # self-certify by writing the marker.
+    device.state["am_start_fails"] = True
+    device.commit()
+    adb, outcomes = run(device, tmp_path)
+    assert outcomes[0].status == "failed"
+    assert adb.marker_exists("cacerts/abc123") is False

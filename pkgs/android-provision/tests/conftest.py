@@ -23,6 +23,7 @@ BASE_STATE = {
     "readonly_settings": [],
     "apk_meta": {},
     "intents": [],
+    "am_start_fails": False,
 }
 
 
