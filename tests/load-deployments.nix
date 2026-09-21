@@ -16,11 +16,7 @@
 let
   loadDeployments = import ../lib/load-deployments.nix { inherit lib; };
 
-  lanbatPlugins = {
-    services = import ../plugins/services;
-    tv = import ../plugins/tv;
-    voice = import ../plugins/voice;
-  };
+  lanbatPlugins = import ../plugins;
 
   inputsWithSelf = inputs // {
     self = self // {
