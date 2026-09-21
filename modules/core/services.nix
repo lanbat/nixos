@@ -72,10 +72,57 @@ let
       };
     };
 
+  endpointSubmodule = types.submodule {
+    options = {
+      scheme = mkOption {
+        type = types.str;
+        default = "http";
+        example = "mqtt";
+        description = "Scheme consumers use to reach the service.";
+      };
+      port = mkOption {
+        type = types.port;
+        description = "Port the service listens on for consumers.";
+      };
+    };
+  };
+
   serviceSubmodule = types.submodule (
     { name, config, ... }:
     {
       options = {
+        # ── Service configuration (the service module itself) ─────────────────
+        settings = mkOption {
+          type = types.submodule { freeformType = types.attrsOf types.anything; };
+          default = { };
+          example = {
+            detectors.ov.device = "CPU";
+            record.motion.days = 30;
+          };
+          description = ''
+            The service's own configuration, rendered by its module.
+
+            The type is freeform, so keys the module does not model still reach
+            the generated config. A module supplies its own values with
+            lib.mkDefault in config, never as an option default, so a profile or
+            a user module overrides them without lib.mkForce.
+          '';
+        };
+
+        implementation = mkOption {
+          type = types.enum [
+            "core"
+            "none"
+          ];
+          default = "core";
+          description = ''
+            core: the service module configures the service.
+            none: the module contributes this description only and you supply
+            the implementation yourself. The wiring still applies, so the vhost,
+            tier gating, account and secrets keep working.
+          '';
+        };
+
         # ── Web exposure (modules/wiring/caddy.nix) ───────────────────────────
         subdomain = mkOption {
           type = types.nullOr types.str;
@@ -146,6 +193,36 @@ let
               (Music Assistant probes /info and /ws before its own login screen).
             '';
           };
+        };
+
+        # ── Cross-host endpoints (modules/wiring/endpoints.nix) ───────────────
+        endpoint = mkOption {
+          type = types.nullOr endpointSubmodule;
+          default = if config.port != null then { inherit (config) port; } else null;
+          defaultText = lib.literalExpression ''{ scheme = "http"; port = port; } when port is set, otherwise null'';
+          description = ''
+            What this service publishes for other services to consume. Consumers
+            name it in their own consumes list and the wiring resolves the
+            address, whichever host each of them runs on.
+
+            This is part of the description, so it must not depend on the
+            resolved endpoints of other services.
+          '';
+        };
+
+        consumes = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [
+            "mosquitto"
+            "postgresql"
+          ];
+          description = ''
+            Services this one connects to, by name. modules/wiring/endpoints.nix
+            resolves each to an address, opens the provider's firewall to this
+            host and orders the units: locally with After= and BindsTo=,
+            remotely with a restart policy.
+          '';
         };
 
         # ── Storage tier (modules/wiring/workload-gate.nix) ───────────────────
