@@ -1,0 +1,14 @@
+{
+  "tag_name": "v1.9.1",
+  "prerelease": false,
+  "assets": [
+    { "name": "AerialViews-1.9.1-googleplay.apk",
+      "browser_download_url": "https://example.invalid/AerialViews-1.9.1-googleplay.apk",
+      "size": 12000000 },
+    { "name": "AerialViews-1.9.1-github.apk",
+      "browser_download_url": "https://example.invalid/AerialViews-1.9.1-github.apk",
+      "size": 12000001 },
+    { "name": "checksums.txt",
+      "browser_download_url": "https://example.invalid/checksums.txt", "size": 100 }
+  ]
+}

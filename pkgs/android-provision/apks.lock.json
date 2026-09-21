@@ -1,0 +1,32 @@
+{
+  "de.badaix.snapcast": {
+    "key": "de.badaix.snapcast",
+    "minSdk": 21,
+    "packageId": "de.badaix.snapcast",
+    "source": "fdroid",
+    "variants": {
+      "arm64-v8a": {
+        "sha256": "sha256-aAyViM/KQNZ7NuW9c3JnKemUAAldPBVGEMmY5DehzZw=",
+        "size": 8339432,
+        "url": "https://f-droid.org/repo/de.badaix.snapcast_2902.apk"
+      },
+      "armeabi-v7a": {
+        "sha256": "sha256-aAyViM/KQNZ7NuW9c3JnKemUAAldPBVGEMmY5DehzZw=",
+        "size": 8339432,
+        "url": "https://f-droid.org/repo/de.badaix.snapcast_2902.apk"
+      },
+      "x86": {
+        "sha256": "sha256-aAyViM/KQNZ7NuW9c3JnKemUAAldPBVGEMmY5DehzZw=",
+        "size": 8339432,
+        "url": "https://f-droid.org/repo/de.badaix.snapcast_2902.apk"
+      },
+      "x86_64": {
+        "sha256": "sha256-aAyViM/KQNZ7NuW9c3JnKemUAAldPBVGEMmY5DehzZw=",
+        "size": 8339432,
+        "url": "https://f-droid.org/repo/de.badaix.snapcast_2902.apk"
+      }
+    },
+    "versionCode": 2902,
+    "versionName": "0.29.0.2"
+  }
+}

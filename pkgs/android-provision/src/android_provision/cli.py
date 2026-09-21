@@ -38,6 +38,11 @@ def build_parser() -> argparse.ArgumentParser:
                 "--force", action="store_true",
                 help="re-apply marker-backed resources (CA certs, Obtainium)",
             )
+
+    u = sub.add_parser("update", help="refresh apks.lock.json from F-Droid and GitHub")
+    u.add_argument("--lockfile", required=True)
+    u.add_argument("--fdroid", action="append", default=[], metavar="PACKAGE_ID")
+    u.add_argument("--github", action="append", default=[], metavar="REPO=GLOB")
     return parser
 
 
@@ -51,6 +56,9 @@ def report(outcomes: list[Outcome]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "update":
+        return _update(args)
+
     apply = args.command == "provision"
     force = getattr(args, "force", False)
 
@@ -84,6 +92,32 @@ def main(argv: list[str] | None = None) -> int:
     if failed:
         print(f"{len(failed)} resource(s) failed", file=sys.stderr)
         return EXIT_RESOURCE_FAILED
+    return EXIT_OK
+
+
+def _update(args) -> int:
+    import os
+
+    from . import update as updater
+
+    token = os.environ.get("GITHUB_TOKEN")
+    entries = []
+    try:
+        if args.fdroid:
+            index = updater.fetch_json(updater.FDROID_INDEX)
+            for package_id in args.fdroid:
+                entries.append(updater.resolve_fdroid(index, package_id))
+        for spec in args.github:
+            repo, _, glob = spec.partition("=")
+            release = updater.fetch_json(updater.GITHUB_API.format(repo=repo), token)
+            apk = updater.fetch_bytes(updater.select_asset(release, glob)["browser_download_url"])
+            entries.append(updater.resolve_github(release, repo, glob, apk))
+    except updater.ResolveError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_MANIFEST
+
+    updater.write_lockfile(args.lockfile, entries)
+    print(f"wrote {len(entries)} entries to {args.lockfile}")
     return EXIT_OK
 
 
