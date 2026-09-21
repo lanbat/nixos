@@ -59,9 +59,23 @@ def test_offline_exits_2(device, tmp_path):
 
 
 def test_unauthorized_exits_3(device, tmp_path):
+    # Real adb: connect succeeds; unauthorized only surfaces on the first
+    # command issued after it (getprop, inside adb.connect()). This is the
+    # first thing a user following "One-time ADB authorization" hits.
     device.state["connect"] = "unauthorized"
     device.commit()
     assert cli.main(["provision", "--manifest", write_manifest(tmp_path)]) == 3
+
+
+def test_junk_sdk_exits_2_without_traceback(device, tmp_path, capsys):
+    # connect() succeeds, but the device answers getprop with garbage: must
+    # be EXIT_UNREACHABLE with a clear message, never an unhandled traceback.
+    device.state["props"]["ro.build.version.sdk"] = "unknown"
+    device.commit()
+    code = cli.main(["provision", "--manifest", write_manifest(tmp_path)])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
 
 
 def test_bad_manifest_exits_4(device, tmp_path):

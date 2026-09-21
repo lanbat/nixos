@@ -6,9 +6,10 @@ converges, and the exit code reports the failure at the end.
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
 
-from .adb import Adb, DeviceOffline, DeviceUnauthorized
+from .adb import Adb, AdbError, DeviceOffline, DeviceUnauthorized
 from .manifest import ManifestError, load
 from .outcome import FAILED, Outcome
 from .resources import apks, cacerts, device_owner, obtainium, settings
@@ -76,6 +77,14 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_UNAUTHORIZED
     except DeviceOffline as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return EXIT_UNREACHABLE
+    except (AdbError, subprocess.TimeoutExpired) as exc:
+        # Anything else adb-shaped -- a box that drops Wi-Fi mid-run, returns
+        # junk, or times out -- must never surface as a bare traceback.
+        print(
+            f"error: {manifest.host}:{manifest.port} did not respond as expected: {exc}",
+            file=sys.stderr,
+        )
         return EXIT_UNREACHABLE
 
     verb = "provisioning" if apply else "planning"

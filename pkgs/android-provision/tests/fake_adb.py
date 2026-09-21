@@ -24,14 +24,25 @@ def main(argv):
         if status == "offline":
             print(f"failed to connect to {argv[1]}")
             return 1
-        if status == "unauthorized":
-            print(f"device unauthorized. Please check the confirmation dialog")
-            return 1
+        # Real adb: `connect` against an unauthorized device still prints
+        # "connected to <serial>" and exits 0. The unauthorized state only
+        # surfaces on the *next* command (see below) -- it is not visible at
+        # connect time.
         print(f"connected to {argv[1]}")
         return 0
 
     # every remaining form is: -s <serial> <verb> ...
     verb, rest = argv[2], argv[3:]
+
+    if state.get("connect") == "unauthorized":
+        print(
+            "error: device unauthorized.\n"
+            "This adb server's $ADB_VENDOR_KEYS is not set\n"
+            "Try 'adb kill-server' if that seems wrong.\n"
+            "Otherwise check for a confirmation dialog on your device.",
+            file=sys.stderr,
+        )
+        return 1
 
     if verb == "shell":
         return shell(state, rest)

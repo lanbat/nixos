@@ -54,11 +54,36 @@ class Adb:
             )
         if proc.returncode != 0 or "failed to connect" in out or "cannot connect" in out:
             raise DeviceOffline(f"{self.serial} did not answer; is the box powered on?")
-        return DeviceInfo(
-            sdk=int(self.getprop("ro.build.version.sdk")),
-            abis=[a for a in self.getprop("ro.product.cpu.abilist").split(",") if a],
-            model=self.getprop("ro.product.model"),
-        )
+
+        # `adb connect` against an unauthorized device still reports success
+        # above -- the unauthorized state only surfaces on the first real
+        # command, as an AdbError from the shell calls below. Classify that
+        # the same way as an unauthorized connect, instead of letting a bare
+        # AdbError escape.
+        try:
+            sdk_raw = self.getprop("ro.build.version.sdk")
+            abis = [a for a in self.getprop("ro.product.cpu.abilist").split(",") if a]
+            model = self.getprop("ro.product.model")
+        except AdbError as exc:
+            message = str(exc).lower()
+            if "unauthorized" in message:
+                raise DeviceUnauthorized(
+                    f"{self.serial} has not authorized this key; accept the on-screen "
+                    "'Allow USB debugging?' dialog with 'always allow'"
+                ) from exc
+            raise DeviceOffline(
+                f"{self.serial} stopped answering while reading device info: {exc}"
+            ) from exc
+
+        try:
+            sdk = int(sdk_raw)
+        except ValueError:
+            raise DeviceOffline(
+                f"{self.serial} returned an unparseable SDK version ({sdk_raw!r}) for "
+                "ro.build.version.sdk; it may still be booting"
+            ) from None
+
+        return DeviceInfo(sdk=sdk, abis=abis, model=model)
 
     def getprop(self, name: str) -> str:
         return self.shell("getprop", name)
