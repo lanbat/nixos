@@ -122,6 +122,13 @@ to update a different file.
 `GITHUB_TOKEN` in the environment raises the GitHub API rate limit for `--github`
 lookups; it isn't required for public repos at low volume.
 
+F-Droid moves a superseded APK from `/repo/` to `/archive/` once an app publishes a new
+version, so a pinned `/repo/` URL in the lockfile 404s at that point — with no warning
+and no relation to anything you changed. The symptom is an opaque `fetchurl` 404 on
+*any* rebuild of a host that enables this plugin, F-Droid apps and all, not just the one
+that moved. The fix is the same either way: `nix run .#android-update` to re-resolve the
+pinned URLs, then commit the regenerated lockfile.
+
 ## Option reference
 
 Every field of `androidDevices.<name>`, with its default:
