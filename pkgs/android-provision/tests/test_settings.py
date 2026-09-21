@@ -44,3 +44,13 @@ def test_plan_mode_changes_nothing(device):
     outcomes = run(device, {"global": {"screen_off_timeout": "600000"}}, apply=False)
     assert outcomes[0].status == "changed"
     assert "screen_off_timeout" not in device.reload()["settings"]["global"]
+
+
+def test_value_with_space_round_trips(device):
+    # adb joins its trailing shell arguments with spaces before sending them
+    # to the device's shell, which re-splits on whitespace. Without quoting,
+    # a value containing a space would arrive at `settings put` truncated to
+    # its first word.
+    outcomes = run(device, {"system": {"device_name": "Living Room"}})
+    assert [o.status for o in outcomes] == ["changed"]
+    assert device.reload()["settings"]["system"]["device_name"] == "Living Room"

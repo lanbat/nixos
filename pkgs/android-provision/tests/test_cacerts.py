@@ -3,22 +3,22 @@ from android_provision.manifest import CaCert, DeviceOwner, Manifest
 from android_provision.resources import cacerts
 
 
-def make_manifest(tmp_path, sha="abc123"):
+def make_manifest(tmp_path, sha="abc123", name="caddy-ca-root"):
     cert = tmp_path / "root.crt"
     cert.write_text("-----BEGIN CERTIFICATE-----\n")
     return Manifest(
         device="bedroom", host="192.0.2.50", port=5555, abi="arm64-v8a",
         allowDowngrade=False, apks=[],
-        caCerts=[CaCert(name="caddy-ca-root", sha256=sha, path=str(cert))],
+        caCerts=[CaCert(name=name, sha256=sha, path=str(cert))],
         settings={}, obtainium=None, deviceOwner=DeviceOwner(False, None),
     )
 
 
-def run(device, tmp_path, *, apply=True, force=False):
+def run(device, tmp_path, *, apply=True, force=False, sha="abc123", name="caddy-ca-root"):
     adb = Adb("192.0.2.50", 5555)
     info = adb.connect()
     return adb, cacerts.reconcile(
-        adb, info, make_manifest(tmp_path), apply=apply, force=force
+        adb, info, make_manifest(tmp_path, sha=sha, name=name), apply=apply, force=force
     )
 
 
@@ -69,3 +69,28 @@ def test_unresolved_install_intent_is_failed_and_writes_no_marker(device, tmp_pa
     adb, outcomes = run(device, tmp_path)
     assert outcomes[0].status == "failed"
     assert adb.marker_exists("cacerts/abc123") is False
+
+
+def test_extension_not_doubled_when_name_already_has_it(device, tmp_path):
+    # The Nix side sets `name` to baseNameOf the cert path, which already
+    # includes ".crt" (e.g. "caddy-ca-root.crt"). The remote filename must
+    # end up "caddy-ca-root.crt", never "caddy-ca-root.crt.crt".
+    _, outcomes = run(device, tmp_path, name="caddy-ca-root.crt")
+    assert outcomes[0].status == "changed"
+    intents = device.reload()["intents"]
+    intent = intents[0]
+    d_value = intent[intent.index("-d") + 1]
+    assert d_value == "file:///sdcard/Download/caddy-ca-root.crt"
+
+
+def test_name_with_space_reaches_the_device_as_one_token(device, tmp_path):
+    # adb joins its trailing shell arguments with spaces before sending them
+    # to the device's own shell, which re-splits on whitespace. Without
+    # quoting, a cert name containing a space breaks the remote `am start`
+    # command into extra words instead of surviving as one path.
+    _, outcomes = run(device, tmp_path, name="My Cert")
+    assert outcomes[0].status == "changed"
+    intents = device.reload()["intents"]
+    intent = intents[0]
+    d_value = intent[intent.index("-d") + 1]
+    assert d_value == "file:///sdcard/Download/My Cert.crt"

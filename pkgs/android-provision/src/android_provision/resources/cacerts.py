@@ -37,7 +37,12 @@ def _one(adb: Adb, cert: CaCert, *, apply: bool, force: bool) -> Outcome:
     if not apply:
         return Outcome("cacert", cert.name, CHANGED, "would push and launch the installer")
 
-    remote = f"{REMOTE_DIR}/{cert.name}.crt"
+    # cert.name is `baseNameOf` the cert path on the Nix side, which already
+    # includes its extension (e.g. "caddy-ca-root.crt"). Strip a trailing
+    # .crt before appending one, so the remote filename never ends up
+    # "caddy-ca-root.crt.crt".
+    stem = cert.name[:-4] if cert.name.lower().endswith(".crt") else cert.name
+    remote = f"{REMOTE_DIR}/{stem}.crt"
     try:
         adb.push(cert.path, remote)
         output = adb.shell(

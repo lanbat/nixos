@@ -2,6 +2,7 @@
 """An adb stand-in for tests, backed by the JSON file named by $FAKE_ADB_STATE."""
 import json
 import os
+import shlex
 import sys
 
 STATE = os.environ["FAKE_ADB_STATE"]
@@ -45,7 +46,14 @@ def main(argv):
         return 1
 
     if verb == "shell":
-        return shell(state, rest)
+        # Real adb joins its trailing shell arguments with spaces into one
+        # command line and hands it to the device's shell, which re-splits
+        # on whitespace, honouring any quoting the caller embedded. Locally
+        # `rest` is already a list of separate argv items (no local shell
+        # involved), so replicate adb's own join-then-remote-split here --
+        # otherwise an unquoted embedded space would never break anything in
+        # this fake, unlike on a real device.
+        return shell(state, shlex.split(" ".join(rest)))
     if verb == "install":
         return install(state, rest)
     if verb == "push":

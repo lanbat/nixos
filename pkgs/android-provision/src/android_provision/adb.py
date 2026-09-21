@@ -1,6 +1,7 @@
 """The only module that speaks adb. Everything else goes through Adb."""
 from __future__ import annotations
 
+import shlex
 import subprocess
 from dataclasses import dataclass
 
@@ -89,11 +90,24 @@ class Adb:
         return self.shell("getprop", name)
 
     def shell(self, *args: str) -> str:
-        return self._run(["-s", self.serial, "shell", *args]).stdout.strip()
+        return self._run(["-s", self.serial, "shell", *self._quoted(args)]).stdout.strip()
 
     def shell_ok(self, *args: str) -> bool:
         """Run a shell command for its exit status alone."""
-        return self._run(["-s", self.serial, "shell", *args], check=False).returncode == 0
+        return self._run(
+            ["-s", self.serial, "shell", *self._quoted(args)], check=False
+        ).returncode == 0
+
+    @staticmethod
+    def _quoted(args: tuple[str, ...]) -> list[str]:
+        # `adb shell` joins its trailing arguments with spaces into a single
+        # command line and hands it to the device's shell, which then does
+        # its own word-splitting. Locally, each element of `args` is one
+        # Python string and its embedded spaces (a filename, a settings
+        # value) are invisible to that join -- so any argument containing a
+        # space must carry its own shell quoting, or the remote shell splits
+        # it into more words than we intended.
+        return [shlex.quote(a) for a in args]
 
     def install(self, path: str, *, downgrade: bool = False) -> None:
         args = ["-s", self.serial, "install", "-r"]
