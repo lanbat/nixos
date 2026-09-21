@@ -30,6 +30,13 @@ def _one(
     if apk.minSdk > info.sdk:
         return Outcome("apk", target, SKIPPED, f"minSdk {apk.minSdk} > device {info.sdk}")
 
+    if manifest.abi not in info.abis:
+        return Outcome(
+            "apk", target, SKIPPED,
+            f"configured abi {manifest.abi!r} not supported by device "
+            f"(device reports: {', '.join(info.abis) or 'none'})",
+        )
+
     current = installed_version(adb, target)
     downgrade = False
 

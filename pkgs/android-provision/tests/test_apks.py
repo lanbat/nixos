@@ -71,6 +71,20 @@ def test_min_sdk_above_device_is_skipped(device, tmp_path):
     assert "com.example.future" not in device.reload()["packages"]
 
 
+def test_abi_not_supported_by_device_is_skipped(device, tmp_path):
+    # make_manifest() always configures abi="arm64-v8a" (the variant fetched
+    # by Nix); if the device's real abilist doesn't include it, installing
+    # the fetched APK would fail on-device with
+    # INSTALL_FAILED_NO_MATCHING_ABIS instead of being reported honestly.
+    device.state["props"]["ro.product.cpu.abilist"] = "x86_64"
+    device.commit()
+    adb, outcomes = run(device, tmp_path, ("de.badaix.snapcast", 2902, 21))
+    assert outcomes[0].status == "skipped"
+    assert "arm64-v8a" in outcomes[0].reason
+    assert "x86_64" in outcomes[0].reason
+    assert "de.badaix.snapcast" not in device.reload()["packages"]
+
+
 def test_plan_mode_changes_nothing(device, tmp_path):
     device.state["apk_meta"]["de.badaix.snapcast.apk"] = {
         "packageId": "de.badaix.snapcast", "versionCode": 2902}
