@@ -33,8 +33,8 @@ def _one(
     current = installed_version(adb, target)
     downgrade = False
 
-    if current is not None and not force:
-        if current == apk.versionCode:
+    if current is not None:
+        if current == apk.versionCode and not force:
             return Outcome("apk", target, OK)
         if current > apk.versionCode:
             if not manifest.allowDowngrade:

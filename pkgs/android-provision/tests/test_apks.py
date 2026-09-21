@@ -81,3 +81,48 @@ def test_plan_mode_changes_nothing(device, tmp_path):
     outcomes = apks.reconcile(adb, info, manifest, apply=False, force=False)
     assert outcomes[0].status == "changed"
     assert "de.badaix.snapcast" not in device.reload()["packages"]
+
+
+def test_verification_mismatch_after_install_is_failed(device, tmp_path):
+    # fake adb "installs" whatever versionCode apk_meta says, independent of
+    # what the manifest claims -- deliberately mismatch them so the
+    # post-install re-read in _one() disagrees with the manifest.
+    device.state["apk_meta"]["com.example.mismatch.apk"] = {
+        "packageId": "com.example.mismatch", "versionCode": 42}
+    device.commit()
+    adb = Adb("192.0.2.50", 5555)
+    info = adb.connect()
+    manifest = make_manifest(tmp_path, ("com.example.mismatch", 7, 21))
+    outcomes = apks.reconcile(adb, info, manifest, apply=True, force=False)
+    assert outcomes[0].status == "failed"
+    assert "installed but reports versionCode 42, expected 7" in outcomes[0].reason
+    assert device.reload()["packages"]["com.example.mismatch"] == 42
+
+
+def test_install_failure_is_failed(device, tmp_path):
+    # No apk_meta entry for this package's apk file: fake_adb's install()
+    # blows up looking it up, adb.py turns the non-zero exit into AdbError,
+    # and _one() must convert that into a FAILED outcome, not propagate it.
+    manifest = make_manifest(tmp_path, ("com.example.missing", 5, 21))
+    adb = Adb("192.0.2.50", 5555)
+    info = adb.connect()
+    outcomes = apks.reconcile(adb, info, manifest, apply=True, force=False)
+    assert outcomes[0].status == "failed"
+    assert "com.example.missing" not in device.reload()["packages"]
+
+
+def test_force_with_allow_downgrade_installs_with_dash_d(device, tmp_path):
+    # force=True must not bypass the allowDowngrade guard, and when
+    # allowDowngrade is set it must still pass -d down to adb install even
+    # though force short-circuits the "already at this version" ok-shortcut.
+    device.state["apk_meta"]["de.badaix.snapcast.apk"] = {
+        "packageId": "de.badaix.snapcast", "versionCode": 2902}
+    device.state["packages"]["de.badaix.snapcast"] = 3000
+    device.commit()
+    adb = Adb("192.0.2.50", 5555)
+    info = adb.connect()
+    manifest = make_manifest(tmp_path, ("de.badaix.snapcast", 2902, 21),
+                              allow_downgrade=True)
+    outcomes = apks.reconcile(adb, info, manifest, apply=True, force=True)
+    assert outcomes[0].status == "changed"
+    assert device.reload()["packages"]["de.badaix.snapcast"] == 2902
