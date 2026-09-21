@@ -260,31 +260,63 @@ in
   };
 
   config = lib.mkIf (devices != { }) {
-    assertions = [
-      {
-        assertion =
+    assertions =
+      let
+        # Group device names by "host:port" so a collision names every
+        # device sharing it, not just that a collision exists.
+        endpointGroups = lib.foldlAttrs (
+          acc: name: d:
           let
-            endpoints = lib.mapAttrsToList (_: d: "${d.host}:${toString d.port}") devices;
+            endpoint = "${d.host}:${toString d.port}";
           in
-          lib.length (lib.unique endpoints) == lib.length endpoints;
-        message = "androidDevices: two devices share the same host:port.";
-      }
-    ]
-    ++ lib.mapAttrsToList (name: d: {
-      assertion = !d.deviceOwner.enable || d.deviceOwner.component != null;
-      message = "androidDevices.${name}: deviceOwner.enable needs deviceOwner.component.";
-    }) devices
-    ++ lib.concatLists (
-      lib.mapAttrsToList (
-        name: d:
-        map (key: {
-          assertion = lock ? ${key};
-          message =
-            "androidDevices.${name}: ${key} is not in pkgs/android-provision/apks.lock.json. "
-            + "Run: nix run .#android-update";
-        }) (d.packages ++ (map (g: g.repo) d.github))
-      ) devices
-    );
+          acc // { ${endpoint} = (acc.${endpoint} or [ ]) ++ [ name ]; }
+        ) { } devices;
+      in
+      lib.concatLists (
+        lib.mapAttrsToList (
+          endpoint: names:
+          lib.optional (lib.length names > 1) {
+            assertion = false;
+            message = "androidDevices: ${lib.concatStringsSep " and " names} share the same host:port ${endpoint}.";
+          }
+        ) endpointGroups
+      )
+      ++ lib.mapAttrsToList (name: d: {
+        assertion = !d.deviceOwner.enable || d.deviceOwner.component != null;
+        message = "androidDevices.${name}: deviceOwner.enable needs deviceOwner.component.";
+      }) devices
+      ++ lib.concatLists (
+        lib.mapAttrsToList (
+          name: d:
+          map (key: {
+            assertion = lock ? ${key};
+            message =
+              "androidDevices.${name}: ${key} is not in pkgs/android-provision/apks.lock.json. "
+              + "Run: nix run .#android-update";
+          }) (d.packages ++ (map (g: g.repo) d.github))
+        ) devices
+      )
+      # A key present in the lockfile might still lack a variant for this
+      # device's abi (and no universal fallback). Checked only for keys the
+      # previous assertion has already confirmed are in the lockfile, so
+      # this never dereferences a missing lock entry.
+      ++ lib.concatLists (
+        lib.mapAttrsToList (
+          name: d:
+          map (
+            key:
+            let
+              entry = lock.${key};
+            in
+            {
+              assertion = entry.variants ? ${d.abi} || entry.variants ? universal;
+              message =
+                "androidDevices.${name}: ${entry.packageId} has no APK variant for abi \"${d.abi}\" "
+                + "(available: ${lib.concatStringsSep ", " (lib.attrNames entry.variants)}).";
+            }
+          ) (lib.filter (key: lock ? ${key}) (d.packages ++ (map (g: g.repo) d.github)))
+        ) devices
+      );
 
     environment.systemPackages = [ provisioner ];
 

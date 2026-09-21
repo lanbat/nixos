@@ -54,6 +54,16 @@ let
     };
   };
 
+  noMatchingVariant = eval {
+    bedroom = {
+      host = "192.0.2.50";
+      # de.badaix.snapcast ships arm64-v8a/armeabi-v7a/x86/x86_64 variants and
+      # no universal, so an unrelated abi resolves to nothing.
+      abi = "mips64";
+      packages = [ "de.badaix.snapcast" ];
+    };
+  };
+
   expect = name: cond: if cond then "" else "FAIL: ${name}\n";
 in
 pkgs.runCommand "android-devices-check" { } ''
@@ -68,6 +78,15 @@ pkgs.runCommand "android-devices-check" { } ''
       lib.length (failures ownerWithoutComponent) == 1
     )
     + expect "a package missing from the lockfile is rejected" (lib.length (failures unlocked) == 1)
+    + expect "an abi with no matching variant and no universal is rejected" (
+      lib.length (failures noMatchingVariant) == 1
+    )
+    + expect "duplicate host:port message names both devices" (
+      let
+        msgs = map (a: a.message) (failures duplicate);
+      in
+      lib.any (m: lib.hasInfix "bedroom" m && lib.hasInfix "lounge" m) msgs
+    )
   }"
   if [ -n "$errors" ]; then
     printf '%s' "$errors" >&2
