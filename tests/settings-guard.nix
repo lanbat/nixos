@@ -26,6 +26,7 @@ let
     "deployment.serverIp"
     "deployment.storageIp"
     "deployment.storageHostname"
+    "deployment.parkingGuard"
     "hosts"
     "mosquitto.extraUsers"
   ];

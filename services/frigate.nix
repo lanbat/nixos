@@ -23,9 +23,9 @@
 # Storage
 # -------
 # All state is local (always-on tier):
- #   /var/lib/frigate/db/         — SQLite event metadata
- #   /var/lib/frigate/clips/      — review snapshots/clips (14-day rolling)
- #   /var/lib/frigate/recordings/ — 7-day motion-only recordings (sub stream)
+#   /var/lib/frigate/db/         — SQLite event metadata
+#   /var/lib/frigate/clips/      — review snapshots/clips (14-day rolling)
+#   /var/lib/frigate/recordings/ — 7-day motion-only recordings (sub stream)
 #   /var/cache/frigate/          — clip buffer (safe to lose)
 #
 # rclone cloud sync will be added later.
