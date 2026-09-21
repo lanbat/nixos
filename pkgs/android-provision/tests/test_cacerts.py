@@ -27,6 +27,14 @@ def test_absent_marker_pushes_cert_and_reports_manual_step(device, tmp_path):
     assert outcomes[0].status == "changed"
     assert "on-screen" in outcomes[0].reason
     assert adb.marker_exists("cacerts/abc123") is True
+    # Verify the intent was launched with correct action and mime type
+    intents = device.reload()["intents"]
+    assert len(intents) == 1
+    intent = intents[0]
+    assert "-a" in intent
+    assert "android.credentials.INSTALL" in intent
+    assert "-t" in intent
+    assert "application/x-x509-ca-cert" in intent
 
 
 def test_existing_marker_is_ok(device, tmp_path):

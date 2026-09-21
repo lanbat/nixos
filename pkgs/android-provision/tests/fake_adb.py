@@ -79,6 +79,11 @@ def shell(state, args):
         save(state)
         print(f"Success: Device owner set to package {args[2]}")
         return 0
+    if args[0] == "am" and args[1] == "start":
+        state.setdefault("intents", []).append(args[2:])
+        save(state)
+        print("Starting: Intent { ... }")
+        return 0
     if args[0] == "test":
         # test -f <path>
         return 0 if args[2] in state.get("files", []) else 1

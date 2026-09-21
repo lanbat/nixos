@@ -22,6 +22,7 @@ BASE_STATE = {
     "accounts": False,
     "readonly_settings": [],
     "apk_meta": {},
+    "intents": [],
 }
 
 
