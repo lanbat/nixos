@@ -22,6 +22,7 @@ queries (`nix run .#hosts`, `nix run .#deploy-query -- server-ip`).
 - [Security model](docs/security.md)
 - [Backup strategy](docs/backup.md)
 - [Operations guide](docs/operations.md)
+- [Android device provisioning](docs/android-devices.md)
 - [Secrets setup](secrets/README.md)
 
 ## How it fits together
