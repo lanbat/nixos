@@ -40,11 +40,7 @@
     let
       inherit (nixpkgs) lib;
 
-      lanbatPlugins = {
-        services = import ./plugins/services;
-        tv = import ./plugins/tv;
-        voice = import ./plugins/voice;
-      };
+      lanbatPlugins = import ./plugins;
 
       inputsWithSelf = inputs // {
         self = self // {
@@ -114,6 +110,7 @@
         lanbat-server = ./lib/roles/server.nix;
         lanbat-storage-pi = ./lib/roles/storage-pi.nix;
         lanbat-voice-pi = ./lib/roles/voice-pi.nix;
+        lanbat-android = ./modules/server/android-devices.nix;
       };
 
       nixosConfigurations = lanbatLib.configurations;
@@ -236,6 +233,18 @@
               exec ${pkgs.nix}/bin/nix build .#checks.x86_64-linux.validate-deploy --no-link
             ''
           );
+        };
+
+        android-provision = {
+          type = "app";
+          program = "${pkgs.callPackage ./pkgs/android-provision { }}/bin/android-provision";
+        };
+        android-update = {
+          type = "app";
+          program = "${pkgs.writeShellScript "android-update" ''
+            exec ${pkgs.callPackage ./pkgs/android-provision { }}/bin/android-provision \
+              update --lockfile "''${1:-pkgs/android-provision/apks.lock.json}" "''${@:2}"
+          ''}";
         };
       };
     };

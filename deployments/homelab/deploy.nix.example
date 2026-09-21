@@ -23,6 +23,17 @@
       "Office" = "server";
       "Living Room" = "pi-storage";
     };
+
+    # Android TV boxes, for lanbatPlugins.android.  Snapdroid needs no
+    # configuration: snapserver publishes over mDNS (services/snapcast.nix).
+    # androidDevices = {
+    #   bedroom = {
+    #     host = "10.0.0.x";
+    #     packages = [ "de.badaix.snapcast" ];
+    #     settings.global.screen_off_timeout = 600000;
+    #   };
+    # };
+
     adminSshKey = "CHANGE_ME";
     zigbeeVendorId = "CHANGE_ME";
     zigbeeProductId = "CHANGE_ME";
