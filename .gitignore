@@ -36,5 +36,9 @@ secrets/secrets.nix
 result
 result-*
 
+# Python bytecode (pkgs/android-provision)
+__pycache__/
+*.pyc
+
 # Claude Code local settings
 .claude/settings.local.json
