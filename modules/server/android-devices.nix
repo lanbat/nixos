@@ -316,6 +316,20 @@ in
             }
           ) (lib.filter (key: lock ? ${key}) (d.packages ++ (map (g: g.repo) d.github)))
         ) devices
+      )
+      # settings is attrsOf (attrsOf ...) with no namespace check in the
+      # type, so a typo like `globl` would otherwise only be caught at
+      # provision time (exit 4) instead of at eval time.
+      ++ lib.concatLists (
+        lib.mapAttrsToList (
+          name: d:
+          map (ns: {
+            assertion = builtins.elem ns [ "global" "secure" "system" ];
+            message =
+              "androidDevices.${name}: unknown settings namespace \"${ns}\" "
+              + "(expected global, secure or system).";
+          }) (lib.attrNames d.settings)
+        ) devices
       );
 
     environment.systemPackages = [ provisioner ];

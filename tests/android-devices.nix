@@ -64,6 +64,14 @@ let
     };
   };
 
+  badNamespace = eval {
+    bedroom = {
+      host = "192.0.2.50";
+      # typo: should be "global"
+      settings.globl.screen_off_timeout = 600000;
+    };
+  };
+
   expect = name: cond: if cond then "" else "FAIL: ${name}\n";
 in
 pkgs.runCommand "android-devices-check" { } ''
@@ -80,6 +88,15 @@ pkgs.runCommand "android-devices-check" { } ''
     + expect "a package missing from the lockfile is rejected" (lib.length (failures unlocked) == 1)
     + expect "an abi with no matching variant and no universal is rejected" (
       lib.length (failures noMatchingVariant) == 1
+    )
+    + expect "an unknown settings namespace is rejected" (
+      lib.length (failures badNamespace) == 1
+    )
+    + expect "the unknown settings namespace message names the device and the namespace" (
+      let
+        msgs = map (a: a.message) (failures badNamespace);
+      in
+      lib.any (m: lib.hasInfix "bedroom" m && lib.hasInfix "globl" m) msgs
     )
     + expect "duplicate host:port message names both devices" (
       let
