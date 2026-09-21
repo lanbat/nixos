@@ -324,7 +324,11 @@ in
         lib.mapAttrsToList (
           name: d:
           map (ns: {
-            assertion = builtins.elem ns [ "global" "secure" "system" ];
+            assertion = builtins.elem ns [
+              "global"
+              "secure"
+              "system"
+            ];
             message =
               "androidDevices.${name}: unknown settings namespace \"${ns}\" "
               + "(expected global, secure or system).";

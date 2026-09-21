@@ -89,9 +89,7 @@ pkgs.runCommand "android-devices-check" { } ''
     + expect "an abi with no matching variant and no universal is rejected" (
       lib.length (failures noMatchingVariant) == 1
     )
-    + expect "an unknown settings namespace is rejected" (
-      lib.length (failures badNamespace) == 1
-    )
+    + expect "an unknown settings namespace is rejected" (lib.length (failures badNamespace) == 1)
     + expect "the unknown settings namespace message names the device and the namespace" (
       let
         msgs = map (a: a.message) (failures badNamespace);
