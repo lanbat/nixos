@@ -121,6 +121,7 @@
       deploy.nodes = if hasDeploy then lanbatLib.deployNodes else { };
 
       checks.x86_64-linux = {
+        android-devices = import ./tests/android-devices.nix { inherit lib pkgs; };
         android-provision = pkgs.callPackage ./pkgs/android-provision { };
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };
         music-assistant = import ./tests/music-assistant.nix { inherit pkgs; };
