@@ -11,6 +11,7 @@ let
   dashboards = pkgs.callPackage ../pkgs/grafana-dashboards { };
   kodiTvConfig = pkgs.callPackage ../pkgs/kodi-tv-config { };
   kodiBootstrap = pkgs.callPackage ../pkgs/kodi-bootstrap { };
+  androidProvision = pkgs.callPackage ../pkgs/android-provision { };
 in
 pkgs.runCommand "pkgs-build-smoke"
   {
@@ -20,12 +21,14 @@ pkgs.runCommand "pkgs-build-smoke"
       caPage
       dashboards
       kodiBootstrap
+      androidProvision
     ];
   }
   ''
     command -v backup-server
     command -v quota-setup
     command -v kodi-bootstrap
+    command -v android-provision
     test -f ${pages}/offline.html
     test -f ${caPage}/index.html
     test -d ${dashboards}
