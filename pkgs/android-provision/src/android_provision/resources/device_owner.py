@@ -14,14 +14,20 @@ from ..adb import Adb, AdbError, DeviceInfo
 from ..manifest import Manifest
 from ..outcome import CHANGED, FAILED, OK, Outcome
 
-OWNER = re.compile(r"Device Owner:\s*(\S+)")
+# Real `dumpsys device_policy` prints a multi-line block, e.g.:
+#     Device Owner:
+#       admin=ComponentInfo{com.example.dpc/com.example.dpc.AdminReceiver}
+#       name=Example
+#       package=com.example.dpc
+# Anchoring on "Device Owner:" with \s* crossing the newline captures
+# "admin=ComponentInfo{...}" instead of the component -- anchor on
+# ComponentInfo{...} itself instead, which is absent when no owner is set.
+OWNER = re.compile(r"ComponentInfo\{([^}]+)\}")
 
 
 def current_owner(adb: Adb) -> str | None:
     match = OWNER.search(adb.shell("dumpsys", "device_policy"))
-    if not match or match.group(1) == "null":
-        return None
-    return match.group(1)
+    return match.group(1) if match else None
 
 
 def reconcile(

@@ -75,7 +75,14 @@ def shell(state, args):
         return 0
     if args[0] == "dumpsys" and args[1] == "device_policy":
         owner = state.get("device_owner")
-        print(f"Device Owner: {owner}" if owner else "Device Owner: null")
+        if owner:
+            package = owner.split("/", 1)[0]
+            print("Device Owner:")
+            print(f"  admin=ComponentInfo{{{owner}}}")
+            print("  name=Example")
+            print(f"  package={package}")
+        else:
+            print("Device Owner: No device owner.")
         return 0
     if args[0] == "dpm" and args[1] == "set-device-owner":
         if state.get("accounts"):
