@@ -44,18 +44,31 @@ let
 
   addressOf = hostKey: config.lanbat.hosts.${hostKey}.networking.ip;
 
-  rulesFor =
+  # The rule bodies, without the -I/-D verb, so that the start and stop commands
+  # cannot drift apart.
+  specsFor =
     name: svc:
     let
       port = toString svc.endpoint.port;
       remote = lib.filter (h: h != thisHost) (consumerHostsOf name);
     in
-    [ "iptables -I INPUT -p tcp --dport ${port} ! -i lo -j DROP" ]
-    ++ map (h: "iptables -I INPUT -p tcp --dport ${port} -s ${addressOf h} -j ACCEPT") remote;
+    [ "INPUT -p tcp --dport ${port} ! -i lo -j DROP" ]
+    ++ map (h: "INPUT -p tcp --dport ${port} -s ${addressOf h} -j ACCEPT") remote;
+
+  specs = lib.concatLists (lib.mapAttrsToList specsFor provided);
 
 in
 {
   networking.firewall.extraCommands = lib.concatStringsSep "\n" (
-    lib.concatLists (lib.mapAttrsToList rulesFor provided)
+    map (spec: "iptables -I ${spec}") specs
+  );
+
+  # extraCommands writes into INPUT, which the firewall's reload does not flush,
+  # so without a matching delete the inserted rules accumulate on every reload.
+  # services/mosquitto.nix carries the same pairing and the comment explaining
+  # why. Failures are swallowed because a stop may run when the rules were never
+  # inserted.
+  networking.firewall.extraStopCommands = lib.concatStringsSep "\n" (
+    map (spec: "iptables -D ${spec} 2>/dev/null || true") specs
   );
 }
