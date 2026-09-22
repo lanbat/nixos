@@ -102,6 +102,9 @@ in
   lanbat.services.influxdb = {
     consumes = lib.optional hasTelegraf "telegraf";
     extraPorts = [ 8086 ];
+    # The upstream unit is influxdb2, not influxdb, so name it here rather than
+    # leaving anything that iterates the services to guess.
+    units = [ "influxdb2" ];
     secrets = {
       influxdb-admin-password.owner = "influxdb2";
       influxdb-admin-token.owner = "influxdb2";

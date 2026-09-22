@@ -53,6 +53,29 @@
 }:
 
 let
+  # Units to report in server-health, taken from the service descriptions so
+  # that the list follows whatever this host actually runs. A service that
+  # declares its units is believed; otherwise a unit sharing the service's name
+  # is used when one exists, which covers the services whose upstream unit is
+  # named after them.
+  #
+  # Oneshots are left out. A bootstrap or setup step finishes and goes
+  # inactive, which is success, and listing it beside the long-running services
+  # makes a healthy host look broken.
+  staysRunning = unit: (config.systemd.services.${unit}.serviceConfig.Type or "simple") != "oneshot";
+
+  healthUnits = lib.filter staysRunning (
+    lib.unique (
+      lib.concatMap (
+        svc:
+        if svc.units != [ ] then
+          svc.units
+        else
+          lib.optional (config.systemd.services ? ${svc.name}) svc.name
+      ) (lib.attrValues config.lanbat.services)
+    )
+  );
+
   adminScript =
     name: body:
     pkgs.writeShellScriptBin name ''
@@ -239,8 +262,8 @@ in
         df -h / | tail -1 | awk '{print "  /: used=" $3 " avail=" $4}'
         echo "  LVM free: $(vgs --noheadings -o vg_free --units g 2>/dev/null | tr -d ' ' || echo unknown)"
         echo
-        echo "── Key services ──"
-        for svc in postgresql caddy home-assistant influxdb2 grafana; do
+        echo "── Services ──"
+        for svc in ${lib.concatStringsSep " " (lib.sort (a: b: a < b) healthUnits)}; do
           printf "  %-28s %s\n" "$svc" "$(systemctl is-active "$svc" 2>/dev/null || true)"
         done
       '')
