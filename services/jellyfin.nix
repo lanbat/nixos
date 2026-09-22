@@ -31,6 +31,11 @@
 #
 # First-run onboarding, media libraries, plugins, and Authentik SSO are
 # completed automatically by jellyfin-bootstrap.
+#
+# That bootstrap logs in to Home Assistant and configures OIDC against
+# Authentik, so it only exists when the deployment runs both. Without them
+# Jellyfin still serves media; it just keeps its own accounts and is not
+# registered with Home Assistant.
 {
   config,
   pkgs,
@@ -41,6 +46,10 @@
 let
   domain = config.lanbat.deployment.domain;
   bootstrap = pkgs.callPackage ../pkgs/jellyfin-bootstrap { };
+
+  # The bootstrap reads secrets that home-assistant.nix and authentik own, so
+  # it can only exist when those services are part of the deployment.
+  integrates = config.lanbat.hasService "home-assistant" && config.lanbat.hasService "authentik";
 in
 {
   lanbat.services.jellyfin = {
@@ -52,7 +61,11 @@ in
     state = [ "jellyfin" ];
     units = [
       "jellyfin"
-      "jellyfin-bootstrap"
+    ]
+    ++ lib.optional integrates "jellyfin-bootstrap";
+    consumes = lib.optionals integrates [
+      "home-assistant"
+      "authentik"
     ];
     workloadDirs."jellyfin".user = "jellyfin";
     nfs.drives = [
@@ -97,7 +110,7 @@ in
 
   networking.firewall.allowedUDPPorts = [ 7359 ];
 
-  systemd.services.jellyfin-bootstrap = {
+  systemd.services.jellyfin-bootstrap = lib.mkIf integrates {
     description = "Complete Jellyfin setup (wizard, libraries, plugins, SSO)";
     wantedBy = [ "multi-user.target" ];
     after = [ "jellyfin.service" ];

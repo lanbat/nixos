@@ -21,6 +21,7 @@ pkgs.testers.runNixOSTest {
     {
       imports = [
         ../modules/core/services.nix
+        ../modules/core/database.nix
         ../modules/wiring/checks.nix
         ../modules/wiring/workload-gate.nix
         ../services/postgresql.nix

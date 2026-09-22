@@ -85,11 +85,11 @@ in
 
   systemd.services.grafana = {
     after = [
-      config.lanbat.postgresql.instances.always-on.unit
+      (config.lanbat.postgresql.instance "always-on").unit
       "grafana-influxdb-token.service"
     ];
     requires = [
-      config.lanbat.postgresql.instances.always-on.unit
+      (config.lanbat.postgresql.instance "always-on").unit
       "grafana-influxdb-token.service"
     ];
     serviceConfig = {
@@ -111,7 +111,7 @@ in
     settings = {
       database =
         let
-          pg = config.lanbat.postgresql.instances.always-on;
+          pg = (config.lanbat.postgresql.instance "always-on");
         in
         {
           type = "postgres";

@@ -7,6 +7,7 @@
     ./settings.nix
     ./host-context.nix
     ./services.nix
+    ./database.nix
     ./base.nix
     ./gc.nix
     ./auto-upgrade.nix

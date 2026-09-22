@@ -109,11 +109,11 @@ in
 
     systemd.services.home-assistant = {
       after = [
-        config.lanbat.postgresql.instances.always-on.unit
+        (config.lanbat.postgresql.instance "always-on").unit
         "mosquitto.service"
       ];
       requires = [
-        config.lanbat.postgresql.instances.always-on.unit
+        (config.lanbat.postgresql.instance "always-on").unit
         "mosquitto.service"
       ];
     };
@@ -338,7 +338,7 @@ in
           purge_keep_days = 30;
           db_url =
             let
-              pg = config.lanbat.postgresql.instances.always-on;
+              pg = (config.lanbat.postgresql.instance "always-on");
             in
             "postgresql://@/hass?host=${pg.socket}&port=${toString pg.port}";
           exclude = {

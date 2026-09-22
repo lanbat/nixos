@@ -22,7 +22,7 @@
 #     account = { uid = 992; extraGroups = [ "media" ]; };
 #     dashboard = { group = "Media"; name = "Jellyfin"; description = "Media server"; };
 #   };
-{ lib, ... }:
+{ config, lib, ... }:
 
 let
   inherit (lib) mkOption types;
@@ -415,4 +415,24 @@ in
     default = { };
     description = "Self-descriptions of the services on this host. See modules/core/services.nix.";
   };
+
+  options.lanbat.hasService = mkOption {
+    type = types.functionTo types.bool;
+    internal = true;
+    readOnly = true;
+    description = ''
+      Whether a service is part of this deployment, by name.
+
+      A service module uses it to make an integration with another service
+      conditional, so that a deployment which leaves that other service out
+      still evaluates and does not start a unit that would retry forever
+      against something absent.
+
+      It answers for this host only. Once lib/ resolves the endpoint table
+      across the profile, this is the single definition that widens to answer
+      for the whole deployment, and its callers do not change.
+    '';
+  };
+
+  config.lanbat.hasService = name: config.lanbat.services ? ${name};
 }
