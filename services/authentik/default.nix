@@ -114,6 +114,31 @@ in
   };
 
   # Always-on instance: logins through Authentik must work before unlock.
+  # Authentik answers the authentication contract in modules/core/auth.nix, so
+  # that modules/wiring/caddy.nix can protect a vhost without naming Authentik.
+  lanbat.authProvider =
+    let
+      port = toString config.lanbat.services.authentik.port;
+    in
+    {
+      service = "authentik";
+
+      # OAuth callback after login — must hit the outpost, not the backend app.
+      outpostProxy = "reverse_proxy /outpost.goauthentik.io/* localhost:${port}";
+
+      forwardAuth = ''
+        forward_auth localhost:${port} {
+          uri /outpost.goauthentik.io/auth/caddy
+          copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Entitlements X-Authentik-Email \
+                       X-Authentik-Name X-Authentik-Uid X-Authentik-Jwt \
+                       X-Authentik-Meta-Jwks X-Authentik-Meta-Outpost \
+                       X-Authentik-Meta-Provider X-Authentik-Meta-App \
+                       X-Authentik-Meta-Version
+          trusted_proxies private_ranges
+        }
+      '';
+    };
+
   lanbat.postgresql.databases.authentik = {
     instance = "always-on";
     passwordFile = authentikEnvFile;

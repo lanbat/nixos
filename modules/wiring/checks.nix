@@ -148,8 +148,8 @@ let
         + " or make the integration conditional on lanbat.hasService.";
     }
     {
-      assertion = s.auth != "forward-auth" || config.lanbat.services ? authentik;
-      message = "lanbat: ${s.name} uses forward auth, but the authentik service isn't imported";
+      assertion = s.auth != "forward-auth" || config.lanbat.authProvider != null;
+      message = "lanbat: ${s.name} uses forward auth, but no authentication provider runs on this host";
     }
     {
       assertion = s.tier != "workload" || s.state != [ ];

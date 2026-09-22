@@ -91,6 +91,18 @@ let
     { name, config, ... }:
     {
       options = {
+        name = mkOption {
+          type = types.str;
+          internal = true;
+          readOnly = true;
+          default = name;
+          defaultText = lib.literalExpression "<the attribute name>";
+          description = ''
+            The service's own name, so that wiring which iterates over the
+            values alone can still say which service it is talking about.
+          '';
+        };
+
         # ── Service configuration (the service module itself) ─────────────────
         settings = mkOption {
           type = types.submodule { freeformType = types.attrsOf types.anything; };

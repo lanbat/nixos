@@ -8,6 +8,7 @@
     ./host-context.nix
     ./services.nix
     ./database.nix
+    ./auth.nix
     ./base.nix
     ./gc.nix
     ./auto-upgrade.nix
