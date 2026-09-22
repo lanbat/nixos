@@ -163,7 +163,8 @@ let
 
     if ${pkgs.util-linux}/bin/mountpoint -q "$MOUNTPOINT" 2>/dev/null; then
       echo "Unmounting $MOUNTPOINT..."
-      umount -l "$MOUNTPOINT" || umount "$MOUNTPOINT"
+      ${pkgs.util-linux}/bin/umount -l "$MOUNTPOINT" \
+        || ${pkgs.util-linux}/bin/umount "$MOUNTPOINT"
     fi
     if [ -e "/dev/mapper/$MAPPER" ]; then
       echo "Closing LUKS mapper: $MAPPER"
