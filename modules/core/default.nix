@@ -19,5 +19,6 @@
     ../wiring/accounts.nix
     ../wiring/secrets.nix
     ../wiring/checks.nix
+    ../wiring/policy.nix
   ];
 }
