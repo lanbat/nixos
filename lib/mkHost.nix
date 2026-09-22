@@ -21,7 +21,11 @@ let
   platform = hostCfg.platform or "generic";
   system = hostCfg.system;
 
-  pluginModules = resolvePlugins hostCfg.role (hostCfg.plugins or [ ]);
+  pluginModules = resolvePlugins hostCfg.role (hostCfg.plugins or [ ]) (hostCfg.services or [ ]);
+
+  # Merged last of all, so a deployment overrides anything core, the role or
+  # a plugin set without having to edit a tracked file.
+  userModules = hostCfg.modules or [ ];
 
   hostContextModule =
     { ... }:
@@ -34,6 +38,8 @@ let
         networking = host.networking;
         disks = host.disks or { };
         storage = host.storage or { };
+        # Needed by the endpoint wiring to work out which host runs a service.
+        services = host.services or [ ];
       }) hosts;
     };
 
@@ -56,7 +62,8 @@ let
       disko.nixosModules.disko
     ];
 
-  modules = if platform == "raspberry-pi" then raspberryPiModules else genericModules;
+  modules =
+    (if platform == "raspberry-pi" then raspberryPiModules else genericModules) ++ userModules;
 
   nixosSystem =
     if platform == "raspberry-pi" then
