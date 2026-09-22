@@ -4,11 +4,7 @@
 let
   validate = import ../lib/validate-deploy.nix { inherit lib; };
 
-  lanbatPlugins = {
-    services = import ../plugins/services;
-    tv = import ../plugins/tv;
-    voice = import ../plugins/voice;
-  };
+  lanbatPlugins = import ../plugins;
 
   baseDeploy = import ../deployments/example/deploy.nix {
     inputs = {

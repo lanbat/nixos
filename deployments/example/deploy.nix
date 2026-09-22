@@ -29,6 +29,14 @@
       "Office" = "server";
       "Living Room" = "pi-storage";
     };
+
+    # Android TV boxes, for lanbatPlugins.android.
+    androidDevices = {
+      bedroom = {
+        host = "192.0.2.50";
+        packages = [ "de.badaix.snapcast" ];
+      };
+    };
   };
 
   hosts = {
@@ -45,6 +53,7 @@
       };
       plugins = [
         inputs.self.lanbatPlugins.services
+        inputs.self.lanbatPlugins.android
       ];
     };
 

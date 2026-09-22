@@ -85,6 +85,7 @@ Plugins add optional features to compatible roles. Built-in plugins:
 | `lanbatPlugins.services` | `server` | All homelab services |
 | `lanbatPlugins.tv` | `storage-pi` | Kodi + EmulationStation |
 | `lanbatPlugins.voice` | `storage-pi`, `voice-pi` | Wyoming satellite |
+| `lanbatPlugins.android` | `server` | Provision Android TV boxes over ADB |
 
 ### External plugins
 

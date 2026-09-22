@@ -154,6 +154,7 @@ When adding a deployment-time value:
 | `config.lanbat.hosts.<key>.disks.system` | Server system disk path |
 | `config.lanbat.hosts.<key>.storage.drives` | Pi NVMe by-id filenames |
 | `config.lanbat.deployment.voiceRooms` | Area name → host key for voice satellites |
+| `config.lanbat.deployment.androidDevices` | Android TV boxes to provision over ADB |
 
 For the domain specifically, the common pattern in service files is:
 ```nix

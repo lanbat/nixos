@@ -266,6 +266,17 @@ in
         description = "Parking guard settings when lanbat-justpark-parking is enabled on the server.";
       };
 
+      androidDevices = mkOption {
+        type = types.attrsOf types.anything;
+        default = { };
+        description = ''
+          Android TV boxes to provision, for the lanbat-android plugin.  The
+          schema is declared by modules/server/android-devices.nix; this option
+          only carries the values from deploy.nix, which is where real device
+          addresses belong.  Type checking happens at the androidDevices option.
+        '';
+      };
+
       voiceRooms = mkOption {
         type = types.attrsOf types.str;
         default = { };

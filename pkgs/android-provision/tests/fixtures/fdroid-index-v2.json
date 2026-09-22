@@ -1,0 +1,48 @@
+{
+  "packages": {
+    "de.badaix.snapcast": {
+      "metadata": { "preferredSigner": "abc" },
+      "versions": {
+        "v2902": {
+          "added": 1737000000000,
+          "file": { "name": "/de.badaix.snapcast_2902.apk",
+                    "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+                    "size": 8000000 },
+          "manifest": { "versionName": "0.29.0.2", "versionCode": 2902,
+                        "usesSdk": { "minSdkVersion": 21, "targetSdkVersion": 34 } }
+        },
+        "v2700": {
+          "added": 1690000000000,
+          "file": { "name": "/de.badaix.snapcast_2700.apk",
+                    "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+                    "size": 7000000 },
+          "manifest": { "versionName": "0.27.0.0", "versionCode": 2700,
+                        "usesSdk": { "minSdkVersion": 21, "targetSdkVersion": 33 } }
+        }
+      }
+    },
+    "org.videolan.vlc": {
+      "metadata": { "preferredSigner": "def" },
+      "versions": {
+        "arm64": {
+          "added": 1737000000000,
+          "file": { "name": "/org.videolan.vlc_13060535.apk",
+                    "sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+                    "size": 41234567 },
+          "manifest": { "versionName": "3.6.5", "versionCode": 13060535,
+                        "usesSdk": { "minSdkVersion": 21, "targetSdkVersion": 34 },
+                        "nativecode": ["arm64-v8a"] }
+        },
+        "armv7": {
+          "added": 1737000000000,
+          "file": { "name": "/org.videolan.vlc_13060534.apk",
+                    "sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+                    "size": 39000000 },
+          "manifest": { "versionName": "3.6.5", "versionCode": 13060534,
+                        "usesSdk": { "minSdkVersion": 21, "targetSdkVersion": 34 },
+                        "nativecode": ["armeabi-v7a"] }
+        }
+      }
+    }
+  }
+}
