@@ -125,6 +125,7 @@
         music-assistant = import ./tests/music-assistant.nix { inherit pkgs; };
         pkgs-build = import ./tests/pkgs-build.nix { inherit pkgs; };
         plugins = import ./tests/plugins.nix { inherit lib pkgs; };
+        endpoints-table = import ./tests/endpoints-table.nix { inherit lib pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
         settings-guard = import ./tests/settings-guard.nix { inherit lib pkgs; };
         validate-deploy = import ./tests/validate-deploy.nix { inherit lib pkgs; };

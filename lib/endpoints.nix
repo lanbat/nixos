@@ -53,7 +53,7 @@ let
               hostnames = lib.listToAttrs (
                 map (hostName: lib.nameValuePair hostName hosts.${hostName}.networking.hostname) hostNames
               );
-              inherit (first) endpoint account;
+              inherit (first) endpoint account consumes;
             }
         )
       ) allServiceNames
