@@ -100,6 +100,10 @@ in
   };
 
   lanbat.services.influxdb = {
+    endpoint = {
+      scheme = "http";
+      port = 8086;
+    };
     consumes = lib.optional hasTelegraf "telegraf";
     extraPorts = [ 8086 ];
     # The upstream unit is influxdb2, not influxdb, so name it here rather than
@@ -114,10 +118,8 @@ in
   # The Pi's Telegraf writes metrics here; nobody else on the LAN may connect.
   # Not loopback: the server's own Telegraf and Grafana connect over it, and
   # without ! -i lo the rule dropped them too.
-  networking.firewall = {
-    allowedTCPPorts = [ 8086 ];
-    extraCommands = ''
-      iptables -I INPUT -p tcp --dport 8086 ! -i lo ! -s ${config.lanbat.deployment.storageIp} -j DROP
-    '';
-  };
+  # Port 8086 is admitted to exactly the hosts running a service that consumes
+  # influxdb; modules/wiring/policy.nix generates that from the descriptions,
+  # so this no longer names the storage host directly.
+  networking.firewall.allowedTCPPorts = [ 8086 ];
 }
