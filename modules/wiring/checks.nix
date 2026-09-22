@@ -7,6 +7,11 @@
 let
   services = lib.mapAttrsToList (name: svc: svc // { inherit name; }) config.lanbat.services;
 
+  # A consumed name may be provided from another host, so the profile-wide table
+  # is the authority. It is empty on a host assembled without one, in which case
+  # the local services are all there is to go on.
+  providedInProfile = name: (config.lanbat.endpoints ? ${name}) || (config.lanbat.services ? ${name});
+
   # [ { key; owner; } ] → error lines for keys claimed by more than one owner.
   clashes =
     what: claims:
@@ -140,12 +145,17 @@ let
       # consumes is a hard requirement: the wiring has to resolve every name to
       # something that actually runs. An optional integration is expressed with
       # lanbat.hasService instead, and drops out of consumes when absent.
-      assertion = lib.all (name: config.lanbat.services ? ${name}) s.consumes;
+      #
+      # The name may be provided by any host in the profile — that is the whole
+      # point of consumes — so this looks in the profile-wide table first and
+      # falls back to the local services for a host assembled without one, as
+      # the pure-eval tests are.
+      assertion = lib.all (name: providedInProfile name) s.consumes;
       message =
         "lanbat: ${s.name} consumes "
-        + lib.concatStringsSep ", " (lib.filter (name: !(config.lanbat.services ? ${name})) s.consumes)
-        + ", which no service on this host provides. Add it to this host's services,"
-        + " or make the integration conditional on lanbat.hasService.";
+        + lib.concatStringsSep ", " (lib.filter (name: !(providedInProfile name)) s.consumes)
+        + ", which no service in this profile provides. Add it to a host in this"
+        + " profile, or make the integration conditional on lanbat.hasService.";
     }
     {
       assertion = s.auth != "forward-auth" || config.lanbat.authProvider != null;
