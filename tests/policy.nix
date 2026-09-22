@@ -69,6 +69,47 @@ let
     };
   };
 
+  # A third service exists in the profile but consumes something else, so it
+  # must not be admitted to mosquitto's port.
+  withBystander = evalPolicy {
+    services.mosquitto.endpoint = {
+      scheme = "mqtt";
+      port = 1883;
+    };
+    endpoints = {
+      mosquitto = {
+        hosts = [ "server" ];
+        consumes = [ ];
+      };
+      telegraf = {
+        hosts = [ "pi" ];
+        consumes = [ "mosquitto" ];
+      };
+      bystander = {
+        hosts = [ "pi" ];
+        consumes = [ "something-else" ];
+      };
+    };
+  };
+
+  # A consumer on the same host needs no rule: the traffic never leaves it.
+  localConsumerOnly = evalPolicy {
+    services.mosquitto.endpoint = {
+      scheme = "mqtt";
+      port = 1883;
+    };
+    endpoints = {
+      mosquitto = {
+        hosts = [ "server" ];
+        consumes = [ ];
+      };
+      frigate = {
+        hosts = [ "server" ];
+        consumes = [ "mosquitto" ];
+      };
+    };
+  };
+
   expect = name: cond: if cond then null else "FAIL: ${name}";
 
   cases = [
@@ -77,6 +118,15 @@ let
     ))
     (expect "loopback is exempt from the drop" (lib.hasInfix "! -i lo" withRemoteConsumer))
     (expect "a service with no endpoint generates nothing" (!(lib.hasInfix "7500" tangUntouched)))
+
+    (expect "a port whose only consumer is local gets a drop and no accept" (
+      lib.hasInfix "--dport 1883 ! -i lo -j DROP" localConsumerOnly
+      && !(lib.hasInfix "-j ACCEPT" localConsumerOnly)
+    ))
+
+    (expect "a service consuming something else is not admitted" (
+      lib.count (x: x == "-s") (lib.splitString " " withBystander) == 1
+    ))
   ];
 
   failures = lib.filter (x: x != null) cases;
