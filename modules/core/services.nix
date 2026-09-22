@@ -428,6 +428,28 @@ in
     description = "Self-descriptions of the services on this host. See modules/core/services.nix.";
   };
 
+  options.lanbat.endpoints = mkOption {
+    type = types.attrsOf (types.attrsOf types.anything);
+    internal = true;
+    default = { };
+    description = ''
+      Every service in this deployment profile and where it runs, keyed by
+      service name: the host key, that host's address and hostname, the
+      endpoint it publishes, and its service account.
+
+      lib/ builds this by evaluating each host's service descriptions once,
+      before building the hosts themselves, and hands the result to every host.
+      That first pass is cheap because the module system is lazy: reading
+      lanbat.services forces the descriptions, not the systemd units or the
+      package set behind them.
+
+      Because the first pass runs with this table empty, a description must not
+      depend on it. Settings and configuration bodies may; endpoint and account
+      may not, or the two passes would disagree about the very thing being
+      resolved.
+    '';
+  };
+
   options.lanbat.hasService = mkOption {
     type = types.functionTo types.bool;
     internal = true;

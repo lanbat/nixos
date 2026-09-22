@@ -12,6 +12,9 @@
   hosts,
   hostName,
   hostCfg,
+  # Profile-wide service table from lib/default.nix. Empty during the first,
+  # descriptions-only pass that produces it.
+  endpoints ? { },
 }:
 
 let
@@ -33,6 +36,7 @@ let
       lanbat.profile = profileName;
       lanbat.hostKey = hostName;
       lanbat.deployment = deployment;
+      lanbat.endpoints = endpoints;
       lanbat.hosts = lib.mapAttrs (name: host: {
         role = host.role;
         networking = host.networking;
