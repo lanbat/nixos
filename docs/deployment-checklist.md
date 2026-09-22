@@ -333,6 +333,12 @@ sudo cryptsetup luksOpen /dev/disk/by-id/DRIVE_B_ID storage-b
 sudo mkfs.xfs -L storage-b /dev/mapper/storage-b
 ```
 
+These commands put LUKS on the whole disk. A drive that instead carries a
+partition table with LUKS on a partition also works: the unlock service checks
+the whole disk first and then its partitions, and uses whichever is really a
+LUKS device. Keep naming the **whole disk** in `deploy.nix` either way, because
+`modules/pi/telegraf.nix` reads SMART counters from that same path.
+
 Set `piStorageDriveA` and `piStorageDriveB` in `deployments/homelab/deploy.nix` to the by-id filenames
 (without the `/dev/disk/by-id/` prefix).
 

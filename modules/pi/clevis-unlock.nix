@@ -112,12 +112,34 @@ let
       exit 1
     fi
 
+    # The LUKS container is either the whole disk or a partition on it. Try the
+    # whole disk first, then each partition in order, and take the first that is
+    # really a LUKS device. deploy.nix keeps naming the whole disk because
+    # modules/pi/telegraf.nix reads SMART from that same path.
+    LUKS_DEV=""
+    if cryptsetup isLuks "$DRIVE"; then
+      LUKS_DEV="$DRIVE"
+    else
+      for part in "$DRIVE"-part*; do
+        [ -b "$part" ] || continue
+        if cryptsetup isLuks "$part"; then
+          LUKS_DEV="$part"
+          break
+        fi
+      done
+    fi
+
+    if [ -z "$LUKS_DEV" ]; then
+      echo "ERROR: no LUKS container on $DRIVE (checked the whole disk and its partitions)" >&2
+      exit 1
+    fi
+
     # Open the LUKS volume via Clevis/Tang (idempotent — skip if already open).
     if [ ! -e "/dev/mapper/$MAPPER" ]; then
-      echo "Attempting Clevis unlock: $DRIVE → /dev/mapper/$MAPPER"
+      echo "Attempting Clevis unlock: $LUKS_DEV → /dev/mapper/$MAPPER"
       # clevis luks unlock contacts Tang over the network.
       # If Tang is unreachable, this exits non-zero and we retry.
-      ${pkgs.clevis}/bin/clevis luks unlock -d "$DRIVE" -n "$MAPPER"
+      ${pkgs.clevis}/bin/clevis luks unlock -d "$LUKS_DEV" -n "$MAPPER"
       echo "Clevis unlock succeeded: /dev/mapper/$MAPPER"
     else
       echo "INFO: /dev/mapper/$MAPPER already open, skipping unlock."
@@ -141,7 +163,8 @@ let
 
     if ${pkgs.util-linux}/bin/mountpoint -q "$MOUNTPOINT" 2>/dev/null; then
       echo "Unmounting $MOUNTPOINT..."
-      umount -l "$MOUNTPOINT" || umount "$MOUNTPOINT"
+      ${pkgs.util-linux}/bin/umount -l "$MOUNTPOINT" \
+        || ${pkgs.util-linux}/bin/umount "$MOUNTPOINT"
     fi
     if [ -e "/dev/mapper/$MAPPER" ]; then
       echo "Closing LUKS mapper: $MAPPER"
