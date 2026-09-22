@@ -13,11 +13,6 @@ let
   net = host.networking;
   networkLib = import ../network.nix { inherit lib; };
   prefixLength = networkLib.prefixLengthFromCidr config.lanbat.deployment.lanSubnet;
-  serverIp =
-    let
-      serverKey = config.lanbat.deployment.primaryServer;
-    in
-    if serverKey == null then "127.0.0.1" else config.lanbat.hosts.${serverKey}.networking.ip;
 in
 {
   networking.hostName = net.hostname;
@@ -53,14 +48,10 @@ in
 
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [
-      22
-      10700
-    ];
+    allowedTCPPorts = [ 22 ];
     allowedUDPPorts = [ 5353 ];
-    extraCommands = ''
-      iptables -I INPUT -p tcp --dport 10700 ! -s ${serverIp} -j DROP
-    '';
+    # The satellite's port is opened and restricted by
+    # modules/wiring/policy.nix, from the edge Home Assistant declares.
   };
 
   services.timesyncd.enable = true;

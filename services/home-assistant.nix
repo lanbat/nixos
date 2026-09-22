@@ -69,6 +69,9 @@ in
 
   config = {
     lanbat.services.home-assistant = {
+      # Home Assistant connects to each voice satellite, which may be on another
+      # host. Conditional so a deployment without voice still evaluates.
+      consumes = lib.optional (config.lanbat.hasService "voice-satellite") "voice-satellite";
       subdomain = "ha";
       port = 8123;
       auth = "forward-auth";
