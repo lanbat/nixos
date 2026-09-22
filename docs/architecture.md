@@ -171,6 +171,30 @@ The activator is a lightweight Python proxy that:
 2. If Bitmagnet is not running: starts it, returns a loading page.
 3. If Bitmagnet is running: transparently proxies the request.
 
+## Network policy
+
+A service that publishes an `endpoint` admits exactly the hosts running a
+service that named it in `consumes`, and drops everything else.
+`modules/wiring/policy.nix` generates those rules from the descriptions, so
+adding a host to a profile needs no firewall edit.
+
+An inserted `ACCEPT` opens a port on its own, because it lands above the jump to
+`nixos-fw`. A service reached from another host therefore does not need its port
+in `allowedTCPPorts` as well — declaring the edge is enough.
+
+Two things sit outside this deliberately:
+
+- **NFS**, because it is wiring driven by `nfs.drives` rather than a service, so
+  it has no endpoint to generate from. Its rules stay in
+  `lib/roles/storage-pi.nix`.
+- **Tang**, because it publishes no endpoint. The Pi reaches it to unlock its
+  LUKS storage, and that path must not depend on generated policy.
+
+**The rules are IPv4 only.** `lanbat.hosts.<key>.networking.ip` is typed `ipv4`,
+so they are `iptables` rather than `ip6tables`. A service that also listens on
+IPv6 is not covered by them, and is reachable over IPv6 on the LAN if its port
+is open. Closing that needs a v6 address in the host schema.
+
 ## NFS dependency model
 
 Services that read/write Pi storage set `lanbat.services.<name>.nfs.drives`.
