@@ -27,22 +27,13 @@
       ];
       # Deduplicate store paths on builds.
       auto-optimise-store = true;
-      # Collect garbage during builds when free space drops below min-free,
-      # until max-free is available again.
-      min-free = 2 * 1024 * 1024 * 1024;
-      max-free = 10 * 1024 * 1024 * 1024;
+      # Garbage collection, including the during-build min-free/max-free valve,
+      # is configured in modules/core/gc.nix under lanbat.gc.
       # Users the Nix daemon trusts, e.g. to accept store paths copied by deploy-rs.
       trusted-users = [
         "root"
         "@wheel"
       ];
-    };
-
-    # Garbage-collect weekly.
-    gc = {
-      automatic = true;
-      dates = "weekly";
-      options = "--delete-older-than 30d";
     };
   };
 

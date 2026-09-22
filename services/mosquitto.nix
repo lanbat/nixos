@@ -26,6 +26,10 @@
 
 {
   lanbat.services.mosquitto = {
+    endpoint = {
+      scheme = "mqtt";
+      port = 1883;
+    };
     extraPorts = [ 1883 ];
     # Plaintext passwords, one line each. Frigate reads its password too.
     secrets = {
@@ -91,20 +95,9 @@
     ];
   };
 
-  # Allow LAN devices and localhost to reach MQTT.
-  # Localhost must be explicitly allowed — HA and Z2M connect from 127.0.0.1.
-  #
-  # Rule order: insert DROP first so it ends up at the bottom after the two
-  # ACCEPT rules (each -I pushes earlier insertions down).
-  # extraStopCommands removes the rules on reload to prevent accumulation.
-  networking.firewall.extraCommands = ''
-    iptables -I INPUT -p tcp --dport 1883 ! -s ${config.lanbat.deployment.lanSubnet} -j DROP
-    iptables -I INPUT -p tcp --dport 1883 -s ${config.lanbat.deployment.lanSubnet} -j ACCEPT
-    iptables -I INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT
-  '';
-  networking.firewall.extraStopCommands = ''
-    iptables -D INPUT -p tcp --dport 1883 -s 127.0.0.1 -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 1883 -s ${config.lanbat.deployment.lanSubnet} -j ACCEPT 2>/dev/null || true
-    iptables -D INPUT -p tcp --dport 1883 ! -s ${config.lanbat.deployment.lanSubnet} -j DROP 2>/dev/null || true
-  '';
+  # Reachability is generated from the declared edges by
+  # modules/wiring/policy.nix: every service that consumes mosquitto is admitted
+  # and nothing else is. The rules this file used to write admitted the whole
+  # LAN subnet, which nothing used — 301 client connections over fourteen days
+  # were all from 127.0.0.1, which the generated drop exempts.
 }

@@ -7,7 +7,10 @@
     ./settings.nix
     ./host-context.nix
     ./services.nix
+    ./database.nix
+    ./auth.nix
     ./base.nix
+    ./gc.nix
     ./auto-upgrade.nix
     ./ssh.nix
     ./users.nix
@@ -16,5 +19,6 @@
     ../wiring/accounts.nix
     ../wiring/secrets.nix
     ../wiring/checks.nix
+    ../wiring/policy.nix
   ];
 }

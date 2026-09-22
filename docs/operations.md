@@ -123,6 +123,26 @@ sudo du -xsh /nix/store /var/lib/* 2>/dev/null | sort -h | tail
 sudo nix-collect-garbage --delete-older-than 14d
 ```
 
+Collection is configured per profile under `lanbat.gc` (see `modules/core/gc.nix`).
+It is on by default; change the schedule, the retention window, or turn the
+scheduled run off entirely:
+
+```nix
+lanbat.gc = {
+  enable = true;                          # false keeps every generation
+  dates = "weekly";
+  options = "--delete-older-than 30d";
+  minFree = 2 * 1024 * 1024 * 1024;       # collect mid-build below this
+  maxFree = 10 * 1024 * 1024 * 1024;      # ... until this much is free
+};
+```
+
+`minFree`/`maxFree` are a separate safety valve that keeps a build from filling
+the disk, so they still apply when `enable = false`. Set `minFree = 0` to turn
+that off too. Disabling collection on a host that deploys often will fill the
+root filesystem, and a full root cannot build a rollback — prefer a longer
+`options` window to switching it off.
+
 ## Checking service health
 
 ```bash

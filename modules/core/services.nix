@@ -22,7 +22,7 @@
 #     account = { uid = 992; extraGroups = [ "media" ]; };
 #     dashboard = { group = "Media"; name = "Jellyfin"; description = "Media server"; };
 #   };
-{ lib, ... }:
+{ config, lib, ... }:
 
 let
   inherit (lib) mkOption types;
@@ -72,10 +72,69 @@ let
       };
     };
 
+  endpointSubmodule = types.submodule {
+    options = {
+      scheme = mkOption {
+        type = types.str;
+        default = "http";
+        example = "mqtt";
+        description = "Scheme consumers use to reach the service.";
+      };
+      port = mkOption {
+        type = types.port;
+        description = "Port the service listens on for consumers.";
+      };
+    };
+  };
+
   serviceSubmodule = types.submodule (
     { name, config, ... }:
     {
       options = {
+        name = mkOption {
+          type = types.str;
+          internal = true;
+          readOnly = true;
+          default = name;
+          defaultText = lib.literalExpression "<the attribute name>";
+          description = ''
+            The service's own name, so that wiring which iterates over the
+            values alone can still say which service it is talking about.
+          '';
+        };
+
+        # ── Service configuration (the service module itself) ─────────────────
+        settings = mkOption {
+          type = types.submodule { freeformType = types.attrsOf types.anything; };
+          default = { };
+          example = {
+            detectors.ov.device = "CPU";
+            record.motion.days = 30;
+          };
+          description = ''
+            The service's own configuration, rendered by its module.
+
+            The type is freeform, so keys the module does not model still reach
+            the generated config. A module supplies its own values with
+            lib.mkDefault in config, never as an option default, so a profile or
+            a user module overrides them without lib.mkForce.
+          '';
+        };
+
+        implementation = mkOption {
+          type = types.enum [
+            "core"
+            "none"
+          ];
+          default = "core";
+          description = ''
+            core: the service module configures the service.
+            none: the module contributes this description only and you supply
+            the implementation yourself. The wiring still applies, so the vhost,
+            tier gating, account and secrets keep working.
+          '';
+        };
+
         # ── Web exposure (modules/wiring/caddy.nix) ───────────────────────────
         subdomain = mkOption {
           type = types.nullOr types.str;
@@ -146,6 +205,36 @@ let
               (Music Assistant probes /info and /ws before its own login screen).
             '';
           };
+        };
+
+        # ── Cross-host endpoints (modules/wiring/endpoints.nix) ───────────────
+        endpoint = mkOption {
+          type = types.nullOr endpointSubmodule;
+          default = if config.port != null then { inherit (config) port; } else null;
+          defaultText = lib.literalExpression ''{ scheme = "http"; port = port; } when port is set, otherwise null'';
+          description = ''
+            What this service publishes for other services to consume. Consumers
+            name it in their own consumes list and the wiring resolves the
+            address, whichever host each of them runs on.
+
+            This is part of the description, so it must not depend on the
+            resolved endpoints of other services.
+          '';
+        };
+
+        consumes = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [
+            "mosquitto"
+            "postgresql"
+          ];
+          description = ''
+            Services this one connects to, by name. modules/wiring/endpoints.nix
+            resolves each to an address, opens the provider's firewall to this
+            host and orders the units: locally with After= and BindsTo=,
+            remotely with a restart policy.
+          '';
         };
 
         # ── Storage tier (modules/wiring/workload-gate.nix) ───────────────────
@@ -338,4 +427,46 @@ in
     default = { };
     description = "Self-descriptions of the services on this host. See modules/core/services.nix.";
   };
+
+  options.lanbat.endpoints = mkOption {
+    type = types.attrsOf (types.attrsOf types.anything);
+    internal = true;
+    default = { };
+    description = ''
+      Every service in this deployment profile and where it runs, keyed by
+      service name: the host key, that host's address and hostname, the
+      endpoint it publishes, and its service account.
+
+      lib/ builds this by evaluating each host's service descriptions once,
+      before building the hosts themselves, and hands the result to every host.
+      That first pass is cheap because the module system is lazy: reading
+      lanbat.services forces the descriptions, not the systemd units or the
+      package set behind them.
+
+      Because the first pass runs with this table empty, a description must not
+      depend on it. Settings and configuration bodies may; endpoint and account
+      may not, or the two passes would disagree about the very thing being
+      resolved.
+    '';
+  };
+
+  options.lanbat.hasService = mkOption {
+    type = types.functionTo types.bool;
+    internal = true;
+    readOnly = true;
+    description = ''
+      Whether a service is part of this deployment, by name.
+
+      A service module uses it to make an integration with another service
+      conditional, so that a deployment which leaves that other service out
+      still evaluates and does not start a unit that would retry forever
+      against something absent.
+
+      It answers for this host only. Once lib/ resolves the endpoint table
+      across the profile, this is the single definition that widens to answer
+      for the whole deployment, and its callers do not change.
+    '';
+  };
+
+  config.lanbat.hasService = name: config.lanbat.services ? ${name};
 }

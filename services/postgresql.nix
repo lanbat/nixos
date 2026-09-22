@@ -28,7 +28,6 @@
 }:
 
 let
-  inherit (lib) mkOption types;
 
   databases = config.lanbat.postgresql.databases;
   onInstance = instance: lib.filterAttrs (_: db: db.instance == instance) databases;
@@ -79,64 +78,22 @@ let
     '';
 in
 {
-  options.lanbat.postgresql = {
-    databases = mkOption {
-      type = types.attrsOf (
-        types.submodule {
-          options = {
-            instance = mkOption {
-              type = types.enum [
-                "workload"
-                "always-on"
-              ];
-              description = ''
-                Which instance holds the database. Use the instance matching the
-                consuming service's tier: a workload-gated service's data belongs
-                on the workload instance.
-              '';
-            };
-            passwordFile = mkOption {
-              type = types.nullOr types.str;
-              default = null;
-              description = "Environment file (readable by the postgres group) defining the password for TCP logins.";
-            };
-            passwordVariable = mkOption {
-              type = types.str;
-              default = "POSTGRES_PASSWORD";
-              description = "Variable in passwordFile that holds the password.";
-            };
-            extraSql = mkOption {
-              type = types.lines;
-              default = "";
-              description = "SQL to run in the database after setup, e.g. CREATE EXTENSION.";
-            };
-          };
-        }
-      );
-      default = { };
-      description = "Databases, each owned by a role of the same name.";
-    };
-
-    instances = mkOption {
-      type = types.attrsOf (types.attrsOf types.anything);
-      readOnly = true;
-      default = {
-        workload = {
-          port = 5432;
-          socket = "/run/postgresql";
-          unit = "postgresql.target";
-        };
-        always-on = {
-          port = 5433;
-          socket = "/run/postgresql-always-on";
-          unit = "postgresql-always-on-setup.service";
-        };
-      };
-      description = "Connection details of each instance, and the unit consumers order after.";
-    };
-  };
-
   config = {
+    # The contract is declared in modules/core/database.nix; this provider
+    # answers it by advertising what it serves.
+    lanbat.postgresql.instances = {
+      workload = {
+        port = 5432;
+        socket = "/run/postgresql";
+        unit = "postgresql.target";
+      };
+      always-on = {
+        port = 5433;
+        socket = "/run/postgresql-always-on";
+        unit = "postgresql-always-on-setup.service";
+      };
+    };
+
     lanbat.services.postgresql = {
       extraPorts = [ instances.workload.port ];
       tier = "workload";

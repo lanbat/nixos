@@ -57,13 +57,15 @@ in
       22
       2049
       111
-      10700
     ];
     allowedUDPPorts = [ 5353 ];
+    # NFS is wiring driven by nfs.drives rather than a service, so it publishes
+    # no endpoint and its restriction stays written out here. The voice
+    # satellite does publish one, so modules/wiring/policy.nix generates its
+    # rule from the declared edge instead.
     extraCommands = ''
-      iptables -I INPUT -p tcp --dport 2049  ! -s ${serverIp} -j DROP
-      iptables -I INPUT -p udp --dport 2049  ! -s ${serverIp} -j DROP
-      iptables -I INPUT -p tcp --dport 10700 ! -s ${serverIp} -j DROP
+      iptables -I INPUT -p tcp --dport 2049 ! -s ${serverIp} -j DROP
+      iptables -I INPUT -p udp --dport 2049 ! -s ${serverIp} -j DROP
     '';
   };
 

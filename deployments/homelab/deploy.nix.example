@@ -27,6 +27,10 @@
     zigbeeVendorId = "CHANGE_ME";
     zigbeeProductId = "CHANGE_ME";
     immich.adminEmail = "CHANGE_ME";
+    secrets = {
+      provider = "agenix";
+      root = ../../secrets;
+    };
 
     # Optional — lanbat-justpark-parking plugin (JustPark + Frigate LPR alerts):
     # parkingGuard = {

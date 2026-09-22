@@ -101,6 +101,8 @@ Follow this checklist every time:
    | `apiClients = true` | is called directly by apps or sync clients (rules out forward auth) |
    | `caddy.extraConfig`, `caddy.proxyOptions` | needs extra Caddy directives |
    | `extraPorts` | listens on other ports |
+   | `endpoint` | is reached over the network by another service |
+   | `consumes` | reaches another service over the network |
    | `tier = "workload"`, `state`, `units` | holds personal data that must stay on the encrypted layer |
    | `workloadDirs` | needs directories with an owner on the workload layer before it starts |
    | `nfs.drives` (and `nfs.units`) | reads or writes Pi storage |

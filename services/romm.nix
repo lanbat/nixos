@@ -45,7 +45,7 @@ let
   # gunicorn behind the container's nginx. Its default, 5000, is Frigate's on
   # the host network.
   backendPort = 8100;
-  workloadDb = config.lanbat.postgresql.instances.workload;
+  workloadDb = (config.lanbat.postgresql.instance "workload");
 
   library = "/srv/storage/b/media/roms";
   browserArcade = "/srv/storage/b/media/roms-browser/mame";

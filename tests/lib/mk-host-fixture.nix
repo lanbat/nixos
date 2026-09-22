@@ -106,8 +106,8 @@ let
     };
   };
 
-  mkHostFor =
-    hostName: hostCfg:
+  buildHost =
+    endpoints: hostName: hostCfg:
     mkHost {
       inherit
         lib
@@ -118,10 +118,26 @@ let
         profileName
         hostName
         hostCfg
+        endpoints
         ;
       deployment = deploy.deployment;
       hosts = deploy.hosts;
     };
+
+  # The same two passes lib/default.nix runs: descriptions first, then the
+  # profile-wide table, then the hosts. Every host in the manifest takes part,
+  # including the server, because a Pi has to see the accounts of services that
+  # run over there.
+  described = lib.mapAttrs (
+    hostName: hostCfg: (buildHost { } hostName hostCfg).config.lanbat.services
+  ) deploy.hosts;
+
+  endpoints = (import ../../lib/endpoints.nix { inherit lib; }).mkTable {
+    inherit profileName described;
+    hosts = deploy.hosts;
+  };
+
+  mkHostFor = buildHost endpoints;
 
   piStorageSystem = mkHostFor "pi-storage" deploy.hosts.pi-storage;
   voicePiSystem = mkHostFor "voice-pi" deploy.hosts.voice-pi;

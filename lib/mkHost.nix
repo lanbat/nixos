@@ -12,6 +12,9 @@
   hosts,
   hostName,
   hostCfg,
+  # Profile-wide service table from lib/default.nix. Empty during the first,
+  # descriptions-only pass that produces it.
+  endpoints ? { },
 }:
 
 let
@@ -21,7 +24,11 @@ let
   platform = hostCfg.platform or "generic";
   system = hostCfg.system;
 
-  pluginModules = resolvePlugins hostCfg.role (hostCfg.plugins or [ ]);
+  pluginModules = resolvePlugins hostCfg.role (hostCfg.plugins or [ ]) (hostCfg.services or [ ]);
+
+  # Merged last of all, so a deployment overrides anything core, the role or
+  # a plugin set without having to edit a tracked file.
+  userModules = hostCfg.modules or [ ];
 
   hostContextModule =
     { ... }:
@@ -29,11 +36,14 @@ let
       lanbat.profile = profileName;
       lanbat.hostKey = hostName;
       lanbat.deployment = deployment;
+      lanbat.endpoints = endpoints;
       lanbat.hosts = lib.mapAttrs (name: host: {
         role = host.role;
         networking = host.networking;
         disks = host.disks or { };
         storage = host.storage or { };
+        # Needed by the endpoint wiring to work out which host runs a service.
+        services = host.services or [ ];
       }) hosts;
     };
 
@@ -56,7 +66,8 @@ let
       disko.nixosModules.disko
     ];
 
-  modules = if platform == "raspberry-pi" then raspberryPiModules else genericModules;
+  modules =
+    (if platform == "raspberry-pi" then raspberryPiModules else genericModules) ++ userModules;
 
   nixosSystem =
     if platform == "raspberry-pi" then

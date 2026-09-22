@@ -5,12 +5,15 @@
 #   <subdomain>.<domain> {
 #     tls internal { on_demand }
 #     route {                     # auth = "forward-auth" only
-#       reverse_proxy /outpost.goauthentik.io/* → Authentik outpost
-#       forward_auth ...
+#       <authProvider.outpostProxy>
+#       <authProvider.forwardAuth>
 #       <caddy.extraConfig>
 #       reverse_proxy localhost:<port>
 #     }
 #   }
+#
+# What the authentication check looks like comes from lanbat.authProvider, the
+# contract in modules/core/auth.nix, so nothing here names a provider.
 #
 # Caddy itself (global options, internal CA, CA landing page) is configured
 # in services/caddy.nix.
@@ -18,22 +21,20 @@
 
 let
   domain = config.lanbat.deployment.domain;
-  authentikPort = config.lanbat.services.authentik.port;
 
-  # OAuth callback after login — must hit the outpost, not the backend app.
-  authentikOutpostProxy = "reverse_proxy /outpost.goauthentik.io/* localhost:${toString authentikPort}";
-
-  authentikFwdAuth = ''
-    forward_auth localhost:${toString authentikPort} {
-      uri /outpost.goauthentik.io/auth/caddy
-      copy_headers X-Authentik-Username X-Authentik-Groups X-Authentik-Entitlements X-Authentik-Email \
-                   X-Authentik-Name X-Authentik-Uid X-Authentik-Jwt \
-                   X-Authentik-Meta-Jwks X-Authentik-Meta-Outpost \
-                   X-Authentik-Meta-Provider X-Authentik-Meta-App \
-                   X-Authentik-Meta-Version
-      trusted_proxies private_ranges
-    }
-  '';
+  # Resolved per service rather than in a let binding, so that a host with no
+  # provider is told which service wanted one instead of failing while this
+  # file is still being evaluated.
+  authProviderFor =
+    svc:
+    if config.lanbat.authProvider != null then
+      config.lanbat.authProvider
+    else
+      throw (
+        "lanbat: ${svc.name} is set to auth = \"forward-auth\", but no"
+        + " authentication provider runs on this host. Add one to this host's"
+        + " services, or set ${svc.name}'s auth to \"app\" or \"none\"."
+      );
 
   upstreamPort = svc: if svc.onDemand != null then svc.onDemand.activatorPort else svc.port;
 
@@ -86,13 +87,13 @@ let
     lib.concatStringsSep "\n" [
       ''
         route {
-          ${authentikOutpostProxy}
+          ${(authProviderFor svc).outpostProxy}
           @auth_bypass path ${pathMatcher}
           handle @auth_bypass {
             ${reverseProxy svc}
           }
           handle {
-            ${authentikFwdAuth}
+            ${(authProviderFor svc).forwardAuth}
             ${svc.caddy.extraConfig}
             ${reverseProxy svc}
           }
@@ -105,8 +106,8 @@ let
     lib.concatStringsSep "\n" [
       ''
         route {
-          ${authentikOutpostProxy}
-          ${authentikFwdAuth}
+          ${(authProviderFor svc).outpostProxy}
+          ${(authProviderFor svc).forwardAuth}
           ${svc.caddy.extraConfig}
           ${reverseProxy svc}
         }

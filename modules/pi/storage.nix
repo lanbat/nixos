@@ -59,6 +59,19 @@
 let
   privateGid = config.users.groups.private.gid;
   mediaGid = config.users.groups.media.gid;
+
+  # The accounts that write here do so from another host over NFS, so this Pi
+  # cannot look them up locally. lanbat.endpoints carries every service in the
+  # profile with the account it runs as, which is where these UIDs now come
+  # from; they used to be repeated here as literals and drifted silently when a
+  # service's uid changed.
+  runs = name: (config.lanbat.endpoints.${name} or { account = null; }).account != null;
+  uidOf = name: toString config.lanbat.endpoints.${name}.account.uid;
+
+  # A directory is only created when the service that owns it is part of the
+  # profile, so a deployment without Immich or Frigate does not get a tree of
+  # empty folders owned by accounts that exist nowhere.
+  forService = name: text: lib.optionalString (runs name) text;
 in
 {
   # ── Storage A initialisation ───────────────────────────────────────────────
@@ -79,15 +92,20 @@ in
       ExecStart = pkgs.writeShellScript "init-storage-a" ''
         set -e
         base=/mnt/storage-a
-        # Media on drive A. qBittorrent saves here as qbt (UID 994), group media.
-        for dir in media media/movies media/tv media/music-videos; do
-          install -d -m 2775 -o 994 -g ${toString mediaGid} "$base/$dir"
-        done
-        # Immich (UID 991) writes originals; Frigate (UID 995) writes recordings.
-        install -d -m 0755 -o 991 -g nogroup "$base/photos"
-        install -d -m 0755 -o 995 -g nogroup "$base/surveillance"
-        install -d -m 0755 -o 995 -g nogroup "$base/surveillance/clips"
-        install -d -m 0755 -o 995 -g nogroup "$base/surveillance/exports"
+        ${forService "qbittorrent" ''
+          # Media on drive A, written by qBittorrent, readable by group media.
+          for dir in media media/movies media/tv media/music-videos; do
+            install -d -m 2775 -o ${uidOf "qbittorrent"} -g ${toString mediaGid} "$base/$dir"
+          done
+        ''}
+        ${forService "immich" ''
+          install -d -m 0755 -o ${uidOf "immich"} -g nogroup "$base/photos"
+        ''}
+        ${forService "frigate" ''
+          install -d -m 0755 -o ${uidOf "frigate"} -g nogroup "$base/surveillance"
+          install -d -m 0755 -o ${uidOf "frigate"} -g nogroup "$base/surveillance/clips"
+          install -d -m 0755 -o ${uidOf "frigate"} -g nogroup "$base/surveillance/exports"
+        ''}
         echo "storage-a directory tree ready."
       '';
     };
@@ -108,17 +126,21 @@ in
       ExecStart = pkgs.writeShellScript "init-storage-b" ''
         set -e
         base=/mnt/storage-b
-        # General media on drive B — group media (Jellyfin, qBittorrent, Samba).
-        for dir in media media/music media/documentaries media/roms \
-          media/audiobooks media/books media/gym media/games media/misc media/incomplete; do
-          install -d -m 2775 -o 994 -g ${toString mediaGid} "$base/$dir"
-        done
-        # Adult content is private-group only — not in Jellyfin, hidden from Samba media shares.
-        install -d -m 2770 -o 994 -g ${toString privateGid} "$base/media/adult"
-        chgrp ${toString privateGid} "$base/media/adult" 2>/dev/null || true
-        chmod 2770 "$base/media/adult" 2>/dev/null || true
-        # Nextcloud (UID 990) owns bulk user data; Samba shared space is group media.
-        install -d -m 0750 -o 990 -g nogroup "$base/nextcloud"
+        ${forService "qbittorrent" ''
+          # General media on drive B — group media (Jellyfin, qBittorrent, Samba).
+          for dir in media media/music media/documentaries media/roms \
+            media/audiobooks media/books media/gym media/games media/misc media/incomplete; do
+            install -d -m 2775 -o ${uidOf "qbittorrent"} -g ${toString mediaGid} "$base/$dir"
+          done
+          # Private group only — not in Jellyfin, hidden from the Samba media shares.
+          install -d -m 2770 -o ${uidOf "qbittorrent"} -g ${toString privateGid} "$base/media/adult"
+          chgrp ${toString privateGid} "$base/media/adult" 2>/dev/null || true
+          chmod 2770 "$base/media/adult" 2>/dev/null || true
+        ''}
+        ${forService "nextcloud" ''
+          # Nextcloud owns bulk user data; the Samba shared space is group media.
+          install -d -m 0750 -o ${uidOf "nextcloud"} -g nogroup "$base/nextcloud"
+        ''}
         install -d -m 0755 -o root -g nogroup "$base/users"
         install -d -m 0775 -o root -g ${toString mediaGid} "$base/shared"
         install -d -m 0700 -o root -g root "$base/backups"

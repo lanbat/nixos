@@ -129,4 +129,5 @@ in
   };
 
   lanbat.services.telegraf.secrets.telegraf-token = { };
+  lanbat.services.telegraf.consumes = [ "influxdb" ];
 }

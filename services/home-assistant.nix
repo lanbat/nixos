@@ -69,6 +69,9 @@ in
 
   config = {
     lanbat.services.home-assistant = {
+      # Home Assistant connects to each voice satellite, which may be on another
+      # host. Conditional so a deployment without voice still evaluates.
+      consumes = lib.optional (config.lanbat.hasService "voice-satellite") "voice-satellite";
       subdomain = "ha";
       port = 8123;
       auth = "forward-auth";
@@ -109,11 +112,11 @@ in
 
     systemd.services.home-assistant = {
       after = [
-        config.lanbat.postgresql.instances.always-on.unit
+        (config.lanbat.postgresql.instance "always-on").unit
         "mosquitto.service"
       ];
       requires = [
-        config.lanbat.postgresql.instances.always-on.unit
+        (config.lanbat.postgresql.instance "always-on").unit
         "mosquitto.service"
       ];
     };
@@ -166,10 +169,12 @@ in
       path = [ postSetup ];
 
       script = ''
-        export MQTT_BROKER="127.0.0.1"
-        export MQTT_PORT="1883"
-        export MQTT_USERNAME="homeassistant"
-        export MQTT_PASSWORD="$(cat ${config.age.secrets.mosquitto-ha-pass.path})"
+        ${lib.optionalString (config.lanbat.hasService "mosquitto") ''
+          export MQTT_BROKER="127.0.0.1"
+          export MQTT_PORT="1883"
+          export MQTT_USERNAME="homeassistant"
+          export MQTT_PASSWORD="$(cat ${config.age.secrets.mosquitto-ha-pass.path})"
+        ''}
         export FRIGATE_URL="http://127.0.0.1:5000/"
         export MUSIC_ASSISTANT_URL="http://127.0.0.1:8095"
         export PI_HOST="${config.lanbat.deployment.storageIp}"
@@ -338,7 +343,7 @@ in
           purge_keep_days = 30;
           db_url =
             let
-              pg = config.lanbat.postgresql.instances.always-on;
+              pg = (config.lanbat.postgresql.instance "always-on");
             in
             "postgresql://@/hass?host=${pg.socket}&port=${toString pg.port}";
           exclude = {

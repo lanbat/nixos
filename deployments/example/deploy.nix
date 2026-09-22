@@ -17,6 +17,10 @@
     zigbeeVendorId = "10c4";
     zigbeeProductId = "ea60";
     adminSshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExampleExample example";
+    secrets = {
+      provider = "agenix";
+      root = ../../secrets;
+    };
     haLlm = {
       baseUrl = "https://llm.example.com/v1";
       model = "example-model";

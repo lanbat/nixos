@@ -35,6 +35,20 @@ let
         };
       };
 
+      services = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [
+          "caddy"
+          "frigate"
+        ];
+        description = ''
+          Services this host runs, by name, resolved through the service
+          registry in modules/core/service-registry.nix. A host with an empty
+          list runs no lanbat service.
+        '';
+      };
+
       disks = mkOption {
         type = types.attrsOf types.str;
         default = { };
@@ -148,6 +162,36 @@ in
         type = types.strMatching "(ssh-|ecdsa-|sk-).+";
         example = "ssh-ed25519 AAAAC3Nza... admin@workstation";
         description = "SSH public key of the admin user on all hosts.";
+      };
+
+      secrets = mkOption {
+        type = types.submodule {
+          options = {
+            provider = mkOption {
+              type = types.enum [
+                "agenix"
+                "sops"
+                "none"
+              ];
+              example = "agenix";
+              description = ''
+                Backend that decrypts this profile's secrets. none resolves
+                every requirement to a throwaway file, so evaluation and the
+                flake checks need no encrypted files at all.
+              '';
+            };
+            root = mkOption {
+              type = types.path;
+              example = lib.literalExpression "./secrets";
+              description = ''
+                Directory holding this profile's encrypted secrets, resolved
+                relative to the profile rather than to lanbat itself, so a fork
+                keeps its own secrets outside this repository.
+              '';
+            };
+          };
+        };
+        description = "Where this profile's secrets come from and how they are decrypted.";
       };
 
       immich.adminEmail = mkOption {

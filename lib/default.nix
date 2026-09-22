@@ -20,6 +20,7 @@ let
   hostLib = import ./host.nix { inherit lib; };
   pluginLib = import ./plugins.nix { inherit lib; };
   validateLib = import ./validate-deploy.nix { inherit lib; };
+  endpointLib = import ./endpoints.nix { inherit lib; };
 
   hostFlakeName =
     profileName: hostName: if profileName == "default" then hostName else "${profileName}-${hostName}";
@@ -36,7 +37,7 @@ let
   };
 
   mkHost =
-    profileName: deploy: hostName: hostCfg:
+    profileName: deploy: hostName: hostCfg: endpoints:
     import ./mkHost.nix {
       inherit
         lib
@@ -47,6 +48,7 @@ let
         profileName
         hostName
         hostCfg
+        endpoints
         ;
       deployment = deploy.deployment;
       hosts = deploy.hosts;
@@ -59,7 +61,20 @@ let
         inherit profileName;
         deploy = deploy;
       };
-      hosts = lib.mapAttrs (name: cfg: mkHost profileName deploy' name cfg) deploy'.hosts;
+      # First pass: the service descriptions only, built with an empty endpoint
+      # table so that nothing in them can depend on the table being resolved.
+      # Reading lanbat.services forces the descriptions and not the units
+      # behind them, which is what keeps this cheap enough to do every time.
+      described = lib.mapAttrs (
+        name: cfg: (mkHost profileName deploy' name cfg { }).config.lanbat.services
+      ) deploy'.hosts;
+
+      endpoints = endpointLib.mkTable {
+        inherit profileName described;
+        hosts = deploy'.hosts;
+      };
+
+      hosts = lib.mapAttrs (name: cfg: mkHost profileName deploy' name cfg endpoints) deploy'.hosts;
       configurations = lib.mapAttrs' (
         name: cfg: lib.nameValuePair (hostFlakeName profileName name) cfg
       ) hosts;

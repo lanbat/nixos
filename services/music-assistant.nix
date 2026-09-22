@@ -50,6 +50,11 @@ let
   setup = pkgs.callPackage ../pkgs/music-assistant-setup {
     inherit pkgs;
   };
+
+  # The setup step registers Music Assistant with Home Assistant and configures
+  # OAuth login against it. Without Home Assistant there is nothing to register
+  # with, and Music Assistant still plays music.
+  integrates = config.lanbat.hasService "home-assistant";
 in
 {
   lanbat.services.music-assistant = {
@@ -59,6 +64,7 @@ in
       8097 # MA stream server (players / imageproxy)
     ];
     auth = "forward-auth";
+    consumes = lib.optional integrates "home-assistant";
     # The web UI probes /info and opens /ws before Music Assistant's own login.
     # Static assets and API paths must also bypass Authentik or the SPA shows
     # "Connect" / "Connection Lost" after the shell page loads.
@@ -126,7 +132,7 @@ in
     };
   };
 
-  systemd.services.music-assistant-setup = {
+  systemd.services.music-assistant-setup = lib.mkIf integrates {
     description = "Configure Music Assistant Home Assistant integration and OAuth login";
     wantedBy = [ "multi-user.target" ];
     after = [

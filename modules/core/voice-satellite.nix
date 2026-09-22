@@ -209,6 +209,14 @@ in
       ha-voice-token.owner = "root";
     };
 
+    # The satellite listens and Home Assistant connects to it, so the satellite
+    # is the provider of this edge. The port comes from cfg.uri rather than a
+    # literal, the same way services/home-assistant.nix reads it.
+    lanbat.services.voice-satellite.endpoint = {
+      scheme = "tcp";
+      port = lib.toInt (lib.last (lib.splitString ":" cfg.uri));
+    };
+
     services.wyoming.satellite = {
       enable = true;
       package = pkgs.wyoming-satellite.overridePythonAttrs (old: {

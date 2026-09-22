@@ -22,6 +22,10 @@
 }:
 
 let
+  # Aliased so the serviceOwners submodule below can still reach the host's
+  # own configuration after its own `config` shadows the name.
+  topConfig = config;
+
   inherit (lib) mkOption types;
 
   quotaType = types.submodule {
@@ -128,27 +132,64 @@ in
         description = "NFS-mounted per-user storage root on the server.";
       };
 
-      # Service UIDs that write into user subdirectories. Pinned here so the Pi
-      # can set ownership without importing the service modules.
+      # Which service owns each kind of per-user subdirectory. The Pi sets the
+      # ownership but does not run these services, so it takes their UIDs from
+      # lanbat.endpoints rather than repeating them: they were pinned here as
+      # literals and had no way to follow a change on the server.
       serviceOwners = mkOption {
         type = types.attrsOf (
-          types.submodule {
-            options.uid = mkOption { type = types.int; };
-            options.name = mkOption { type = types.str; };
-          }
+          types.submodule (
+            { config, ... }:
+            {
+              options.name = mkOption {
+                type = types.str;
+                description = "Service that owns this kind of subdirectory.";
+              };
+              options.uid = mkOption {
+                type = types.int;
+                defaultText = lib.literalExpression "the service's account uid";
+                default =
+                  let
+                    # A host that runs the service knows its account directly; a
+                    # host that only mounts its data reads the profile-wide
+                    # table. Local first, so a host or a test assembled without
+                    # the table still resolves.
+                    local = topConfig.lanbat.services.${config.name} or null;
+                    remote = topConfig.lanbat.endpoints.${config.name} or null;
+                    account =
+                      if local != null && local.account != null then
+                        local.account
+                      else if remote != null then
+                        remote.account
+                      else
+                        null;
+                  in
+                  if account != null then
+                    account.uid
+                  else
+                    throw (
+                      "lanbat.userStorage.serviceOwners: '${config.name}' has no"
+                      + " lanbat service account to take a uid from, so set its uid"
+                      + " explicitly."
+                    );
+                description = ''
+                  UID that owns the directory. Defaults to the account the named
+                  service runs as, whether it runs on this host or elsewhere in
+                  the profile. A service whose user the upstream NixOS module
+                  creates has no lanbat account to take, so give it explicitly.
+                '';
+              };
+            }
+          )
         );
         default = {
-          cloud = {
-            uid = 990;
-            name = "nextcloud";
-          };
-          photos = {
-            uid = 991;
-            name = "immich";
-          };
+          cloud.name = "nextcloud";
+          photos.name = "immich";
+          # Syncthing's user comes from the upstream NixOS module rather than a
+          # lanbat account, so there is nothing to derive it from.
           sync = {
-            uid = 237;
             name = "syncthing";
+            uid = 237;
           };
         };
       };

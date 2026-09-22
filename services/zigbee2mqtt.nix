@@ -35,6 +35,9 @@
     subdomain = "zigbee";
     port = 8099;
     auth = "forward-auth";
+    # Zigbee2MQTT exists to bridge Zigbee onto MQTT, so a broker is not an
+    # optional extra the way it is for Frigate or Home Assistant.
+    consumes = [ "mosquitto" ];
     dashboard = {
       group = "Automation";
       name = "Zigbee2MQTT";
@@ -86,7 +89,7 @@
     let
       script = pkgs.writeShellScript "z2m-write-secret" ''
         set -euo pipefail
-        password=$(cat ${config.age.secrets.mosquitto-z2m-pass.path})
+        password=$(cat ${config.lanbat.secretPath "mosquitto-z2m-pass"})
         printf 'mqtt_password: %s\n' "$password" \
           > /var/lib/zigbee2mqtt/secret.yaml
         chmod 0600 /var/lib/zigbee2mqtt/secret.yaml

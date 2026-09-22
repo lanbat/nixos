@@ -77,7 +77,7 @@ let
       builtins.seq (requireField profileName name "system" host) (
         builtins.seq (validateNetworking profileName name host) (
           builtins.seq (validateRoleRequirements profileName name host) (
-            pluginLib.resolvePlugins host.role (host.plugins or [ ])
+            pluginLib.resolvePlugins host.role (host.plugins or [ ]) (host.services or [ ])
           )
         )
       )
