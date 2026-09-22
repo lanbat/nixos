@@ -42,6 +42,12 @@ let
   immichVersion = "v1.136.8";
   domain = config.lanbat.deployment.domain;
   bootstrap = pkgs.callPackage ../pkgs/immich-bootstrap { };
+
+  # The bootstrap creates Immich's first admin from the owner credentials that
+  # hass-bootstrap-env carries, so it only runs when Home Assistant is part of
+  # the deployment. Immich itself serves fine without it; it just has no admin
+  # account until someone creates one.
+  bootstraps = config.lanbat.hasService "home-assistant";
   # immich-db-password.age exports POSTGRES_PASSWORD for postgres init; Immich v3
   # reads DB_PASSWORD at runtime.
   immichServerEnv = "/run/immich/server.env";
@@ -69,8 +75,9 @@ in
       units = [
         "podman-immich-server"
         "podman-immich-machine-learning"
-        "immich-bootstrap"
-      ];
+      ]
+      ++ lib.optional bootstraps "immich-bootstrap";
+      consumes = lib.optional bootstraps "home-assistant";
       # Podman requires volume host paths to exist before the container starts.
       workloadDirs =
         lib.genAttrs
@@ -228,7 +235,7 @@ in
       '';
     };
 
-    systemd.services.immich-bootstrap = {
+    systemd.services.immich-bootstrap = lib.mkIf bootstraps {
       description = "Create the first Immich admin for Authentik OAuth login";
       wantedBy = [ "multi-user.target" ];
       after = [ "podman-immich-server.service" ];

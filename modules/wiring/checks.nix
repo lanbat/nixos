@@ -137,6 +137,17 @@ let
 
   perService = s: [
     {
+      # consumes is a hard requirement: the wiring has to resolve every name to
+      # something that actually runs. An optional integration is expressed with
+      # lanbat.hasService instead, and drops out of consumes when absent.
+      assertion = lib.all (name: config.lanbat.services ? ${name}) s.consumes;
+      message =
+        "lanbat: ${s.name} consumes "
+        + lib.concatStringsSep ", " (lib.filter (name: !(config.lanbat.services ? ${name})) s.consumes)
+        + ", which no service on this host provides. Add it to this host's services,"
+        + " or make the integration conditional on lanbat.hasService.";
+    }
+    {
       assertion = s.auth != "forward-auth" || config.lanbat.services ? authentik;
       message = "lanbat: ${s.name} uses forward auth, but the authentik service isn't imported";
     }

@@ -29,15 +29,26 @@
 #   4. Rebuild — OIDC login becomes available.
 #
 # Always-on: yes.  No NFS dependency.
-{ config, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   domain = config.lanbat.deployment.domain;
+
+  # Grafana's InfluxDB datasource reads a token that influxdb.nix owns. A
+  # deployment without InfluxDB still gets Grafana, its PostgreSQL-backed
+  # dashboards and its OIDC login; it just has no metrics datasource.
+  hasInflux = config.lanbat.hasService "influxdb";
   dashboards = pkgs.callPackage ../pkgs/grafana-dashboards { };
 in
 
 {
   lanbat.services.grafana = {
+    consumes = lib.optional hasInflux "influxdb";
     subdomain = "grafana";
     port = 3030;
     secrets.grafana-env = { };
@@ -63,7 +74,7 @@ in
   # logs in as its system user over the socket, so no password is needed.
   lanbat.postgresql.databases.grafana.instance = "always-on";
 
-  systemd.services.grafana-influxdb-token = {
+  systemd.services.grafana-influxdb-token = lib.mkIf hasInflux {
     description = "InfluxDB operator token for Grafana datasource";
     before = [ "grafana.service" ];
     requiredBy = [ "grafana.service" ];
@@ -86,12 +97,12 @@ in
   systemd.services.grafana = {
     after = [
       (config.lanbat.postgresql.instance "always-on").unit
-      "grafana-influxdb-token.service"
-    ];
+    ]
+    ++ lib.optional hasInflux "grafana-influxdb-token.service";
     requires = [
       (config.lanbat.postgresql.instance "always-on").unit
-      "grafana-influxdb-token.service"
-    ];
+    ]
+    ++ lib.optional hasInflux "grafana-influxdb-token.service";
     serviceConfig = {
       # OAuth token/userinfo calls hit https://auth.<domain> server-side; trust
       # the internal Caddy CA (global environment.variables do not reach units).
@@ -100,8 +111,8 @@ in
       ];
       EnvironmentFile = [
         config.age.secrets.grafana-env.path
-        "/run/grafana-datasource/influxdb-token.env"
-      ];
+      ]
+      ++ lib.optional hasInflux "/run/grafana-datasource/influxdb-token.env";
     };
   };
 
@@ -184,7 +195,7 @@ in
           }
         ];
 
-        datasources = [
+        datasources = lib.optionals hasInflux [
           {
             name = "InfluxDB";
             uid = "influxdb-homelab";

@@ -57,13 +57,30 @@
 let
   yolov8nOpenVinoModel = pkgs.callPackage ../pkgs/frigate-yolov8n-openvino-model { };
 
+  # Frigate records and detects perfectly well on its own; MQTT is how it tells
+  # Home Assistant about events. A deployment without a broker keeps the camera
+  # side and loses the announcements.
+  hasMqtt = config.lanbat.hasService "mosquitto";
+
+  mqttSection =
+    if hasMqtt then
+      ''
+        mqtt:
+          enabled: true
+          host: 127.0.0.1
+          port: 1883
+          user: frigate
+          password: "{FRIGATE_MQTT_PASSWORD}"
+      ''
+    else
+      ''
+        # No broker in this deployment, so no event announcements.
+        mqtt:
+          enabled: false
+      '';
+
   frigateConfig = pkgs.writeText "frigate.yml" ''
-    mqtt:
-      enabled: true
-      host: 127.0.0.1
-      port: 1883
-      user: frigate
-      password: "{FRIGATE_MQTT_PASSWORD}"
+    ${mqttSection}
 
     database:
       path: /media/frigate/db/frigate.db
@@ -278,6 +295,7 @@ in
   lanbat.services.frigate = {
     subdomain = "nvr";
     port = 5000;
+    consumes = lib.optional hasMqtt "mosquitto";
     extraPorts = [ 8554 ]; # RTSP restream
     auth = "forward-auth";
     # Homepage's Frigate widget calls /api/* without an Authentik session.
@@ -380,8 +398,10 @@ in
             # awk 1 ensures a trailing newline even if the secret file lacks one,
             # preventing the next printf from being appended to the last line.
             ${pkgs.gawk}/bin/awk 1 ${config.age.secrets.frigate-rtsp-env.path}
-            printf 'FRIGATE_MQTT_PASSWORD=%s\n' \
-              "$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.age.secrets.mosquitto-frigate-pass.path})"
+            ${lib.optionalString hasMqtt ''
+              printf 'FRIGATE_MQTT_PASSWORD=%s\n' \
+                "$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.age.secrets.mosquitto-frigate-pass.path})"
+            ''}
           } > /run/frigate-env
           chown frigate:frigate /run/frigate-env
           chmod 600 /run/frigate-env

@@ -166,10 +166,12 @@ in
       path = [ postSetup ];
 
       script = ''
-        export MQTT_BROKER="127.0.0.1"
-        export MQTT_PORT="1883"
-        export MQTT_USERNAME="homeassistant"
-        export MQTT_PASSWORD="$(cat ${config.age.secrets.mosquitto-ha-pass.path})"
+        ${lib.optionalString (config.lanbat.hasService "mosquitto") ''
+          export MQTT_BROKER="127.0.0.1"
+          export MQTT_PORT="1883"
+          export MQTT_USERNAME="homeassistant"
+          export MQTT_PASSWORD="$(cat ${config.age.secrets.mosquitto-ha-pass.path})"
+        ''}
         export FRIGATE_URL="http://127.0.0.1:5000/"
         export MUSIC_ASSISTANT_URL="http://127.0.0.1:8095"
         export PI_HOST="${config.lanbat.deployment.storageIp}"

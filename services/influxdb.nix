@@ -26,7 +26,13 @@
 # /var/lib/influxdb2  — managed by the module (back this up!)
 #
 # Always-on: yes.  No NFS dependency.
-{ config, ... }:
+{ config, lib, ... }:
+
+let
+  # The Telegraf write token comes from a secret Telegraf owns, so it is only
+  # provisioned when Telegraf is part of the deployment.
+  hasTelegraf = config.lanbat.hasService "telegraf";
+in
 
 {
   services.influxdb2 = {
@@ -57,10 +63,14 @@
         buckets.metrics.retention = 0;
         # The write token Telegraf uses on the server and the Pi, with the
         # value from telegraf-token.age (see influxdb2-telegraf-token below).
-        auths.telegraf = {
-          description = "Telegraf on the server and the Pi";
-          tokenFile = "/run/influxdb2-telegraf-token/token";
-          writeBuckets = [ "metrics" ];
+        # Only provisioned when Telegraf is part of the deployment, since the
+        # secret that carries the value belongs to it.
+        auths = lib.optionalAttrs hasTelegraf {
+          telegraf = {
+            description = "Telegraf on the server and the Pi";
+            tokenFile = "/run/influxdb2-telegraf-token/token";
+            writeBuckets = [ "metrics" ];
+          };
         };
       };
     };
@@ -70,7 +80,7 @@
   # environment; provisioning wants the bare token. The module reads it in
   # influxdb2's preStart, which runs as the influxdb2 user, so the directory
   # and file belong to its group.
-  systemd.services.influxdb2-telegraf-token = {
+  systemd.services.influxdb2-telegraf-token = lib.mkIf hasTelegraf {
     description = "Bare Telegraf write token for InfluxDB provisioning";
     before = [ "influxdb2.service" ];
     requiredBy = [ "influxdb2.service" ];
@@ -90,6 +100,7 @@
   };
 
   lanbat.services.influxdb = {
+    consumes = lib.optional hasTelegraf "telegraf";
     extraPorts = [ 8086 ];
     secrets = {
       influxdb-admin-password.owner = "influxdb2";
