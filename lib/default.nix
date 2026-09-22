@@ -20,6 +20,7 @@ let
   hostLib = import ./host.nix { inherit lib; };
   pluginLib = import ./plugins.nix { inherit lib; };
   validateLib = import ./validate-deploy.nix { inherit lib; };
+  endpointLib = import ./endpoints.nix { inherit lib; };
 
   hostFlakeName =
     profileName: hostName: if profileName == "default" then hostName else "${profileName}-${hostName}";
@@ -68,51 +69,10 @@ let
         name: cfg: (mkHost profileName deploy' name cfg { }).config.lanbat.services
       ) deploy'.hosts;
 
-      # The profile-wide table. A service is keyed by name and may run on more
-      # than one host: telegraf and the voice satellite are per-host agents,
-      # not singletons, so this records every placement rather than assuming
-      # one.
-      placedOn =
-        svcName: lib.filter (hostName: described.${hostName} ? ${svcName}) (lib.attrNames described);
-
-      allServiceNames = lib.unique (lib.concatMap lib.attrNames (lib.attrValues described));
-
-      endpoints = lib.listToAttrs (
-        map (
-          svcName:
-          let
-            hostNames = placedOn svcName;
-            # endpoint and account come from the service module, so every
-            # placement agrees on them; take the first and check the rest.
-            first = described.${lib.head hostNames}.${svcName};
-            disagreeing = lib.filter (
-              hostName:
-              described.${hostName}.${svcName}.endpoint != first.endpoint
-              || described.${hostName}.${svcName}.account != first.account
-            ) hostNames;
-          in
-          lib.nameValuePair svcName (
-            if disagreeing != [ ] then
-              builtins.throw (
-                "lanbat profile '${profileName}': service '${svcName}' describes a"
-                + " different endpoint or account on ${lib.concatStringsSep ", " disagreeing}"
-                + " than on ${lib.head hostNames}. A service must look the same"
-                + " wherever it runs, or consumers cannot resolve it."
-              )
-            else
-              {
-                hosts = hostNames;
-                addresses = lib.listToAttrs (
-                  map (hostName: lib.nameValuePair hostName deploy'.hosts.${hostName}.networking.ip) hostNames
-                );
-                hostnames = lib.listToAttrs (
-                  map (hostName: lib.nameValuePair hostName deploy'.hosts.${hostName}.networking.hostname) hostNames
-                );
-                inherit (first) endpoint account;
-              }
-          )
-        ) allServiceNames
-      );
+      endpoints = endpointLib.mkTable {
+        inherit profileName described;
+        hosts = deploy'.hosts;
+      };
 
       hosts = lib.mapAttrs (name: cfg: mkHost profileName deploy' name cfg endpoints) deploy'.hosts;
       configurations = lib.mapAttrs' (
