@@ -47,12 +47,24 @@ let
       }) hosts;
     };
 
+  # Chosen from deploy data, which exists before any evaluation, so the module
+  # can simply be imported rather than selected inside the configuration.
+  overlayProviders = import ./overlay-providers.nix;
+  overlayName = deployment.overlay.provider or "none";
+  overlayModule =
+    overlayProviders.${overlayName} or (builtins.throw (
+      "lanbat: no overlay provider named \"${overlayName}\". Available: "
+      + lib.concatStringsSep ", " (lib.attrNames overlayProviders)
+      + "."
+    ));
+
   commonModules = [
     agenix.nixosModules.default
     { nixpkgs.config.allowUnfree = true; }
     ../modules/core
     hostContextModule
   ]
+  ++ [ overlayModule ]
   ++ getRoleModules hostCfg.role
   ++ pluginModules;
 
