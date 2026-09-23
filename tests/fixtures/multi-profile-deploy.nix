@@ -8,6 +8,11 @@
       deployment = {
         domain = "home.test";
         rootDomain = "test";
+        # provider "none" so the fixture needs no encrypted files.
+        secrets = {
+          provider = "none";
+          root = ../../secrets;
+        };
         gatewayIp = "192.0.2.1";
         lanSubnet = "192.0.2.0/24";
         nfsIdmapdDomain = "home.test";
@@ -69,6 +74,11 @@
       deployment = {
         domain = "cabin.test";
         rootDomain = "test";
+        # provider "none" so the fixture needs no encrypted files.
+        secrets = {
+          provider = "none";
+          root = ../../secrets;
+        };
         gatewayIp = "192.0.2.1";
         lanSubnet = "192.0.2.0/24";
         nfsIdmapdDomain = "cabin.test";

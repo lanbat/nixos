@@ -47,9 +47,12 @@ nix build -L .#checks.aarch64-linux.pi     # an aarch64 machine with KVM, such a
 - Say how you tested it. Evaluation only is fine; mention it if you also deployed the change.
 - Never commit `deploy.nix`, `deployments/*/deploy.nix`, real IP addresses, domains, SSH keys or plaintext secrets.
 - Secrets are [agenix](https://github.com/ryantm/agenix) files encrypted to the
-  maintainer's keys. If your change needs a new secret, commit an empty placeholder file
-  at the referenced `secrets/<name>.age` path so evaluation passes, and say so in the pull
-  request. The maintainer replaces it with the real encrypted file before merging.
+  maintainer's keys, so you cannot read or create them. You do not need to: the `example`
+  profile that CI evaluates sets `deployment.secrets.provider = "none"`, which resolves
+  every secret to a placeholder in the Nix store. Declare the secret under
+  `lanbat.services.<name>.secrets`, add it to `secrets/secrets.nix.example` and the
+  inventory in `secrets/README.md`, and say in the pull request what it should contain.
+  No `.age` file of any kind is needed for evaluation or the checks to pass.
 - If you add or change a service, follow the checklist below, including the docs updates.
 
 ## Reporting security issues

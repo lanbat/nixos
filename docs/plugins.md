@@ -63,11 +63,12 @@ secrets:
    non-service secrets).
 2. Add entries to `secrets/secrets.nix.example` and the inventory in
    `secrets/README.md`.
-3. **In your pull request:** commit an empty placeholder at each
-   `secrets/<name>.age` path so evaluation passes, and document the required
-   secrets in your plugin README (format, how to generate values).
-4. **Before merge:** the lanbat maintainer replaces placeholders with real
-   `.age` files encrypted to the deployment host keys (see
+3. **In your pull request:** document the required secrets in your plugin
+   README (format, how to generate values). No `.age` file is needed — the
+   `example` profile resolves secrets to placeholders, so evaluation and the
+   checks pass without one.
+4. **Before merge:** the lanbat maintainer creates the real `.age` files
+   encrypted to the deployment host keys (see
    [CONTRIBUTING.md](../CONTRIBUTING.md)).
 
 ## Exported modules

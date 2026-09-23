@@ -17,8 +17,12 @@
     zigbeeVendorId = "10c4";
     zigbeeProductId = "ea60";
     adminSshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExampleExample example";
+    # The example profile is read and evaluated, never deployed, so it resolves
+    # secrets to placeholders. That is what lets somebody add a service with
+    # secrets and run nix flake check without holding any keys or committing an
+    # empty .age file to make evaluation pass.
     secrets = {
-      provider = "agenix";
+      provider = "none";
       root = ../../secrets;
     };
     haLlm = {
