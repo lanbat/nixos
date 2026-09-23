@@ -8,7 +8,20 @@
 }:
 
 let
-  servicesPlugin = import ../plugins/services;
+  inherit (pkgs) lib;
+
+  # The services come from the built-in registry, chosen the way lib/mkHost.nix
+  # chooses them for the example profile's server: the names its deploy entry
+  # lists in hosts.server.services, or every registered service when it lists
+  # none. Only the services plugin is resolved; the example server's other
+  # plugins are not part of this test.
+  exampleServer =
+    (import ../deployments/example/deploy.nix {
+      inputs.self.lanbatPlugins = { };
+    }).hosts.server;
+  serviceModules = (import ../lib/plugins.nix { inherit lib; }).resolvePlugins exampleServer.role [
+    (import ../plugins/services)
+  ] (exampleServer.services or [ ]);
 in
 pkgs.testers.runNixOSTest {
   name = "server";
@@ -30,7 +43,7 @@ pkgs.testers.runNixOSTest {
         ./lib/example-host-context.nix
         ./lib/test-secrets.nix
       ]
-      ++ servicesPlugin.modules;
+      ++ serviceModules;
 
       nixpkgs.config.allowUnfree = true;
 
