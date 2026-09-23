@@ -84,6 +84,22 @@ let
         type = types.port;
         description = "Port the service listens on for consumers.";
       };
+      transport = mkOption {
+        type = types.enum [
+          "overlay"
+          "lan"
+        ];
+        # Read with `or` because a host assembled without the settings module,
+        # as the pure-eval tests do, has no deployment to ask.
+        default =
+          if (config.lanbat.deployment.overlay.provider or "none") == "none" then "lan" else "overlay";
+        defaultText = lib.literalExpression ''if deployment.overlay.provider == "none" then "lan" else "overlay"'';
+        description = ''
+          Network consumers reach the service over. "overlay" is the default
+          whenever the profile runs one; "lan" keeps an edge on the LAN address
+          regardless, for a path that must not depend on the overlay being up.
+        '';
+      };
     };
   };
 

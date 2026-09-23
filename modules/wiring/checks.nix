@@ -191,6 +191,20 @@ let
     }
   ];
 
+  # Tang must stay outside generated policy and off the overlay. The Pi's Clevis
+  # reaches it to unlock the storage LUKS volumes, and Clevis is not a service
+  # that can declare it consumes Tang, so an endpoint would make policy.nix drop
+  # the Pi on port 7500. Keeping Tang endpoint-less is also what keeps it off
+  # the overlay: transport is a property of an endpoint, so a service without
+  # one stays on the LAN whatever the profile runs.
+  tangEndpoint =
+    lib.optional ((config.lanbat.services.tang or { endpoint = null; }).endpoint != null)
+      (
+        "lanbat: tang publishes an endpoint. It must not: policy would drop the"
+        + " storage Pi's Clevis, which unlocks the Pi's storage through it. Keep 7500"
+        + " in extraPorts and the literal firewall rule in services/tang.nix."
+      );
+
   errors =
     clashes "port" portClaims
     ++ clashes "subdomain" subdomainClaims
@@ -199,7 +213,8 @@ let
     ++ clashes "GID" gidClaims
     ++ map (r: "lanbat: ${r.owner} references unit ${r.unit}, which no module defines") undefinedUnits
     ++ gatedPulls
-    ++ ungatedTriggers;
+    ++ ungatedTriggers
+    ++ tangEndpoint;
 in
 {
   assertions =

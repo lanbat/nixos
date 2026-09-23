@@ -139,6 +139,14 @@ let
         timerConfig.OnBootSec = "5m";
       };
     } gatedDemo [ "demo.timer starts the workload-gated demo.service outside the gate" ])
+
+    (expect "tang with an endpoint" {
+      tang.endpoint.port = 7500;
+    } [ "tang publishes an endpoint" ])
+
+    (expect "tang without an endpoint passes" {
+      tang.extraPorts = [ 7500 ];
+    } [ ])
   ];
 in
 pkgs.runCommand "lanbat-assertions" { } ''
