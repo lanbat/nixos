@@ -135,6 +135,11 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
 | Conversation LLM (`lanbat.haLlm`) | API key (agenix) | External OpenAI-compatible API; only HA calls it, outbound |
 
+The Authentik side of this matrix is generated: every `forward-auth` service gets a
+proxy provider, an application and a place on the embedded outpost, and every service
+with an `oidc` description gets an OAuth2 provider and application
+(`services/authentik/catalogue.nix`).
+
 ## Hostname map
 
 | Hostname | Service |

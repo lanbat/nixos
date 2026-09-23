@@ -109,6 +109,7 @@ Follow this checklist every time:
    |---|---|
    | `subdomain`, `port`, `auth` | has a web UI |
    | `apiClients = true` | is called directly by apps or sync clients (rules out forward auth) |
+| `oidc` | logs users in through the identity provider over OpenID Connect |
    | `caddy.extraConfig`, `caddy.proxyOptions` | needs extra Caddy directives |
    | `extraPorts` | listens on other ports |
    | `endpoint` | is reached over the network by another service |
@@ -121,8 +122,11 @@ Follow this checklist every time:
    | `secrets.<file> = { }` | reads `secrets/<file>.age` |
    | `dashboard` | should appear on Homepage |
 
-4. **Forward auth**: add a proxy provider and application for the service to
-   `services/authentik/blueprints.nix`, and add the provider to the embedded outpost there.
+4. **Authentik**: nothing to edit. The blueprints are generated from the
+   description (`services/authentik/catalogue.nix`): `auth = "forward-auth"` gives the
+   service a proxy provider, an application and a place on the embedded outpost, and
+   `oidc` gives it an OAuth2 provider and application. For an OIDC client, add its
+   `AUTHENTIK_<NAME>_CLIENT_SECRET` line to `authentik-oidc-secrets` (see step 5).
 5. **Secrets**: add new files to `secrets/secrets.nix.example` and the inventory in
    `secrets/README.md`.
 6. **Check**: run the commands above. Evaluation rejects clashing ports, subdomains,

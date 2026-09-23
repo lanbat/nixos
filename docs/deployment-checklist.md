@@ -476,7 +476,8 @@ admin account.
 #### Automated: providers, applications, and outpost
 
 All Authentik providers, applications, and the embedded outpost are configured
-automatically via blueprints (`services/authentik/blueprints.nix`).
+automatically via blueprints, generated from the service descriptions of the
+services on the server (`services/authentik/catalogue.nix`).
 The blueprints are applied by Authentik on every startup — no manual UI work
 needed for the Authentik side.
 
