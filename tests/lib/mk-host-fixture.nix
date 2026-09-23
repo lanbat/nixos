@@ -33,6 +33,12 @@ let
     deployment = {
       domain = "home.test";
       rootDomain = "test";
+      # The VM tests supply their own throwaway secrets through
+      # tests/lib/test-secrets.nix, so this fixture needs no encrypted files.
+      secrets = {
+        provider = "none";
+        root = ../../secrets;
+      };
       gatewayIp = "192.0.2.1";
       lanSubnet = "192.0.2.0/24";
       nfsIdmapdDomain = "home.test";

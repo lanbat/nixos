@@ -4,10 +4,40 @@
 # lanbat.services.<name>.secrets. The encrypted file is secrets/<secret>.age,
 # decrypted at boot to /run/agenix/<secret>; services read it through
 # config.age.secrets.<secret>.path.
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   inherit (lib) mkOption types;
+
+  provider = config.lanbat.deployment.secrets.provider;
+
+  # Where a secret's encrypted file comes from.
+  #
+  # The path used to be built from this repository's own secrets directory,
+  # which meant a deployment consuming lanbat as a flake input pointed at the
+  # maintainer's encrypted files and could not substitute its own. It now comes
+  # from the profile.
+  #
+  # Under "none" each secret resolves to a store file instead, so evaluation and
+  # the flake checks need no encrypted files at all. That is what lets somebody
+  # add a service with secrets and run nix flake check without holding any keys.
+  fileFor =
+    name:
+    if provider == "none" then
+      pkgs.writeText "lanbat-placeholder-${name}" ''
+        This is not a secret. The profile sets deployment.secrets.provider to
+        "none", which resolves every secret to this placeholder so the
+        configuration can be evaluated without any encrypted files.
+
+        A host built this way must not be deployed: ${name} would be this text.
+      ''
+    else
+      config.lanbat.deployment.secrets.root + "/${name}.age";
   secrets = lib.concatMap lib.attrsToList (
     lib.mapAttrsToList (_: svc: svc.secrets) config.lanbat.services
   );
@@ -40,12 +70,29 @@ in
     ))
     ).path;
 
+  config.assertions = [
+    {
+      assertion = provider != "sops";
+      message =
+        "lanbat.deployment.secrets.provider is \"sops\", which is named in the"
+        + " option but not implemented yet. Use \"agenix\", or \"none\" to"
+        + " evaluate without encrypted files.";
+    }
+  ];
+
+  # Loud rather than silent: a host built this way looks complete and is not.
+  config.warnings = lib.optional (provider == "none") (
+    "lanbat.deployment.secrets.provider is \"none\", so every secret resolves"
+    + " to a placeholder in the Nix store. This profile evaluates and builds but"
+    + " must not be deployed."
+  );
+
   config.age.secrets = lib.listToAttrs (
     map (
       s:
       lib.nameValuePair s.name (
         {
-          file = ../../secrets + "/${s.name}.age";
+          file = fileFor s.name;
           inherit (s.value) owner;
         }
         // lib.optionalAttrs (s.value.group != null) { inherit (s.value) group; }
