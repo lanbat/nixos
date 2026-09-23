@@ -14,6 +14,14 @@
 # udev creates /dev/zigbee (symlink) owned by group "ha".
 # The zigbee2mqtt service user is added to that group.
 #
+# Unplugging the dongle
+# ---------------------
+# The service is bound to the dongle's device unit rather than started at boot:
+# BindsTo stops it cleanly when the dongle disappears, and the device wants it,
+# so it starts again when the dongle comes back.  Without this, pulling the
+# dongle for a few seconds made Z2M crash and restart until systemd's start
+# limit gave up on it, and it stayed down after the dongle was back.
+#
 # Secret: mosquitto-z2m-pass.age
 #   Single line — the plaintext MQTT password for the zigbee2mqtt user.
 #   Written into /var/lib/zigbee2mqtt/secret.yaml at service start so the
@@ -27,9 +35,31 @@
   config,
   pkgs,
   lib,
+  utils,
+  inputs,
   ...
 }:
 
+let
+  serialPort = config.services.zigbee2mqtt.settings.serial.port;
+  # dev-zigbee.device for /dev/zigbee.  systemd only creates it because the
+  # udev rule below tags the device for systemd.
+  serialDevice = "${utils.escapeSystemdPath serialPort}.device";
+
+  # Pinned from nixpkgs-z2m rather than this flake's nixpkgs (2.9.1).  2.9.1's
+  # zigbee-herdsman-converters lists the TS0601_soil_3 definition but not the
+  # manufacturer name our soil sensor reports, so the device lands as an
+  # "Automatically generated definition" exposing only battery and linkquality.
+  # Some Tuya batches report a malformed name -- ours sends
+  # "_TZE2841000000_tgrzpqf4" instead of "_TZE284_tgrzpqf4" -- and Z2M matches
+  # manufacturerName exactly.  Upstream converters carry both spellings; 2.14.1
+  # bundles zigbee-herdsman-converters 26.105.0, which has ours.
+  #
+  # The override lapses by itself once nixpkgs ships 2.14.1 or newer, and is
+  # skipped for a flake that consumes lanbat without the nixpkgs-z2m input.
+  pinned = inputs.nixpkgs-z2m.legacyPackages.${pkgs.stdenv.hostPlatform.system}.zigbee2mqtt;
+  usePinned = inputs ? nixpkgs-z2m && lib.versionOlder pkgs.zigbee2mqtt.version pinned.version;
+in
 {
   lanbat.services.zigbee2mqtt = {
     subdomain = "zigbee";
@@ -46,12 +76,22 @@
   };
 
   systemd.services.zigbee2mqtt = {
-    after = [ "mosquitto.service" ];
+    after = [
+      "mosquitto.service"
+      serialDevice
+    ];
     requires = [ "mosquitto.service" ];
+    # Follow the dongle: stop when it goes, start when it (re)appears.  Not
+    # wanted by multi-user.target, so a boot without the dongle neither waits
+    # for it nor leaves a failed unit behind.
+    bindsTo = [ serialDevice ];
+    wantedBy = lib.mkForce [ serialDevice ];
   };
 
   services.zigbee2mqtt = {
     enable = true;
+
+    package = lib.mkIf usePinned pinned;
 
     settings = {
       # Zigbee dongle — created by udev rule below.
@@ -105,10 +145,13 @@
     "ha"
   ];
 
-  # udev rule — creates /dev/zigbee symlink, group-owned by "ha".
+  # udev rule — creates /dev/zigbee symlink, group-owned by "ha".  The systemd
+  # tag gives the dongle its device unit (dev-zigbee.device, through the
+  # symlink), and SYSTEMD_WANTS starts Z2M whenever the dongle is plugged in.
   services.udev.extraRules = ''
     SUBSYSTEM=="tty", ATTRS{idVendor}=="${config.lanbat.deployment.zigbeeVendorId}", \
       ATTRS{idProduct}=="${config.lanbat.deployment.zigbeeProductId}", \
-      SYMLINK+="zigbee", GROUP="ha", MODE="0660"
+      SYMLINK+="zigbee", GROUP="ha", MODE="0660", \
+      TAG+="systemd", ENV{SYSTEMD_WANTS}+="zigbee2mqtt.service"
   '';
 }

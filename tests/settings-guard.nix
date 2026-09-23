@@ -21,6 +21,7 @@ let
     "profile"
     "deployment.overlay"
     "deployment.haLlm"
+    "deployment.haXiaomiBle"
     "deployment.voiceRooms"
     "deployment.primaryServer"
     "deployment.primaryStorage"
@@ -29,6 +30,7 @@ let
     "deployment.storageHostname"
     "deployment.parkingGuard"
     "deployment.androidDevices"
+    "deployment.xiaomiClocks"
     "hosts"
     "mosquitto.extraUsers"
   ];

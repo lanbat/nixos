@@ -4,6 +4,12 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+    # Zigbee2MQTT only.  The pinned nixpkgs above carries 2.9.1, whose bundled
+    # zigbee-herdsman-converters does not list the manufacturer name reported by
+    # the TS0601 soil sensor (see services/zigbee2mqtt.nix).  Deliberately not
+    # following nixpkgs: the point is a newer lock.
+    nixpkgs-z2m.url = "github:NixOS/nixpkgs/nixos-unstable";
+
     nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
 
     agenix = {
@@ -157,7 +163,7 @@
             ;
         };
         server = import ./tests/server.nix {
-          inherit pkgs;
+          inherit pkgs inputs;
           inherit (inputs) agenix disko;
         };
         workload-gate = import ./tests/workload-gate.nix { inherit pkgs; };

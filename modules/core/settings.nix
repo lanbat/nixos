@@ -286,6 +286,16 @@ in
         description = "Home Assistant conversation agent LLM. null uses HA's own agent.";
       };
 
+      haXiaomiBle = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Whether Home Assistant adds Xiaomi BLE devices from bind keys in the
+          ha-xiaomi-ble secret, one "<MAC> <bindkey> [title]" line per device.
+          Needs that secret; see secrets/README.md.
+        '';
+      };
+
       parkingGuard = mkOption {
         type = types.nullOr (
           types.submodule {
@@ -339,6 +349,17 @@ in
           schema is declared by modules/server/android-devices.nix; this option
           only carries the values from deploy.nix, which is where real device
           addresses belong.  Type checking happens at the androidDevices option.
+        '';
+      };
+
+      xiaomiClocks = mkOption {
+        type = types.listOf (types.strMatching "([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}");
+        default = [ ];
+        example = [ "A4:C1:38:00:00:01" ];
+        description = ''
+          Bluetooth addresses of Xiaomi BLE thermometers with a clock display
+          (LYWSD02/LYWSD02MMC), for the lanbat-xiaomi-clock plugin.  They cannot
+          set their own time and ship on UTC+8, so a timer writes it over BLE.
         '';
       };
 

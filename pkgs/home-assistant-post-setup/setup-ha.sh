@@ -52,6 +52,14 @@ VOICE_USER_NAME="Voice satellites"
 # Turns the record's KEY=value lines into an object, inside jq.
 VOICE_RECORD_JQ='$record | split("\n") | map(select(test("^[A-Z_]+=")) | capture("^(?<key>[A-Z_]+)=(?<value>.*)$")) | from_entries'
 
+# Xiaomi BLE bind keys (ha-xiaomi-ble.age): one device per line,
+#   <MAC> <bindkey> [entry title]
+# Blank lines and # comments are ignored.  The bindkey is that device's AES
+# key; without it Home Assistant cannot decrypt its advertisements.  Obtain one
+# locally with atc1441.github.io/Temp_universal_mi_activate.html — the Xiaomi
+# cloud is not involved.
+XIAOMI_BLE_KEYS_FILE="${XIAOMI_BLE_KEYS_FILE:-}"
+
 log() {
   echo "home-assistant-post-setup: $*"
 }
@@ -83,6 +91,8 @@ add_entry() {
   local data_json="$3"
   local version="${4:-1}"
   local subentries_json="${5:-[]}"
+  local unique_id="${6:-}"
+  local source="${7:-user}"
   local now entry_id tmp
   now="$(now_utc)"
   entry_id="$(new_entry_id)"
@@ -96,6 +106,8 @@ add_entry() {
     --slurpfile data <(printf '%s' "$data_json") \
     --slurpfile subentries <(printf '%s' "$subentries_json") \
     --argjson version "$version" \
+    --arg source "$source" \
+    --arg unique_id "$unique_id" \
     '.data.entries += [{
       created_at: $now,
       data: $data[0],
@@ -108,10 +120,10 @@ add_entry() {
       options: {},
       pref_disable_new_entities: false,
       pref_disable_polling: false,
-      source: "user",
+      source: $source,
       subentries: $subentries[0],
       title: $title,
-      unique_id: null,
+      unique_id: (if $unique_id == "" then null else $unique_id end),
       version: $version
     }]' "$CONFIG_ENTRIES" > "$tmp"
   install -o hass -g hass -m 0600 "$tmp" "$CONFIG_ENTRIES"
@@ -443,6 +455,105 @@ area_id() {
   openssl rand -hex 16
 }
 
+# Whether a config entry of this domain already exists for a unique_id.  Xiaomi
+# BLE has one entry per device, so the domain alone is not enough.
+has_entry_uid() {
+  local domain="$1" uid="$2"
+  jq -e --arg domain "$domain" --arg uid "$uid" \
+    '.data.entries[] | select(.domain == $domain and .unique_id == $uid)' \
+    "$CONFIG_ENTRIES" >/dev/null
+}
+
+# Local Bluetooth adapters, as "<hciN> <ADDRESS>" lines.  An hci device has no
+# address attribute in sysfs, so the address comes from BlueZ over D-Bus --
+# which also means this only sees adapters once bluetooth.service is up.
+bluetooth_adapters() {
+  local paths path name addr
+  paths="$(busctl --system tree org.bluez --list 2>/dev/null \
+    | grep -oE '^/org/bluez/hci[0-9]+$' || true)"
+  [[ -n "$paths" ]] || return 0
+  while read -r path; do
+    [[ -n "$path" ]] || continue
+    name="${path##*/}"
+    addr="$(busctl --system get-property org.bluez "$path" org.bluez.Adapter1 Address 2>/dev/null \
+      | sed -nE 's/^s "(([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2})"$/\1/p' || true)"
+    [[ -n "$addr" ]] || continue
+    printf '%s %s\n' "$name" "${addr^^}"
+  done <<< "$paths"
+}
+
+bluetooth_needed() {
+  local name addr
+  while read -r name addr; do
+    [[ -n "$addr" ]] || continue
+    has_entry_uid bluetooth "$addr" || return 0
+  done < <(bluetooth_adapters)
+  return 1
+}
+
+# Home Assistant needs one config entry per Bluetooth adapter before it scans
+# at all.  It only creates them by itself during onboarding, so an adapter
+# added to an instance that is already onboarded would otherwise sit as a
+# discovery waiting for a click in the UI, and nothing BLE would ever work.
+ensure_bluetooth() {
+  local name addr product title
+  while read -r name addr; do
+    [[ -n "$addr" ]] || continue
+    if has_entry_uid bluetooth "$addr"; then
+      continue
+    fi
+    product="$(cat "/sys/class/bluetooth/$name/device/../product" 2>/dev/null || true)"
+    [[ -n "$product" ]] || product="Bluetooth"
+    title="$product ($name ($addr))"
+    log "adding bluetooth adapter $name ($addr)"
+    add_entry bluetooth "$title" '{}' 1 "[]" "$addr" "user"
+  done < <(bluetooth_adapters)
+}
+
+# Valid "<MAC> <bindkey> [title]" lines from the bind key file.
+xiaomi_ble_devices() {
+  [[ -n "$XIAOMI_BLE_KEYS_FILE" && -r "$XIAOMI_BLE_KEYS_FILE" ]] || return 0
+  sed -E 's/#.*//' "$XIAOMI_BLE_KEYS_FILE" \
+    | grep -E '^[[:space:]]*([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}[[:space:]]+[0-9A-Fa-f]+' \
+    || true
+}
+
+xiaomi_ble_needed() {
+  local mac rest
+  while read -r mac rest; do
+    [[ -n "$mac" ]] || continue
+    has_entry_uid xiaomi_ble "${mac^^}" || return 0
+  done < <(xiaomi_ble_devices)
+  return 1
+}
+
+# Home Assistant discovers these over Bluetooth, but cannot decrypt them
+# without the bindkey, and the bindkey can only be entered in the UI.  Writing
+# the entry here keeps it declarative: the key stays in agenix.
+ensure_xiaomi_ble() {
+  local mac key title
+  while read -r mac key title; do
+    [[ -n "$mac" && -n "$key" ]] || continue
+    mac="${mac^^}"
+    key="${key,,}"
+    # MiBeacon v4/v5 keys are 32 hex characters, v2/v3 are 24.
+    if [[ ! "$key" =~ ^([0-9a-f]{24}|[0-9a-f]{32})$ ]]; then
+      log "xiaomi_ble: skipping $mac, bindkey is not 24 or 32 hex characters"
+      continue
+    fi
+    if has_entry_uid xiaomi_ble "$mac"; then
+      continue
+    fi
+    [[ -n "$title" ]] || title="Xiaomi BLE ${mac//:/}"
+    log "adding xiaomi_ble device $mac"
+    # The key goes through the environment, not argv, to keep it out of the
+    # process list.
+    add_entry xiaomi_ble "$title" \
+      "$(bindkey="$key" jq -n '{bindkey: env.bindkey}')" \
+      1 "[]" "$mac" "bluetooth"
+  done < <(xiaomi_ble_devices)
+}
+
 ensure_areas() {
   if state_done areas || [[ ! -f "$AREA_REGISTRY" ]]; then
     [[ -f "$AREA_REGISTRY" ]] && mark_done areas
@@ -504,6 +615,8 @@ if llm_needed; then needs_work=true; fi
 if ! state_done "$(pipeline_state_key)"; then needs_work=true; fi
 if ! state_done "$(satellite_vad_state_key)"; then needs_work=true; fi
 if voice_token_needed; then needs_work=true; fi
+if bluetooth_needed; then needs_work=true; fi
+if xiaomi_ble_needed; then needs_work=true; fi
 
 if [[ "$needs_work" != true ]]; then
   log "post-setup already complete"
@@ -527,6 +640,8 @@ ensure_llm
 ensure_pipeline
 ensure_satellite_vad
 ensure_voice_token
+ensure_bluetooth
+ensure_xiaomi_ble
 ensure_areas
 
 systemctl start home-assistant.service
