@@ -257,6 +257,13 @@
           );
         };
 
+        overlay-keys = {
+          type = "app";
+          program = "${
+            pkgs.callPackage ./pkgs/overlay-keys { agenix = agenix.packages.x86_64-linux.default; }
+          }/bin/overlay-keys";
+        };
+
         android-provision = {
           type = "app";
           program = "${pkgs.callPackage ./pkgs/android-provision { }}/bin/android-provision";
