@@ -21,6 +21,7 @@ let
     "profile"
     "deployment.overlay"
     "deployment.haLlm"
+    "deployment.haXiaomiBle"
     "deployment.voiceRooms"
     "deployment.primaryServer"
     "deployment.primaryStorage"

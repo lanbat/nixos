@@ -33,6 +33,8 @@
       "Office" = "server";
       "Living Room" = "pi-storage";
     };
+    # Xiaomi BLE bind keys for Home Assistant, from ha-xiaomi-ble.age.
+    haXiaomiBle = true;
 
     # Android TV boxes, for lanbatPlugins.android.
     androidDevices = {

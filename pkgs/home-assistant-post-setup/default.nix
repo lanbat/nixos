@@ -5,6 +5,7 @@
   jq,
   coreutils,
   openssl,
+  systemd,
 }:
 
 stdenv.mkDerivation {
@@ -25,6 +26,7 @@ stdenv.mkDerivation {
           jq
           coreutils
           openssl
+          systemd # busctl, systemctl
         ]
       }"
   '';

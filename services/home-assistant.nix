@@ -27,6 +27,32 @@
 # (owner account + SSO user mirror).  Break-glass local login remains available
 # on localhost.
 #
+# Bluetooth
+# ---------
+# A USB Bluetooth adapter on the server carries BLE sensors.  hardware.bluetooth
+# enables BlueZ; the "bluetooth", "xiaomi_ble" and "bthome" components let HA
+# scan and decode the advertisements.
+#
+# home-assistant-post-setup also writes the bluetooth integration's own config
+# entry, one per adapter.  Home Assistant creates those by itself only during
+# onboarding, so on an instance onboarded before the adapter existed it would
+# otherwise wait for a click in the UI and never scan.
+#
+# Stock-firmware Xiaomi models such as the LYWSD02MMC clock broadcast encrypted
+# and need a per-device bind key.  With lanbat.deployment.haXiaomiBle set, those
+# keys live in ha-xiaomi-ble.age and home-assistant-post-setup writes one
+# xiaomi_ble config entry per device, so a key is never typed into the UI and
+# never reaches the Nix store.  Obtain one locally from
+# atc1441.github.io/Temp_universal_mi_activate.html; the Xiaomi cloud is not
+# involved.  (The LYWSD02MMC has no Telink OTA service, so custom firmware would
+# need a wired programmer; the bind key is the practical route.)
+#
+# Sensors reflashed with pvvx firmware broadcast BTHome v2 in the clear and need
+# no key; "bthome" covers those.  Anything else is discovered in the UI.
+#
+# Note: the adapter shares 2.4 GHz with the Zigbee coordinator.  Keep the two
+# dongles physically apart or both will degrade.
+#
 # Voice
 # -----
 # home-assistant-post-setup adds the Wyoming services and satellites
@@ -54,6 +80,7 @@ let
   piper = config.services.wyoming.piper.servers.main;
   # A satellite with a room hands its replies to the voice_reply script.
   voiceRooms = config.lanbat.deployment.voiceRooms != { };
+  xiaomiBle = config.lanbat.deployment.haXiaomiBle;
 in
 {
   options.lanbat.homeAssistant = {
@@ -94,6 +121,10 @@ in
       // lib.optionalAttrs voiceRooms {
         # The record of the voice satellites' token, for home-assistant-post-setup.
         ha-voice-refresh-token.owner = "root";
+      }
+      // lib.optionalAttrs xiaomiBle {
+        # Xiaomi BLE bind keys, read by home-assistant-post-setup (runs as root).
+        ha-xiaomi-ble.owner = "root";
       };
       caddy.proxyOptions = ''
         # Long-lived websockets for HA's live updates.
@@ -118,15 +149,26 @@ in
     # its system user over the socket, so no password is needed.
     lanbat.postgresql.databases.hass.instance = "always-on";
 
+    # BlueZ for the USB Bluetooth adapter.  HA talks to it over system D-Bus;
+    # the "bluetooth" component below grants the matching systemd permissions.
+    hardware.bluetooth = {
+      enable = true;
+      powerOnBoot = true;
+    };
+
     systemd.services.home-assistant = {
       after = [
         (config.lanbat.postgresql.instance "always-on").unit
         "mosquitto.service"
+        "bluetooth.service"
       ];
       requires = [
         (config.lanbat.postgresql.instance "always-on").unit
         "mosquitto.service"
       ];
+      # Bluetooth is a soft dependency: a missing or failed adapter must not
+      # stop HA, matching its always-on posture.
+      wants = [ "bluetooth.service" ];
     };
 
     systemd.services.home-assistant-bootstrap = {
@@ -164,8 +206,13 @@ in
         "home-assistant-bootstrap.service"
         "music-assistant-setup.service"
         "mosquitto.service"
+        # bluetooth_adapters reads BlueZ over D-Bus, so BlueZ must be up.
+        "bluetooth.service"
       ];
-      wants = [ "music-assistant-setup.service" ];
+      wants = [
+        "music-assistant-setup.service"
+        "bluetooth.service"
+      ];
       requires = [ "mosquitto.service" ];
 
       serviceConfig = {
@@ -202,6 +249,9 @@ in
         ''}
         ${lib.optionalString voiceRooms ''
           export VOICE_TOKEN_RECORD_FILE="${config.age.secrets.ha-voice-refresh-token.path}"
+        ''}
+        ${lib.optionalString xiaomiBle ''
+          export XIAOMI_BLE_KEYS_FILE="${config.age.secrets.ha-xiaomi-ble.path}"
         ''}
         exec home-assistant-post-setup
       '';
@@ -249,6 +299,12 @@ in
         "wyoming"
         "music_assistant"
         "qbittorrent"
+        # Bluetooth LE sensors.  "bluetooth" also relaxes the module's systemd
+        # hardening: it adds AF_BLUETOOTH and CAP_NET_ADMIN/CAP_NET_RAW so HA can
+        # talk to BlueZ and the hci device.
+        "bluetooth"
+        "xiaomi_ble" # Xiaomi BLE sensors on stock firmware (encrypted, bind key)
+        "bthome" # Xiaomi sensors reflashed with pvvx firmware (BTHome v2, no key)
       ]
       # extended_openai_conversation depends on these.
       ++ lib.optionals (llm != null) [
@@ -421,23 +477,21 @@ in
                   "binary_sensor.zigbee2mqtt_bridge_restart_required"
                 ];
               }
-              {
-                type = "entity-filter";
-                show_empty = false;
-                filters = [
-                  {
-                    domain = "switch";
-                    options = {
-                      exclude = "switch.zigbee2mqtt_bridge_permit_join";
-                    };
-                  }
-                ];
-                card = {
-                  type = "entities";
-                  title = "Switches";
-                };
-              }
             ];
+          }
+          {
+            # Everything else, from Home Assistant's built-in "original-states"
+            # view strategy: it generates the cards from the entity and area
+            # registries when the view is rendered, grouped by area.  Nothing
+            # deployment-specific (IEEE-derived entity IDs, area names) is
+            # committed here, and new devices appear without a config change.
+            # type is the only required key; areas, hide_entities_without_area
+            # and hide_energy are optional.
+            title = "All";
+            path = "all";
+            strategy = {
+              type = "original-states";
+            };
           }
         ];
       };

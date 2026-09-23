@@ -250,6 +250,7 @@ Until then, use the union-of-keys pattern above.
 | `ha-llm-api-key.age` | plaintext API key | Home Assistant's conversation agent (`lanbat.haLlm`); only with `haLlm` set |
 | `ha-voice-token.age` | Home Assistant long-lived access token, from `generate-ha-voice-token.sh` | Voice satellites (server + Pi), to speak replies on the room's speakers (`lanbat.voiceRooms`); only with `voiceRooms` set |
 | `ha-voice-refresh-token.age` | `VOICE_TOKEN_ID=`, `VOICE_TOKEN_JWT_KEY=`, `VOICE_TOKEN_CREATED=`, from `generate-ha-voice-token.sh` | `home-assistant-post-setup`, which adds the token and its "Voice satellites" user to Home Assistant |
+| `ha-xiaomi-ble.age` | `<MAC> <bindkey> [entry title]` lines, one Xiaomi BLE device each | `home-assistant-post-setup`, which adds each device's `xiaomi_ble` config entry so Home Assistant can decrypt its advertisements; only with `haXiaomiBle` set. Get a bindkey locally from [Mi Activation](https://atc1441.github.io/Temp_universal_mi_activate.html) — no Xiaomi cloud account |
 | `caddy-ca-root.crt` | PEM root certificate (public) | Caddy internal CA — committed plaintext |
 | `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |
 | `romm-db-pass.age` | `POSTGRES_PASSWORD=<value>` and `DB_PASSWD=<same value>` | RomM database password (PostgreSQL setup and the container) |

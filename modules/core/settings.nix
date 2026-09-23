@@ -286,6 +286,16 @@ in
         description = "Home Assistant conversation agent LLM. null uses HA's own agent.";
       };
 
+      haXiaomiBle = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Whether Home Assistant adds Xiaomi BLE devices from bind keys in the
+          ha-xiaomi-ble secret, one "<MAC> <bindkey> [title]" line per device.
+          Needs that secret; see secrets/README.md.
+        '';
+      };
+
       parkingGuard = mkOption {
         type = types.nullOr (
           types.submodule {

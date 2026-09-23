@@ -23,6 +23,9 @@
       "Office" = "server";
       "Living Room" = "pi-storage";
     };
+    # Xiaomi BLE bind keys for Home Assistant, from ha-xiaomi-ble.age
+    # (see secrets/README.md).
+    # haXiaomiBle = true;
 
     # Android TV boxes, for lanbatPlugins.android.  Snapdroid needs no
     # configuration: snapserver publishes over mDNS (services/snapcast.nix).

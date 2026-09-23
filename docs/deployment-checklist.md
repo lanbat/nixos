@@ -774,6 +774,28 @@ and stops after 30 minutes idle.
    once per browser; RomM remembers it, and its default, MAME 2003, crashes on these
    sets. Dreamcast games don't run in the browser; play them on the TV.
 
+### 3p. Bluetooth sensors (optional)
+
+> **Hardware required:** a USB Bluetooth adapter on the server. Keep it away
+> from the Zigbee dongle: both use 2.4 GHz.
+
+`home-assistant-post-setup` adds Home Assistant's Bluetooth config entry for
+each adapter BlueZ reports. Sensors reflashed to BTHome (pvvx firmware) are
+then discovered without further setup.
+
+Stock-firmware Xiaomi sensors broadcast encrypted and need a bind key per
+device, which you can get locally from
+[Mi Activation](https://atc1441.github.io/Temp_universal_mi_activate.html):
+
+1. Put one `<MAC> <bindkey> [entry title]` line per device in
+   `ha-xiaomi-ble.age` (`agenix -e ha-xiaomi-ble.age`) and set
+   `deployment.haXiaomiBle = true` in `deploy.nix`.
+2. Deploy. `home-assistant-post-setup` adds a `xiaomi_ble` config entry for each
+   device not yet in Home Assistant:
+   ```bash
+   journalctl -u home-assistant-post-setup | grep -i xiaomi
+   ```
+
 ## Phase 4 — Ongoing
 
 - Deploy changes immediately: `deploy path:.#homelab-server` / `deploy path:.#homelab-pi-storage`.
