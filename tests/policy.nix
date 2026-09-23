@@ -225,11 +225,34 @@ let
     };
   };
 
+  # NFS under a mesh: the storage Pi exports to the server's LAN address, not
+  # its overlay address, because the server mounts over the LAN and Pi storage
+  # must not depend on the overlay.
+  nfsOnMesh = import ../lib/nfs-clients.nix {
+    inherit lib;
+    config = evalHost {
+      provider = "wireguard-mesh";
+      hostKey = "pi";
+      hosts = meshHosts;
+      services = { };
+      endpoints.jellyfin = {
+        hosts = [ "server" ];
+        consumes = [ ];
+        endpoint = null;
+        nfs = {
+          drives = [ "a" ];
+          storageHost = "pi";
+        };
+      };
+    };
+  };
+
   rulesOf = cfg: cfg.networking.firewall.extraCommands;
 
   expect = name: cond: if cond then null else "FAIL: ${name}";
 
   cases = [
+    (expect "NFS is exported to the LAN address under a mesh" (nfsOnMesh.addresses == [ "192.0.2.10" ]))
     (expect "a remote consumer's host is accepted" (
       lib.hasInfix "--dport 1883 -s 192.0.2.11 -j ACCEPT" withRemoteConsumer
     ))

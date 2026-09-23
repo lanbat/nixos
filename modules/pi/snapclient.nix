@@ -26,15 +26,15 @@
 
 let
   endpointLib = import ../../lib/endpoints.nix { inherit lib; };
-  overlay = config.lanbat.overlay;
 
   snapserverHost = endpointLib.soleHost {
     endpoints = config.lanbat.endpoints;
     name = "snapcast";
     consumer = "snapclient on ${config.lanbat.hostKey}";
   };
-  snapserverAddress = overlay.addressOf snapserverHost;
-  snapserver = if snapserverAddress != null then snapserverAddress else overlay.nameOf snapserverHost;
+  # The address the server's generated rule admits this host from: the overlay
+  # name when the edge runs on the overlay, the LAN address otherwise.
+  snapserver = config.lanbat.endpointHost "snapcast" snapserverHost;
 in
 {
   lanbat.services.snapclient.consumes = [ "snapcast" ];

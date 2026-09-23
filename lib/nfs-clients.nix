@@ -5,9 +5,10 @@
 #
 # They are the hosts running a service whose nfs.drives is non-empty and whose
 # storage host is this one, read from the profile-wide endpoint table. The
-# addresses come from the overlay contract, which without an overlay is the
-# LAN address in lanbat.hosts. Exports and firewall rules need an address, so a
-# provider that cannot give one during evaluation is an error here.
+# addresses are always the LAN addresses in lanbat.hosts, whatever overlay the
+# profile runs: NFS stays on the LAN by design, since the server mounts it by
+# the storage host's LAN address and Pi storage must not depend on the overlay
+# being up (docs/failure-modes.md).
 { config, lib }:
 
 let
@@ -20,18 +21,7 @@ let
     inherit (config.lanbat.deployment) primaryStorage;
   };
 
-  addressOf =
-    host:
-    let
-      address = config.lanbat.overlay.addressOf host;
-    in
-    if address == null then
-      builtins.throw (
-        "lanbat: ${thisHost} exports NFS to ${host}, but the overlay provider"
-        + " '${config.lanbat.overlay.provider}' has no address for it during evaluation"
-      )
-    else
-      address;
+  addressOf = host: config.lanbat.hosts.${host}.networking.ip;
 in
 {
   inherit hosts;
