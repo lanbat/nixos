@@ -1,15 +1,17 @@
 # services/authentik/blueprints.nix
 #
-# Authentik blueprints — declarative providers, applications, and outpost.
+# Authentik blueprints: providers, applications and the embedded outpost.
 #
-# Applied automatically by Authentik on startup from /blueprints/custom/.
-# State is "present" (idempotent create/update) throughout.
+# Applied by Authentik on startup from /blueprints/custom/, with state
+# "present" (idempotent create/update) throughout.
 #
-# Proxy providers (forward auth via Caddy):
-#   Home Assistant, Immich, Frigate, qBittorrent, Bitmagnet, Syncthing, Snapcast, Zigbee2MQTT
-#
-# OIDC providers (native SSO):
-#   Grafana, Nextcloud, Immich, Home Assistant, Jellyfin
+# The app catalogue is generated from the service descriptions by
+# ./catalogue.nix, which documents the rules; there is nothing to edit here
+# when a service is added. A service gets:
+#   - a proxy provider, an application and a place on the embedded outpost
+#     when it sets auth = "forward-auth";
+#   - an OAuth2 provider and an application when it sets oidc.
+# Only the services placed on this host are included.
 #
 # Secrets
 # -------
@@ -17,7 +19,9 @@
 # into the authentik containers via environmentFiles.  The blueprint reads
 # them with the !Env tag so they never appear in the Nix store.
 #
-# File format for authentik-oidc-secrets.age (one KEY=value per line):
+# File format for authentik-oidc-secrets.age (one KEY=value per line, one
+# line per OIDC client, AUTHENTIK_<NAME>_CLIENT_SECRET unless the service
+# sets oidc.secretVariable):
 #   AUTHENTIK_GRAFANA_CLIENT_SECRET=<40+ random chars>
 #   AUTHENTIK_NEXTCLOUD_CLIENT_SECRET=<40+ random chars>
 #   AUTHENTIK_IMMICH_CLIENT_SECRET=<40+ random chars>
@@ -32,11 +36,9 @@
 #   immich-oidc-env.age   → IMMICH_OAUTH_CLIENT_ID=immich
 #                            IMMICH_OAUTH_CLIENT_SECRET=<immich-value>
 #
-# Home Assistant and Jellyfin require manual UI setup on their side:
-#   HA:      Settings → Devices & Services → Add Integration → search "Authentik"
-#            (or use HACS: https://github.com/jchonig/ha-authentik)
-#   Jellyfin: install the "SSO Authentication" plugin from the plugin catalogue,
-#            then configure it with client_id="jellyfin" and the token/userinfo URLs.
+# Home Assistant requires manual UI setup on its side:
+#   Settings → Devices & Services → Add Integration → search "Authentik"
+#   (or use HACS: https://github.com/jchonig/ha-authentik)
 {
   config,
   pkgs,
@@ -45,475 +47,20 @@
 }:
 
 let
-  domain = config.lanbat.deployment.domain;
+  yaml = import ./yaml.nix { inherit lib; };
 
-  # ── Blueprint 1: Proxy providers (Caddy forward-auth) ─────────────────────
-  proxyBlueprint = pkgs.writeText "10-proxy-providers.yaml" ''
-    version: 1
-    metadata:
-      name: "Homelab Proxy Providers"
-      labels:
-        blueprints.goauthentik.io/instantiate: "true"
+  catalogue = import ./catalogue.nix { inherit lib; } {
+    inherit (config.lanbat.deployment) domain;
+    authentikHost = "https://${config.lanbat.services.authentik.subdomain}.${config.lanbat.deployment.domain}";
+    services = config.lanbat.services;
+  };
 
-    entries:
-
-      # ── Home Assistant ──────────────────────────────────────────────────────
-      # Browser UI is gated by Caddy forward-auth.  HA itself authenticates via
-      # the hass-auth-header custom component (X-Authentik-Username).
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-home-assistant-proxy
-        state: present
-        identifiers:
-          name: "Home Assistant (proxy)"
-        attrs:
-          name: "Home Assistant (proxy)"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://ha.${domain}"
-          internal_host: "http://127.0.0.1:8123"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: home-assistant-proxy
-        attrs:
-          name: "Home Assistant"
-          slug: home-assistant-proxy
-          provider: !KeyOf provider-home-assistant-proxy
-          policy_engine_mode: any
-
-      # ── Immich ──────────────────────────────────────────────────────────────
-      # Browser UI is gated by Caddy forward-auth.  Immich login uses native OIDC
-      # (Authentik) via IMMICH_CONFIG_FILE after the session gate.
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-immich-proxy
-        state: present
-        identifiers:
-          name: "Immich (proxy)"
-        attrs:
-          name: "Immich (proxy)"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://photos.${domain}"
-          internal_host: "http://127.0.0.1:2283"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: immich-proxy
-        attrs:
-          name: "Immich"
-          slug: immich-proxy
-          provider: !KeyOf provider-immich-proxy
-          policy_engine_mode: any
-
-      # ── Frigate ─────────────────────────────────────────────────────────────
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-frigate
-        state: present
-        identifiers:
-          name: "Frigate"
-        attrs:
-          name: "Frigate"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://nvr.${domain}"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: frigate
-        attrs:
-          name: "Frigate"
-          slug: frigate
-          provider: !KeyOf provider-frigate
-          policy_engine_mode: any
-
-      # ── qBittorrent ─────────────────────────────────────────────────────────
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-qbittorrent
-        state: present
-        identifiers:
-          name: "qBittorrent"
-        attrs:
-          name: "qBittorrent"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://torrent.${domain}"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: qbittorrent
-        attrs:
-          name: "qBittorrent"
-          slug: qbittorrent
-          provider: !KeyOf provider-qbittorrent
-          policy_engine_mode: any
-
-      # ── Bitmagnet ───────────────────────────────────────────────────────────
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-bitmagnet
-        state: present
-        identifiers:
-          name: "Bitmagnet"
-        attrs:
-          name: "Bitmagnet"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://bitmagnet.${domain}"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: bitmagnet
-        attrs:
-          name: "Bitmagnet"
-          slug: bitmagnet
-          provider: !KeyOf provider-bitmagnet
-          policy_engine_mode: any
-
-      # ── RomM ────────────────────────────────────────────────────────────────
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-romm
-        state: present
-        identifiers:
-          name: "RomM"
-        attrs:
-          name: "RomM"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://romm.${domain}"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: romm
-        attrs:
-          name: "RomM"
-          slug: romm
-          provider: !KeyOf provider-romm
-          policy_engine_mode: any
-
-      # ── Syncthing ───────────────────────────────────────────────────────────
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-syncthing
-        state: present
-        identifiers:
-          name: "Syncthing"
-        attrs:
-          name: "Syncthing"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://sync.${domain}"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: syncthing
-        attrs:
-          name: "Syncthing"
-          slug: syncthing
-          provider: !KeyOf provider-syncthing
-          policy_engine_mode: any
-
-      # ── Music Assistant ─────────────────────────────────────────────────────
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-music-assistant
-        state: present
-        identifiers:
-          name: "Music Assistant"
-        attrs:
-          name: "Music Assistant"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://music.${domain}"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: music-assistant
-        attrs:
-          name: "Music Assistant"
-          slug: music-assistant
-          provider: !KeyOf provider-music-assistant
-          policy_engine_mode: any
-
-      # ── Snapcast ────────────────────────────────────────────────────────────
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-snapcast
-        state: present
-        identifiers:
-          name: "Snapcast"
-        attrs:
-          name: "Snapcast"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://audio.${domain}"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: snapcast
-        attrs:
-          name: "Snapcast"
-          slug: snapcast
-          provider: !KeyOf provider-snapcast
-          policy_engine_mode: any
-
-      # ── Zigbee2MQTT ─────────────────────────────────────────────────────────
-      - model: authentik_providers_proxy.proxyprovider
-        id: provider-zigbee2mqtt
-        state: present
-        identifiers:
-          name: "Zigbee2MQTT"
-        attrs:
-          name: "Zigbee2MQTT"
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          mode: forward_single
-          external_host: "https://zigbee.${domain}"
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: zigbee2mqtt
-        attrs:
-          name: "Zigbee2MQTT"
-          slug: zigbee2mqtt
-          provider: !KeyOf provider-zigbee2mqtt
-          policy_engine_mode: any
-
-      # ── Embedded Outpost ────────────────────────────────────────────────────
-      # Assigns all forward-auth providers to the built-in outpost that runs
-      # inside authentik-server.  Only the providers field is specified so
-      # the outpost's existing config (authentik_host, etc.) is preserved.
-      - model: authentik_outposts.outpost
-        state: present
-        identifiers:
-          managed: "goauthentik.io/outposts/embedded"
-        attrs:
-          type: proxy
-          config:
-            authentik_host: "https://auth.${domain}"
-          providers:
-            - !KeyOf provider-home-assistant-proxy
-            - !KeyOf provider-immich-proxy
-            - !KeyOf provider-frigate
-            - !KeyOf provider-qbittorrent
-            - !KeyOf provider-bitmagnet
-            - !KeyOf provider-romm
-            - !KeyOf provider-syncthing
-            - !KeyOf provider-music-assistant
-            - !KeyOf provider-snapcast
-            - !KeyOf provider-zigbee2mqtt
+  header = ''
+    # Generated from lanbat.services by services/authentik/catalogue.nix.
   '';
 
-  # ── Blueprint 2: OIDC providers ───────────────────────────────────────────
-  oidcBlueprint = pkgs.writeText "20-oidc-providers.yaml" ''
-    version: 1
-    metadata:
-      name: "Homelab OIDC Providers"
-      labels:
-        blueprints.goauthentik.io/instantiate: "true"
-
-    entries:
-
-      # ── Grafana ─────────────────────────────────────────────────────────────
-      - model: authentik_providers_oauth2.oauth2provider
-        id: provider-grafana
-        state: present
-        identifiers:
-          name: "Grafana"
-        attrs:
-          name: "Grafana"
-          client_id: "grafana"
-          client_secret: !Env "AUTHENTIK_GRAFANA_CLIENT_SECRET"
-          client_type: confidential
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          redirect_uris:
-            - url: "https://grafana.${domain}/login/generic_oauth"
-              matching_mode: strict
-          signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
-          sub_mode: hashed_user_id
-          include_claims_in_id_token: true
-          property_mappings:
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: grafana
-        attrs:
-          name: "Grafana"
-          slug: grafana
-          provider: !KeyOf provider-grafana
-          policy_engine_mode: any
-
-      # ── Nextcloud ───────────────────────────────────────────────────────────
-      - model: authentik_providers_oauth2.oauth2provider
-        id: provider-nextcloud
-        state: present
-        identifiers:
-          name: "Nextcloud"
-        attrs:
-          name: "Nextcloud"
-          client_id: "nextcloud"
-          client_secret: !Env "AUTHENTIK_NEXTCLOUD_CLIENT_SECRET"
-          client_type: confidential
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          redirect_uris:
-            - url: "https://cloud.${domain}/apps/user_oidc/code"
-              matching_mode: strict
-          signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
-          sub_mode: hashed_user_id
-          include_claims_in_id_token: true
-          property_mappings:
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: nextcloud
-        attrs:
-          name: "Nextcloud"
-          slug: nextcloud
-          provider: !KeyOf provider-nextcloud
-          policy_engine_mode: any
-
-      # ── Immich ──────────────────────────────────────────────────────────────
-      - model: authentik_providers_oauth2.oauth2provider
-        id: provider-immich
-        state: present
-        identifiers:
-          name: "Immich"
-        attrs:
-          name: "Immich"
-          client_id: "immich"
-          client_secret: !Env "AUTHENTIK_IMMICH_CLIENT_SECRET"
-          client_type: confidential
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          redirect_uris:
-            - url: "https://photos.${domain}/auth/login"
-              matching_mode: strict
-            - url: "app.immich:///oauth-callback"
-              matching_mode: strict
-          signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
-          sub_mode: hashed_user_id
-          include_claims_in_id_token: true
-          property_mappings:
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: immich
-        attrs:
-          name: "Immich"
-          slug: immich
-          provider: !KeyOf provider-immich
-          policy_engine_mode: any
-          # Listed once in My applications, as immich-proxy.
-          meta_launch_url: "blank://blank"
-
-      # ── Home Assistant (OIDC, optional) ─────────────────────────────────────
-      # Primary SSO is forward-auth + hass-auth-header (see proxy blueprint).
-      # This OIDC provider remains for optional HACS/native OAuth integrations.
-      - model: authentik_providers_oauth2.oauth2provider
-        id: provider-home-assistant
-        state: present
-        identifiers:
-          name: "Home Assistant"
-        attrs:
-          name: "Home Assistant"
-          client_id: "home-assistant"
-          client_secret: !Env "AUTHENTIK_HA_CLIENT_SECRET"
-          client_type: confidential
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          redirect_uris:
-            - url: "https://ha.${domain}/auth/external/callback"
-              matching_mode: strict
-          signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
-          sub_mode: hashed_user_id
-          include_claims_in_id_token: true
-          property_mappings:
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: home-assistant
-        attrs:
-          name: "Home Assistant"
-          slug: home-assistant
-          # Listed once in My applications, as home-assistant-proxy.
-          meta_launch_url: "blank://blank"
-          provider: !KeyOf provider-home-assistant
-          policy_engine_mode: any
-
-      # ── Jellyfin ────────────────────────────────────────────────────────────
-      # Authentik side only — Jellyfin side requires manual setup:
-      #   Install the "SSO Authentication" plugin from the Jellyfin plugin catalogue.
-      #   Configure it with:
-      #     Provider name: authentik
-      #     client_id: jellyfin
-      #     Authorization URL: https://auth.${domain}/application/o/authorize/
-      #     Token URL:         https://auth.${domain}/application/o/token/
-      #     Userinfo URL:      https://auth.${domain}/application/o/userinfo/
-      - model: authentik_providers_oauth2.oauth2provider
-        id: provider-jellyfin
-        state: present
-        identifiers:
-          name: "Jellyfin"
-        attrs:
-          name: "Jellyfin"
-          client_id: "jellyfin"
-          client_secret: !Env "AUTHENTIK_JELLYFIN_CLIENT_SECRET"
-          client_type: confidential
-          authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
-          invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
-          redirect_uris:
-            - url: "https://media.${domain}/sso/OID/redirect/authentik"
-              matching_mode: strict
-          signing_key: !Find [authentik_crypto.certificatekeypair, [name, "authentik Self-signed Certificate"]]
-          sub_mode: hashed_user_id
-          include_claims_in_id_token: true
-          property_mappings:
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, openid]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, email]]
-            - !Find [authentik_providers_oauth2.scopemapping, [scope_name, profile]]
-
-      - model: authentik_core.application
-        state: present
-        identifiers:
-          slug: jellyfin
-        attrs:
-          name: "Jellyfin"
-          slug: jellyfin
-          provider: !KeyOf provider-jellyfin
-          policy_engine_mode: any
-  '';
+  proxyBlueprint = pkgs.writeText "10-proxy-providers.yaml" (header + yaml.render catalogue.proxy);
+  oidcBlueprint = pkgs.writeText "20-oidc-providers.yaml" (header + yaml.render catalogue.oidc);
 
   blueprintsDir = pkgs.runCommand "authentik-blueprints" { } ''
     mkdir -p $out
@@ -522,22 +69,36 @@ let
   '';
 in
 {
-  # Mount blueprints into both containers.  The Nix store path is read-only
-  # on the host, so :ro is both safe and accurate.
-  virtualisation.oci-containers.containers."authentik-server".volumes = [
-    "${blueprintsDir}:/blueprints/custom:ro"
-  ];
-  virtualisation.oci-containers.containers."authentik-worker".volumes = [
-    "${blueprintsDir}:/blueprints/custom:ro"
-  ];
+  options.lanbat.authentik.blueprints = lib.mkOption {
+    type = lib.types.attrsOf lib.types.anything;
+    internal = true;
+    readOnly = true;
+    description = ''
+      The generated blueprints as Nix values, keyed "proxy" and "oidc", so
+      tests can inspect the catalogue without building the YAML.
+    '';
+  };
 
-  # Inject OIDC client secrets so the blueprint can read them via !Env.
-  # These are appended to the existing environmentFiles list (which already
-  # contains authentik-env from authentik.nix).
-  virtualisation.oci-containers.containers."authentik-server".environmentFiles = [
-    config.age.secrets.authentik-oidc-secrets.path
-  ];
-  virtualisation.oci-containers.containers."authentik-worker".environmentFiles = [
-    config.age.secrets.authentik-oidc-secrets.path
-  ];
+  config = {
+    lanbat.authentik.blueprints = catalogue;
+
+    # Mount blueprints into both containers.  The Nix store path is read-only
+    # on the host, so :ro is both safe and accurate.
+    virtualisation.oci-containers.containers."authentik-server".volumes = [
+      "${blueprintsDir}:/blueprints/custom:ro"
+    ];
+    virtualisation.oci-containers.containers."authentik-worker".volumes = [
+      "${blueprintsDir}:/blueprints/custom:ro"
+    ];
+
+    # Inject OIDC client secrets so the blueprint can read them via !Env.
+    # These are appended to the existing environmentFiles list (which already
+    # contains authentik-env from authentik.nix).
+    virtualisation.oci-containers.containers."authentik-server".environmentFiles = [
+      config.age.secrets.authentik-oidc-secrets.path
+    ];
+    virtualisation.oci-containers.containers."authentik-worker".environmentFiles = [
+      config.age.secrets.authentik-oidc-secrets.path
+    ];
+  };
 }

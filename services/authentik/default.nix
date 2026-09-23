@@ -34,12 +34,8 @@
 # --------------------------
 # The embedded outpost (built into authentik-server) handles the
 # /outpost.goauthentik.io/auth/caddy path used by Caddy's forward_auth.
-# After initial setup, create in the Authentik UI:
-#   1. A "Proxy Provider" (type: Forward Auth / Single Application) per
-#      protected service (Frigate, qBittorrent, Bitmagnet, Snapcast, Syncthing).
-#   2. An "Application" linked to each provider.
-#   3. Edit the embedded-outpost and add all proxy applications to it.
-# See docs/deployment-checklist.md step 3b for the full walkthrough.
+# Its providers, and every application, come from blueprints generated from
+# the service descriptions (./blueprints.nix, ./catalogue.nix).
 {
   config,
   pkgs,
