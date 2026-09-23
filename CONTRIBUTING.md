@@ -27,10 +27,11 @@ secrets are required: CI evaluates the `example` profile as `example-server` and
 ```bash
 nix fmt                                   # format all .nix files
 nix flake check --no-build --all-systems  # evaluate the example hosts and the checks
-nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql,plugins,settings-guard,validate-deploy,load-deployments,deploy-rs-fixture}
+nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql,music-assistant,plugins,settings-guard,validate-deploy,load-deployments,deploy-rs-fixture}
 ```
 
-The workload-gate and postgresql tests boot VMs and need KVM. CI runs them on every pull request.
+The workload-gate, postgresql and music-assistant tests boot VMs and need KVM. CI runs
+every `x86_64-linux` check except `server` on every pull request.
 
 The full server VM test boots the complete server configuration and is too slow for every
 PR. CI runs it nightly (03:00 UTC) and on manual dispatch via the **nightly** workflow.
@@ -39,7 +40,13 @@ Run it locally when you change a host, a service's tier or the unlock scripts:
 ```bash
 nix build -L .#checks.x86_64-linux.server  # KVM, about 10 GB of free memory, 15–45 minutes
 nix build -L .#checks.aarch64-linux.pi     # an aarch64 machine with KVM, such as the Pi (see tests/pi.nix)
+nix build -L .#checks.aarch64-linux.voice-pi
 ```
+
+GitHub's arm64 runners have no KVM, so CI cannot boot the Pi VM tests. On every pull
+request it builds their drivers (`.#checks.aarch64-linux.{pi,voice-pi}.driver`), which
+builds the Pi systems without booting them. Run the tests themselves on an aarch64
+machine when you change a Pi role, a Pi plugin or `tests/lib/mk-host-fixture.nix`.
 
 ## Pull requests
 
