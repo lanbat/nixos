@@ -54,6 +54,17 @@ let
     };
   };
 
+  withDrives =
+    drives:
+    baseDeploy
+    // {
+      hosts = baseDeploy.hosts // {
+        pi-storage = baseDeploy.hosts.pi-storage // {
+          storage = { inherit drives; };
+        };
+      };
+    };
+
   twoServers = baseDeploy // {
     hosts = baseDeploy.hosts // {
       server-b = baseDeploy.hosts.server;
@@ -73,6 +84,21 @@ let
     (expectPass "voiceRooms server role without lanbat-voice" voiceRoomOnServer)
     (expectThrow "bad voiceRooms host" badVoiceRooms)
     (expectThrow "storage-pi without drives" missingDrives)
+    (expectPass "storage-pi with one drive" (withDrives {
+      data = "example-storage-1";
+    }))
+    (expectPass "storage-pi with three drives" (withDrives {
+      a = "example-storage-a";
+      b = "example-storage-b";
+      c = "example-storage-c";
+    }))
+    (expectThrow "a drive key that is not a safe unit name" (withDrives {
+      a = "example-storage-a";
+      "b-2" = "example-storage-b";
+    }))
+    (expectThrow "a drive with an empty by-id name" (withDrives {
+      a = "";
+    }))
     (expectThrow "multiple servers without primary override" twoServers)
   ];
 in

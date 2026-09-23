@@ -185,10 +185,20 @@ in `allowedTCPPorts` as well — declaring the edge is enough.
 Two things sit outside this deliberately:
 
 - **NFS**, because it is wiring driven by `nfs.drives` rather than a service, so
-  it has no endpoint to generate from. Its rules stay in
-  `lib/roles/storage-pi.nix`.
+  it has no endpoint to generate from. `lib/roles/storage-pi.nix` generates its
+  rules from `nfs.drives` instead: the hosts running a service that uses a
+  storage host's drives (`lib/nfs-clients.nix`) are the hosts it exports to and
+  the only ones admitted to port 2049.
 - **Tang**, because it publishes no endpoint. The Pi reaches it to unlock its
   LUKS storage, and that path must not depend on generated policy.
+
+The Pi's own clients use the same edges. Its Telegraf consumes `influxdb` and its
+snapclient consumes `snapcast`, and each takes the provider's host from the
+profile-wide endpoint table rather than assuming the server, so either provider can
+move to another host. A service publishes one endpoint, and snapcast's is its web UI
+(1780, bound to loopback) rather than the streaming port snapclient uses (1704, open
+to the LAN for phones and TV boxes), so the edge admits the Pi to a port it does not
+connect to. That rule is inert; it is the cost of one endpoint per service.
 
 **The rules are IPv4 only.** `lanbat.hosts.<key>.networking.ip` is typed `ipv4`,
 so they are `iptables` rather than `ip6tables`. A service that also listens on

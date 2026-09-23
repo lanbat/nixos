@@ -47,6 +47,13 @@ let
     lib.filter (h: h != null) (map storageHostFor (lib.attrValues dependents))
   );
 
+  # Every drive of every storage host in use, by name. A client mounts all of a
+  # storage host's drives rather than only the ones its services name, because
+  # host-level jobs such as the backups write to a drive without being a service
+  # that could declare it.
+  drivesOf = host: lib.attrNames hosts.${host}.storage.drives;
+  usedDrives = lib.unique (lib.concatMap drivesOf storageHosts);
+
   hostResolutions = lib.concatLists (
     map (
       host:
@@ -67,9 +74,8 @@ in
 
   systemd.tmpfiles.rules = [
     "d /srv/storage      0755 root root -"
-    "d /srv/storage/a    0755 root root -"
-    "d /srv/storage/b    0755 root root -"
-  ];
+  ]
+  ++ map (drive: "d ${mountPoint drive}    0755 root root -") usedDrives;
 
   fileSystems = lib.mkMerge (
     lib.flatten (
@@ -78,22 +84,13 @@ in
         let
           hostname = storageHostname host;
         in
-        [
-          {
-            "/srv/storage/a" = {
-              device = "${hostname}:/mnt/storage-a";
-              fsType = "nfs4";
-              options = nfsOpts;
-            };
-          }
-          {
-            "/srv/storage/b" = {
-              device = "${hostname}:/mnt/storage-b";
-              fsType = "nfs4";
-              options = nfsOpts;
-            };
-          }
-        ]
+        map (drive: {
+          ${mountPoint drive} = {
+            device = "${hostname}:/mnt/storage-${drive}";
+            fsType = "nfs4";
+            options = nfsOpts;
+          };
+        }) (drivesOf host)
       ) storageHosts
     )
   );

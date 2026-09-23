@@ -30,7 +30,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #
 #  LUKS unlock and mounting are handled by modules/pi/clevis-unlock.nix.
-#  That module creates:
+#  That module creates one storage-<drive>-unlock.service per key of
+#  hosts.<key>.storage.drives, for example:
 #    storage-a-unlock.service  — unlocks + mounts /mnt/storage-a
 #    storage-b-unlock.service  — unlocks + mounts /mnt/storage-b
 #
@@ -74,82 +75,84 @@ let
   # profile, so a deployment without Immich or Frigate does not get a tree of
   # empty folders owned by accounts that exist nowhere.
   forService = name: text: lib.optionalString (runs name) text;
-in
-{
-  # ── Storage A initialisation ───────────────────────────────────────────────
-  # Runs after storage-a is unlocked and mounted, creates the top-level
-  # directory tree with correct permissions, then refreshes the NFS exports so
-  # the drive is served (modules/pi/nfs-exports.nix exports it once mounted).
-  systemd.services."storage-a-init" = {
-    description = "Initialise storage-a directory tree after unlock";
-    requires = [ "storage-a-unlock.service" ];
-    after = [ "storage-a-unlock.service" ];
-    before = [ "nfs-server.service" ];
-    wantedBy = [ "nfs-server.service" ];
 
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStartPost = "-${pkgs.nfs-utils}/bin/exportfs -ra";
-      ExecStart = pkgs.writeShellScript "init-storage-a" ''
-        set -e
-        base=/mnt/storage-a
-        ${forService "qbittorrent" ''
-          # Media on drive A, written by qBittorrent, readable by group media.
-          for dir in media media/movies media/tv media/music-videos; do
-            install -d -m 2775 -o ${uidOf "qbittorrent"} -g ${toString mediaGid} "$base/$dir"
-          done
-        ''}
-        ${forService "immich" ''
-          install -d -m 0755 -o ${uidOf "immich"} -g nogroup "$base/photos"
-        ''}
-        ${forService "frigate" ''
-          install -d -m 0755 -o ${uidOf "frigate"} -g nogroup "$base/surveillance"
-          install -d -m 0755 -o ${uidOf "frigate"} -g nogroup "$base/surveillance/clips"
-          install -d -m 0755 -o ${uidOf "frigate"} -g nogroup "$base/surveillance/exports"
-        ''}
-        echo "storage-a directory tree ready."
-      '';
-    };
-  };
+  drives = config.lanbat.hosts.${config.lanbat.hostKey}.storage.drives;
 
-  # ── Storage B initialisation ───────────────────────────────────────────────
-  systemd.services."storage-b-init" = {
-    description = "Initialise storage-b directory tree after unlock";
-    requires = [ "storage-b-unlock.service" ];
-    after = [ "storage-b-unlock.service" ];
-    before = [ "nfs-server.service" ];
-    wantedBy = [ "nfs-server.service" ];
+  # The directory tree each drive gets, keyed by drive name. The services put
+  # their data on a named drive (Immich on a, Nextcloud on b and so on, see the
+  # layout above), so the tree belongs to the name rather than to the position.
+  # A drive with no entry here is still unlocked, initialised and exported; it
+  # just starts empty.
+  trees = {
+    a = lib.concatStringsSep "\n" [
+      (forService "qbittorrent" ''
+        # Media on drive A, written by qBittorrent, readable by group media.
+        for dir in media media/movies media/tv media/music-videos; do
+          install -d -m 2775 -o ${uidOf "qbittorrent"} -g ${toString mediaGid} "$base/$dir"
+        done
+      '')
+      (forService "immich" ''
+        install -d -m 0755 -o ${uidOf "immich"} -g nogroup "$base/photos"
+      '')
+      (forService "frigate" ''
+        install -d -m 0755 -o ${uidOf "frigate"} -g nogroup "$base/surveillance"
+        install -d -m 0755 -o ${uidOf "frigate"} -g nogroup "$base/surveillance/clips"
+        install -d -m 0755 -o ${uidOf "frigate"} -g nogroup "$base/surveillance/exports"
+      '')
+    ];
 
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStartPost = "-${pkgs.nfs-utils}/bin/exportfs -ra";
-      ExecStart = pkgs.writeShellScript "init-storage-b" ''
-        set -e
-        base=/mnt/storage-b
-        ${forService "qbittorrent" ''
-          # General media on drive B — group media (Jellyfin, qBittorrent, Samba).
-          for dir in media media/music media/documentaries media/roms \
-            media/audiobooks media/books media/gym media/games media/misc media/incomplete; do
-            install -d -m 2775 -o ${uidOf "qbittorrent"} -g ${toString mediaGid} "$base/$dir"
-          done
-          # Private group only — not in Jellyfin, hidden from the Samba media shares.
-          install -d -m 2770 -o ${uidOf "qbittorrent"} -g ${toString privateGid} "$base/media/adult"
-          chgrp ${toString privateGid} "$base/media/adult" 2>/dev/null || true
-          chmod 2770 "$base/media/adult" 2>/dev/null || true
-        ''}
-        ${forService "nextcloud" ''
-          # Nextcloud owns bulk user data; the Samba shared space is group media.
-          install -d -m 0750 -o ${uidOf "nextcloud"} -g nogroup "$base/nextcloud"
-        ''}
+    b = lib.concatStringsSep "\n" [
+      (forService "qbittorrent" ''
+        # General media on drive B — group media (Jellyfin, qBittorrent, Samba).
+        for dir in media media/music media/documentaries media/roms \
+          media/audiobooks media/books media/gym media/games media/misc media/incomplete; do
+          install -d -m 2775 -o ${uidOf "qbittorrent"} -g ${toString mediaGid} "$base/$dir"
+        done
+        # Private group only — not in Jellyfin, hidden from the Samba media shares.
+        install -d -m 2770 -o ${uidOf "qbittorrent"} -g ${toString privateGid} "$base/media/adult"
+        chgrp ${toString privateGid} "$base/media/adult" 2>/dev/null || true
+        chmod 2770 "$base/media/adult" 2>/dev/null || true
+      '')
+      (forService "nextcloud" ''
+        # Nextcloud owns bulk user data; the Samba shared space is group media.
+        install -d -m 0750 -o ${uidOf "nextcloud"} -g nogroup "$base/nextcloud"
+      '')
+      ''
         install -d -m 0755 -o root -g nogroup "$base/users"
         install -d -m 0775 -o root -g ${toString mediaGid} "$base/shared"
-        install -d -m 0700 -o root -g root "$base/backups"
-        echo "storage-b directory tree ready."
-      '';
-    };
+        install -d -m 0700 -o root -g root "$base/backups"''
+    ];
   };
+in
+{
+  # ── Drive initialisation, one unit per drive ───────────────────────────────
+  # Runs after storage-<drive> is unlocked and mounted, creates the top-level
+  # directory tree with correct permissions, then refreshes the NFS exports so
+  # the drive is served (modules/pi/nfs-exports.nix exports it once mounted).
+  systemd.services = lib.listToAttrs (
+    map (
+      drive:
+      lib.nameValuePair "storage-${drive}-init" {
+        description = "Initialise storage-${drive} directory tree after unlock";
+        requires = [ "storage-${drive}-unlock.service" ];
+        after = [ "storage-${drive}-unlock.service" ];
+        before = [ "nfs-server.service" ];
+        wantedBy = [ "nfs-server.service" ];
+
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStartPost = "-${pkgs.nfs-utils}/bin/exportfs -ra";
+          ExecStart = pkgs.writeShellScript "init-storage-${drive}" ''
+            set -e
+            base=/mnt/storage-${drive}
+            ${trees.${drive} or ""}
+            echo "storage-${drive} directory tree ready."
+          '';
+        };
+      }
+    ) (lib.attrNames drives)
+  );
 
   environment.systemPackages = with pkgs; [
     xfsprogs

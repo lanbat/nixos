@@ -2,7 +2,8 @@
 #
 # Human user accounts and unified storage quotas.
 #
-# Each user gets a directory tree on Pi storage (Drive B):
+# Each user gets a directory tree on Pi storage (lanbat.userStorage.drive, B by
+# default):
 #
 #   /mnt/storage-b/users/<username>/
 #     files/    — Samba home share
@@ -120,15 +121,26 @@ in
         '';
       };
 
+      drive = mkOption {
+        type = types.strMatching "[a-z0-9]+";
+        default = "b";
+        description = ''
+          Pi storage drive, by its key in the storage host's storage.drives,
+          that holds the per-user directories and their quotas.
+        '';
+      };
+
       mountOnPi = mkOption {
         type = types.str;
-        default = "/mnt/storage-b/users";
+        default = "/mnt/storage-${config.lanbat.userStorage.drive}/users";
+        defaultText = lib.literalExpression ''"/mnt/storage-''${drive}/users"'';
         description = "Per-user storage root on the Pi (XFS enforcement point).";
       };
 
       mountOnServer = mkOption {
         type = types.str;
-        default = "/srv/storage/b/users";
+        default = "/srv/storage/${config.lanbat.userStorage.drive}/users";
+        defaultText = lib.literalExpression ''"/srv/storage/''${drive}/users"'';
         description = "NFS-mounted per-user storage root on the server.";
       };
 

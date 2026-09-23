@@ -34,6 +34,11 @@
 
 let
   romDirectory = "/mnt/storage-b/media/roms";
+  # Kodi waits for every storage drive this host has; a TV on a host with none
+  # (a voice Pi) waits for nothing.
+  unlockUnits = map (drive: "storage-${drive}-unlock.service") (
+    lib.attrNames (config.lanbat.hosts.${config.lanbat.hostKey}.storage.drives or { })
+  );
   home = config.users.users.media.home;
   kodiTvConfig = pkgs.callPackage ../../pkgs/kodi-tv-config { };
   kodiBootstrap = pkgs.callPackage ../../pkgs/kodi-bootstrap { };
@@ -232,11 +237,7 @@ in
         description = "Kodi on the TV";
         other = "tv-games.service";
         command = "${kodi}/bin/kodi-standalone";
-        extraAfter = [
-          "kodi-bootstrap.service"
-          "storage-a-unlock.service"
-          "storage-b-unlock.service"
-        ];
+        extraAfter = [ "kodi-bootstrap.service" ] ++ unlockUnits;
       };
       tv-games = session {
         description = "EmulationStation on the TV";
@@ -247,10 +248,7 @@ in
       kodi-bootstrap = {
         description = "Wait for Pi storage before Kodi scans libraries";
         wantedBy = [ "multi-user.target" ];
-        after = [
-          "storage-a-unlock.service"
-          "storage-b-unlock.service"
-        ];
+        after = unlockUnits;
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;

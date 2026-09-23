@@ -1,6 +1,7 @@
 # modules/pi/clevis-unlock.nix
 #
-# Post-boot Clevis/Tang unlock for the Raspberry Pi's two NVMe storage drives.
+# Post-boot Clevis/Tang unlock for the Raspberry Pi's NVMe storage drives, one
+# unit per key of hosts.<key>.storage.drives.
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # DESIGN: POST-BOOT UNLOCK (NOT INITRAMFS)
@@ -16,15 +17,16 @@
 # BOOT SEQUENCE
 # ─────────────────────────────────────────────────────────────────────────────
 #
-#  SD card boots → network comes up → storage-a-unlock and storage-b-unlock
-#  services start → each service tries Clevis/Tang unlock:
+#  SD card boots → network comes up → one storage-<drive>-unlock service per
+#  drive starts (storage-a-unlock and storage-b-unlock for drives a and b) →
+#  each service tries Clevis/Tang unlock:
 #
 #    IF Tang reachable (server control layer unlocked):
 #      → LUKS open succeeds → drive mounts → NFS exports become populated
 #
 #    IF Tang unreachable (server still locked / offline):
 #      → LUKS open fails → service exits with error
-#      → systemd retries automatically every 5 minutes (Restart=on-failure)
+#      → systemd retries automatically every 5 minutes (storage-<drive>-unlock.timer)
 #      → boot continues; SD-card OS and non-NVMe services remain fully functional
 #      → once the server admin unlocks the control layer, next retry succeeds
 #
@@ -85,6 +87,16 @@ let
   cfg = config.lanbat;
   host = cfg.hosts.${cfg.hostKey};
   storageDrives = host.storage.drives;
+
+  # The drives are named by their keys in hosts.<key>.storage.drives, and each
+  # key names everything derived from it: drive "a" is unlocked by
+  # storage-a-unlock into /dev/mapper/storage-a and mounted on /mnt/storage-a.
+  # lib/validate-deploy.nix keeps the keys to lowercase letters and digits so
+  # they are safe in all three.
+  driveNames = lib.attrNames storageDrives;
+  mapperName = drive: "storage-${drive}";
+  mountPoint = drive: "/mnt/storage-${drive}";
+  unlockUnit = drive: "storage-${drive}-unlock";
 
   # Unlock + mount script for one drive.
   # Arguments: $1 = by-id path, $2 = mapper name, $3 = mount point.
@@ -185,55 +197,34 @@ in
   # ── Mount point stubs ──────────────────────────────────────────────────────
   # These directories exist on the SD card. They are empty when the NVMe drives
   # are locked; the unlock services mount the filesystems here on success.
-  systemd.tmpfiles.rules = [
-    "d /mnt/storage-a 0755 root root -"
-    "d /mnt/storage-b 0755 root root -"
-  ];
+  systemd.tmpfiles.rules = map (drive: "d ${mountPoint drive} 0755 root root -") driveNames;
 
-  # ── Storage A unlock service ───────────────────────────────────────────────
-  systemd.services."storage-a-unlock" = {
-    description = "Clevis/Tang unlock and mount of NVMe storage drive A";
+  # ── Unlock services, one per drive ─────────────────────────────────────────
+  systemd.services = lib.listToAttrs (
+    map (
+      drive:
+      lib.nameValuePair (unlockUnit drive) {
+        description = "Clevis/Tang unlock and mount of NVMe storage drive ${lib.toUpper drive}";
 
-    # Run after network is online — Clevis needs to reach Tang.
-    after = [
-      "network-online.target"
-      "systemd-udevd.service"
-    ];
-    wants = [ "network-online.target" ];
-    # Attempt at boot; place in multi-user so NFS can depend on it.
-    wantedBy = [ "multi-user.target" ];
+        # Run after network is online — Clevis needs to reach Tang.
+        after = [
+          "network-online.target"
+          "systemd-udevd.service"
+        ];
+        wants = [ "network-online.target" ];
+        # Attempt at boot; place in multi-user so NFS can depend on it.
+        wantedBy = [ "multi-user.target" ];
 
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-
-      # Retried by storage-a-unlock.timer (see below).
-
-      ExecStart = "${unlockScript} ${storageDrives.a} storage-a /mnt/storage-a";
-      ExecStop = "${stopScript} storage-a /mnt/storage-a";
-    };
-  };
-
-  # ── Storage B unlock service ───────────────────────────────────────────────
-  systemd.services."storage-b-unlock" = {
-    description = "Clevis/Tang unlock and mount of NVMe storage drive B";
-
-    after = [
-      "network-online.target"
-      "systemd-udevd.service"
-    ];
-    wants = [ "network-online.target" ];
-    wantedBy = [ "multi-user.target" ];
-
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      # Retried by storage-b-unlock.timer (see below).
-
-      ExecStart = "${unlockScript} ${storageDrives.b} storage-b /mnt/storage-b";
-      ExecStop = "${stopScript} storage-b /mnt/storage-b";
-    };
-  };
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          # Retried by the timer of the same name (see below).
+          ExecStart = "${unlockScript} ${storageDrives.${drive}} ${mapperName drive} ${mountPoint drive}";
+          ExecStop = "${stopScript} ${mapperName drive} ${mountPoint drive}";
+        };
+      }
+    ) driveNames
+  );
 
   # ── Retries ────────────────────────────────────────────────────────────────
   # A failed unlock (Tang unreachable, drive not bound yet) is retried every
@@ -241,7 +232,7 @@ in
   # Restart=on-failure: a restarting oneshot keeps its start job queued, which
   # holds up multi-user.target at boot and `nixos-rebuild switch` until the
   # drive unlocks.
-  systemd.timers = lib.genAttrs [ "storage-a-unlock" "storage-b-unlock" ] (_: {
+  systemd.timers = lib.genAttrs (map unlockUnit driveNames) (_: {
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnActiveSec = "5min";

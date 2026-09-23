@@ -157,9 +157,13 @@ Services that use Pi storage declare which storage host to mount from:
 ```nix
 lanbat.services.jellyfin.nfs = {
   storageHost = "pi-storage";  # defaults to primary storage-pi
-  drives = [ "a" "b" ];
+  drives = [ "a" "b" ];        # keys of that host's storage.drives
 };
 ```
+
+A storage host's drives are the keys of `hosts.<key>.storage.drives`, one or more,
+named with lowercase letters and digits. See
+[storage-layout.md](storage-layout.md#drives-are-named-not-counted).
 
 Voice satellites map Home Assistant areas to host keys:
 

@@ -44,14 +44,22 @@ let
       else
         requireNonEmptyString profileName hostName "disks.system" host.disks.system
     else if host.role == "storage-pi" then
-      if !(host ? storage) || !(host.storage ? drives) then
-        builtins.throw "${ctx}: storage-pi role requires storage.drives.a and storage.drives.b"
-      else if !(host.storage.drives ? a) || !(host.storage.drives ? b) then
-        builtins.throw "${ctx}: storage-pi role requires storage.drives.a and storage.drives.b"
+      let
+        drives = (host.storage or { }).drives or { };
+        # A drive's key names its unlock unit, LUKS mapper, mount point and NFS
+        # mount (storage-<key>-unlock, /mnt/storage-<key>, /srv/storage/<key>).
+        # systemd escapes a "-" in a mount path, so the mount unit would no
+        # longer be srv-storage-<key>.mount; keep keys to letters and digits.
+        badKeys = lib.filter (key: builtins.match "[a-z0-9]+" key == null) (lib.attrNames drives);
+      in
+      if !(lib.isAttrs drives) || drives == { } then
+        builtins.throw "${ctx}: storage-pi role requires at least one entry in storage.drives"
+      else if badKeys != [ ] then
+        builtins.throw "${ctx}: storage.drives keys must be lowercase letters and digits: ${lib.concatStringsSep ", " badKeys}"
       else
-        builtins.seq (requireNonEmptyString profileName hostName "storage.drives.a" host.storage.drives.a) (
-          requireNonEmptyString profileName hostName "storage.drives.b" host.storage.drives.b
-        )
+        lib.foldl' (
+          _: key: requireNonEmptyString profileName hostName "storage.drives.${key}" drives.${key}
+        ) null (lib.attrNames drives)
     else if host.role == "voice-pi" then
       null
     else

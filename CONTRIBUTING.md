@@ -162,7 +162,7 @@ When adding a deployment-time value:
 | `config.lanbat.deployment.gatewayIp` | Default gateway |
 | `config.lanbat.hosts.<key>.networking.ip` | Per-host static address |
 | `config.lanbat.hosts.<key>.disks.system` | Server system disk path |
-| `config.lanbat.hosts.<key>.storage.drives` | Pi NVMe by-id filenames |
+| `config.lanbat.hosts.<key>.storage.drives` | Pi NVMe by-id filenames, keyed by drive name |
 | `config.lanbat.deployment.voiceRooms` | Area name → host key for voice satellites |
 | `config.lanbat.deployment.androidDevices` | Android TV boxes to provision over ADB |
 
@@ -220,7 +220,8 @@ internally), and own its data directories with the account. Sub-UID/GID ranges a
 derived from the UID.
 
 ### NFS-dependent services
-Any service that reads/writes Pi storage (`/srv/storage/a` or `/srv/storage/b`) declares it:
+Any service that reads/writes Pi storage (`/srv/storage/<drive>`, where the drives are the
+keys of the storage host's `storage.drives`, `a` and `b` in the default layout) declares it:
 ```nix
 lanbat.services.<name>.nfs = { drives = [ "a" ]; storageHost = "pi-storage"; };
 ```

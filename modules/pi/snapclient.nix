@@ -10,8 +10,13 @@
 # which mixes it with the TV sessions and the voice satellite's replies. The
 # satellite turns it down while the voice assistant listens and answers.
 #
+# Snapserver is wherever the profile runs snapcast: snapclient consumes it and
+# takes its host from the profile-wide endpoint table rather than assuming the
+# server. The port is snapserver's streaming port, which is not the endpoint
+# snapcast publishes (that is its web UI), so it stays written out here.
+#
 # No inbound firewall changes needed — snapclient only makes outbound
-# connections to the server on port 1704.
+# connections to snapserver on port 1704.
 {
   config,
   pkgs,
@@ -19,7 +24,21 @@
   ...
 }:
 
+let
+  endpointLib = import ../../lib/endpoints.nix { inherit lib; };
+  overlay = config.lanbat.overlay;
+
+  snapserverHost = endpointLib.soleHost {
+    endpoints = config.lanbat.endpoints;
+    name = "snapcast";
+    consumer = "snapclient on ${config.lanbat.hostKey}";
+  };
+  snapserverAddress = overlay.addressOf snapserverHost;
+  snapserver = if snapserverAddress != null then snapserverAddress else overlay.nameOf snapserverHost;
+in
 {
+  lanbat.services.snapclient.consumes = [ "snapcast" ];
+
   # nixos-24.11 has no services.snapclient module — run it manually.
   systemd.services.snapclient = {
     description = "Snapcast client";
@@ -32,7 +51,7 @@
     wants = [ "pipewire.socket" ];
     environment.PIPEWIRE_RUNTIME_DIR = "/run/pipewire";
     serviceConfig = {
-      ExecStart = "${pkgs.snapcast}/bin/snapclient --host ${config.lanbat.deployment.serverIp} --port 1704 --player pipewire";
+      ExecStart = "${pkgs.snapcast}/bin/snapclient --host ${snapserver} --port 1704 --player pipewire";
       Restart = "on-failure";
       RestartSec = "5s";
       User = "snapclient";
