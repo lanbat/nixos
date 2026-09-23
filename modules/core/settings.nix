@@ -35,6 +35,37 @@ let
         };
       };
 
+      overlay = mkOption {
+        type = types.nullOr (
+          types.submodule {
+            options = {
+              ip = mkOption {
+                type = types.str;
+                example = "10.100.0.1";
+                description = "Address this host holds on the overlay.";
+              };
+              publicKey = mkOption {
+                type = types.str;
+                description = "Public key other hosts encrypt to. Not a secret.";
+              };
+              endpoint = mkOption {
+                type = types.nullOr types.str;
+                default = null;
+                example = "vpn.example.com:51820";
+                description = ''
+                  Where this host can be dialled, when it can be. A host without
+                  one keeps a path open toward those that have one, so a
+                  rendezvous host is just a host with an endpoint rather than a
+                  special case.
+                '';
+              };
+            };
+          }
+        );
+        default = null;
+        description = "This host's place on the overlay, or null if it does not join one.";
+      };
+
       services = mkOption {
         type = types.listOf types.str;
         default = [ ];
@@ -162,6 +193,40 @@ in
         type = types.strMatching "(ssh-|ecdsa-|sk-).+";
         example = "ssh-ed25519 AAAAC3Nza... admin@workstation";
         description = "SSH public key of the admin user on all hosts.";
+      };
+
+      overlay = mkOption {
+        type = types.submodule {
+          options = {
+            provider = mkOption {
+              type = types.str;
+              default = "none";
+              example = "wireguard-mesh";
+              description = ''
+                Which implementation answers the overlay contract. "none" keeps
+                cross-host traffic on the LAN, which is what a profile that says
+                nothing gets.
+              '';
+            };
+            subnet = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              example = "10.100.0.0/24";
+              description = "Address range the overlay uses, when it has one.";
+            };
+            domain = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              example = "lanbat.internal";
+              description = "Suffix overlay names are resolved under, when the provider uses one.";
+            };
+          };
+        };
+        default = { };
+        description = ''
+          How hosts reach each other. Optional: absent means no overlay, and
+          cross-host traffic stays on the LAN as it does today.
+        '';
       };
 
       secrets = mkOption {

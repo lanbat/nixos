@@ -9,6 +9,7 @@
     ./services.nix
     ./database.nix
     ./auth.nix
+    ./overlay.nix
     ./base.nix
     ./gc.nix
     ./auto-upgrade.nix

@@ -19,6 +19,7 @@ let
 
   allowedWithDefault = [
     "profile"
+    "deployment.overlay"
     "deployment.haLlm"
     "deployment.voiceRooms"
     "deployment.primaryServer"
