@@ -27,11 +27,11 @@ secrets are required: CI evaluates the `example` profile as `example-server` and
 ```bash
 nix fmt                                   # format all .nix files
 nix flake check --no-build --all-systems  # evaluate the example hosts and the checks
-nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql,music-assistant,plugins,settings-guard,validate-deploy,load-deployments,deploy-rs-fixture}
+nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql,music-assistant,overlay-mesh,overlay,policy,plugins,settings-guard,validate-deploy,load-deployments,deploy-rs-fixture}
 ```
 
-The workload-gate, postgresql and music-assistant tests boot VMs and need KVM. CI runs
-every `x86_64-linux` check except `server` on every pull request.
+The workload-gate, postgresql, music-assistant and overlay-mesh tests boot VMs and need
+KVM. CI runs every `x86_64-linux` check except `server` on every pull request.
 
 The full server VM test boots the complete server configuration and is too slow for every
 PR. CI runs it nightly (03:00 UTC) and on manual dispatch via the **nightly** workflow.

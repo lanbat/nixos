@@ -179,6 +179,10 @@
           inherit pkgs inputs;
           inherit (inputs) agenix disko;
         };
+        overlay-mesh = import ./tests/overlay-mesh.nix {
+          inherit pkgs;
+          inherit (inputs) agenix;
+        };
         workload-gate = import ./tests/workload-gate.nix { inherit pkgs; };
       }
       // lib.optionalAttrs hasDeploy (

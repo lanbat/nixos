@@ -14,8 +14,12 @@
 }:
 
 let
+  # Every secret the services declare, and the host's overlay key, which no
+  # service declares, when the host is on an overlay.
+  overlayInterface = (config.lanbat.overlay or { }).interface or null;
   names = lib.unique (
     lib.concatMap (svc: lib.attrNames svc.secrets) (lib.attrValues config.lanbat.services)
+    ++ lib.optional (overlayInterface != null) "overlay-${config.lanbat.hostKey}"
   );
   contents = config.lanbat.testSecrets;
 
