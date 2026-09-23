@@ -26,6 +26,8 @@
     # Xiaomi BLE bind keys for Home Assistant, from ha-xiaomi-ble.age
     # (see secrets/README.md).
     # haXiaomiBle = true;
+    # Xiaomi BLE thermometers with a clock display (lanbatPlugins.xiaomi-clock).
+    # xiaomiClocks = [ "A4:C1:38:00:00:01" ];
 
     # Android TV boxes, for lanbatPlugins.android.  Snapdroid needs no
     # configuration: snapserver publishes over mDNS (services/snapcast.nix).
@@ -70,6 +72,7 @@
       };
       plugins = [
         inputs.self.lanbatPlugins.services
+        # inputs.self.lanbatPlugins.xiaomi-clock
         # inputs.lanbat-justpark-parking.lanbatPlugin
       ];
     };

@@ -12,6 +12,7 @@ let
   kodiTvConfig = pkgs.callPackage ../pkgs/kodi-tv-config { };
   kodiBootstrap = pkgs.callPackage ../pkgs/kodi-bootstrap { };
   androidProvision = pkgs.callPackage ../pkgs/android-provision { };
+  xiaomiClockSync = pkgs.callPackage ../pkgs/xiaomi-clock-sync { };
 in
 pkgs.runCommand "pkgs-build-smoke"
   {
@@ -22,6 +23,7 @@ pkgs.runCommand "pkgs-build-smoke"
       dashboards
       kodiBootstrap
       androidProvision
+      xiaomiClockSync
     ];
   }
   ''
@@ -29,6 +31,7 @@ pkgs.runCommand "pkgs-build-smoke"
     command -v quota-setup
     command -v kodi-bootstrap
     command -v android-provision
+    XIAOMI_CLOCK_DEVICES= xiaomi-clock-sync
     test -f ${pages}/offline.html
     test -f ${caPage}/index.html
     test -d ${dashboards}

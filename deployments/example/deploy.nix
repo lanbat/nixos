@@ -35,6 +35,8 @@
     };
     # Xiaomi BLE bind keys for Home Assistant, from ha-xiaomi-ble.age.
     haXiaomiBle = true;
+    # Xiaomi BLE thermometers with a clock display, for lanbatPlugins.xiaomi-clock.
+    xiaomiClocks = [ "A4:C1:38:00:00:01" ];
 
     # Android TV boxes, for lanbatPlugins.android.
     androidDevices = {
@@ -60,6 +62,7 @@
       plugins = [
         inputs.self.lanbatPlugins.services
         inputs.self.lanbatPlugins.android
+        inputs.self.lanbatPlugins.xiaomi-clock
       ];
     };
 

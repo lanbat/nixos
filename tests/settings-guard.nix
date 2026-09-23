@@ -30,6 +30,7 @@ let
     "deployment.storageHostname"
     "deployment.parkingGuard"
     "deployment.androidDevices"
+    "deployment.xiaomiClocks"
     "hosts"
     "mosquitto.extraUsers"
   ];

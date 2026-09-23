@@ -6,4 +6,5 @@
   tv = import ./tv;
   voice = import ./voice;
   android = import ./android;
+  xiaomi-clock = import ./xiaomi-clock;
 }

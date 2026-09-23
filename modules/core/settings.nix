@@ -352,6 +352,17 @@ in
         '';
       };
 
+      xiaomiClocks = mkOption {
+        type = types.listOf (types.strMatching "([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}");
+        default = [ ];
+        example = [ "A4:C1:38:00:00:01" ];
+        description = ''
+          Bluetooth addresses of Xiaomi BLE thermometers with a clock display
+          (LYWSD02/LYWSD02MMC), for the lanbat-xiaomi-clock plugin.  They cannot
+          set their own time and ship on UTC+8, so a timer writes it over BLE.
+        '';
+      };
+
       voiceRooms = mkOption {
         type = types.attrsOf types.str;
         default = { };
