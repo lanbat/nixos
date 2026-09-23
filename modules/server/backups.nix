@@ -274,31 +274,47 @@ in
   # ];
 
   # ── PostgreSQL dump helper (run before workload backup) ────────────────────
-  # Dumps all databases to /mnt/workload/postgresql-dumps/ for consistent backup.
+  # Dumps every database to /mnt/workload/postgresql-dumps/ for consistent backup.
+  # Not enabled. If you revive it, take the databases from
+  # lanbat.postgresql.databases and the connection details from
+  # lanbat.postgresql.instances, as below, rather than naming either: services
+  # add and move databases, and a written-out list silently misses them.
+  # Nextcloud is the exception: its upstream module creates its database on the
+  # workload instance (database.createLocally), so it appears in
+  # services.postgresql.ensureDatabases but not in lanbat.postgresql.databases.
   #
-  # systemd.services."postgresql-dump" = {
-  #   description = "Dump all PostgreSQL databases for backup";
-  #   requires = [ "workload-online.target" "postgresql.service" ];
-  #   after    = [ "workload-online.target" "postgresql.service" ];
-  #   before   = [ "workload-backup.service" ];
-  #   serviceConfig = {
-  #     Type = "oneshot";
-  #     User = "postgres";
-  #     ExecStart = pkgs.writeShellScript "pg-dump-all" ''
-  #       set -euo pipefail
-  #       DUMPDIR=/mnt/workload/postgresql-dumps
-  #       mkdir -p "$DUMPDIR"
-  #       # Workload instance (port 5432).
-  #       for db in nextcloud immich bitmagnet; do
-  #         pg_dump -Fc "$db" > "$DUMPDIR/$db-$(date +%Y%m%d).dump"
+  # systemd.services."postgresql-dump" =
+  #   let
+  #     pg = config.lanbat.postgresql;
+  #     # instance name -> names of the databases that live on it
+  #     databasesOn =
+  #       instance:
+  #       lib.attrNames (lib.filterAttrs (_: db: db.instance == instance) pg.databases);
+  #     dumpInstance = instance: ''
+  #       for db in ${lib.escapeShellArgs (databasesOn instance)}; do
+  #         pg_dump -Fc -h ${pg.instances.${instance}.socket} -p ${toString pg.instances.${instance}.port} \
+  #           "$db" > "$DUMPDIR/$db-$(date +%Y%m%d).dump"
   #       done
-  #       # Always-on instance (port 5433).
-  #       for db in authentik hass grafana; do
-  #         pg_dump -Fc -h /run/postgresql-always-on -p 5433 "$db" > "$DUMPDIR/$db-$(date +%Y%m%d).dump"
-  #       done
-  #       # Prune dumps older than 7 days.
-  #       find "$DUMPDIR" -name "*.dump" -mtime +7 -delete
   #     '';
+  #     units = lib.mapAttrsToList (_: i: i.unit) pg.instances;
+  #   in
+  #   {
+  #     description = "Dump all PostgreSQL databases for backup";
+  #     requires = [ "workload-online.target" ] ++ units;
+  #     after = [ "workload-online.target" ] ++ units;
+  #     before = [ "workload-backup.service" ];
+  #     path = [ config.services.postgresql.finalPackage ];
+  #     serviceConfig = {
+  #       Type = "oneshot";
+  #       User = "postgres";
+  #       ExecStart = pkgs.writeShellScript "pg-dump-all" ''
+  #         set -euo pipefail
+  #         DUMPDIR=/mnt/workload/postgresql-dumps
+  #         mkdir -p "$DUMPDIR"
+  #         ${lib.concatMapStrings dumpInstance (lib.attrNames pg.instances)}
+  #         # Prune dumps older than 7 days.
+  #         find "$DUMPDIR" -name "*.dump" -mtime +7 -delete
+  #       '';
+  #     };
   #   };
-  # };
 }
