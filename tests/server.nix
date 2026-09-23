@@ -5,6 +5,7 @@
   pkgs,
   agenix,
   disko,
+  inputs,
 }:
 
 let
@@ -14,6 +15,10 @@ pkgs.testers.runNixOSTest {
   name = "server";
 
   node.pkgsReadOnly = false;
+
+  # services/zigbee2mqtt.nix pins its package from inputs.nixpkgs-z2m, so the
+  # VM runs the same Zigbee2MQTT as the hosts.
+  node.specialArgs = { inherit inputs; };
 
   nodes.server =
     { config, lib, ... }:
