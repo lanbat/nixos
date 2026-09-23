@@ -13,7 +13,7 @@
 | Caddy root CA key | `secrets/caddy-ca-root-key.age` (agenix) + `secrets/caddy-ca-root.crt` (git) | git + agenix |
 | Caddy intermediate/leaf state | `/var/lib/caddy/` | `backup-server.sh` (regenerates from root if lost) |
 | agenix secrets | `secrets/*.age` | git repository |
-| Frigate config | `/var/lib/frigate/config/` | `backup-server.sh` |
+| Frigate config | Rendered from `lanbat.services.frigate.settings` in your `deploy.nix` | Back up `deploy.nix` and the modules it lists (gitignored) |
 | Nextcloud config | `/var/lib/nextcloud/` | `backup-server.sh` (back up before any major upgrade — see `docs/runbook.md` § Nextcloud major version upgrade) |
 | Vaultwarden data | `/var/lib/vaultwarden/` | `backup-server.sh` |
 | InfluxDB data (metrics) | `/var/lib/influxdb2/` | `backup-server.sh` |
@@ -63,8 +63,9 @@ This keeps a cloud copy of all detected-event clips.
 Full 24h recordings stay on Pi storage only (they are too large for typical cloud plans).
 
 Retention recommendation (indoor cameras, household):
-- Local recordings: 7 days (set in `frigate.nix`)
-- Event clips (local): 30 days (set in `frigate.nix`)
+- Local recordings: 7 days (`lanbat.services.frigate.settings.retention.motionDays`)
+- Event clips (local): 14 days (`retention.detectionDays` and `retention.alertDays`)
+- Snapshots (local): 30 days (`retention.snapshotDays`)
 - Event clips (cloud): indefinite until you clean them up
 
 ### Pi storage (no backup by default)

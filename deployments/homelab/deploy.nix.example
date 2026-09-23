@@ -90,6 +90,10 @@
         # inputs.self.lanbatPlugins.xiaomi-clock
         # inputs.lanbat-justpark-parking.lanbatPlugin
       ];
+      # NixOS modules merged last. Frigate's cameras, zones and retention are
+      # set here (lanbat.services.frigate.settings); start from
+      # deployments/example/frigate.nix.
+      # modules = [ ./frigate.nix ];
     };
 
     pi-storage = {

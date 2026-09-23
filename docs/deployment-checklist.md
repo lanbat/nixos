@@ -597,7 +597,17 @@ served chain does not verify against the pinned root.
 
 ### 3f. Configure Frigate cameras
 
-Update the cameras in `services/frigate.nix` and deploy.
+Describe the cameras under `lanbat.services.frigate.settings` in a module listed
+in `hosts.server.modules` of your `deploy.nix` (see
+[extensibility.md](extensibility.md#service-settings)). Start from
+`deployments/example/frigate.nix`: set each camera's go2rtc inputs (one with the
+`detect` role), detect resolution and zones. Put the camera credentials in
+`frigate-rtsp-env.age` and reference them from the sources as
+`{FRIGATE_RTSP_USER}` and `{FRIGATE_RTSP_PASSWORD}`. Evaluation warns while no
+camera is configured.
+
+To tune zones or masks in Frigate's UI, follow "Temporary UI tuning" at the top of
+`services/frigate.nix`, then copy the values back into the settings.
 
 ### 3g. Set up rclone for Frigate cloud sync
 

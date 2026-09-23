@@ -64,6 +64,30 @@ Each profile is fully independent:
 
 Secrets (`secrets/*.age`) are still shared at the repo level; encrypt each secret for the agenix host keys of every profile that needs it.
 
+### Service settings
+
+A service whose configuration differs between sites reads it from
+`lanbat.services.<name>.settings`, a typed schema its module declares, rather than
+from literals in `services/<name>.nix`. A profile sets those values from a NixOS
+module listed in the host's `modules`, which is merged last, so it overrides a
+service's defaults without `lib.mkForce`:
+
+```nix
+# deployments/<profile>/deploy.nix
+hosts.server.modules = [
+  ./frigate.nix   # or an inline module: ({ config, ... }: { ... })
+];
+```
+
+Frigate is the first service with a schema: cameras (go2rtc inputs and their
+roles, detect, zones, object filters, review, motion, LPR), the detector device,
+retention, and `extraConfig` escape hatches for raw Frigate keys, globally and per
+camera. The options are documented in `services/frigate.nix`;
+`deployments/example/frigate.nix` is a complete one-camera configuration. Camera
+sources reference credentials as `{FRIGATE_RTSP_USER}` and `{FRIGATE_RTSP_PASSWORD}`,
+which Frigate substitutes from `secrets/frigate-rtsp-env.age`, so no credential is
+ever written into the profile.
+
 ## Roles
 
 Roles bundle infrastructure modules for a host type. They are not optional — every host declares `role = "server"` (or `storage-pi`, `voice-pi`).
