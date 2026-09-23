@@ -69,9 +69,17 @@ in
 
   config = {
     lanbat.services.home-assistant = {
-      # Home Assistant connects to each voice satellite, which may be on another
-      # host. Conditional so a deployment without voice still evaluates.
-      consumes = lib.optional (config.lanbat.hasService "voice-satellite") "voice-satellite";
+      # Home Assistant connects to each voice satellite, which normally runs on
+      # another host.
+      #
+      # The predicate has to come from deploy data, not from the resolved
+      # services: consumes is part of the description, and lib/ builds the
+      # endpoint table from a first pass in which that table is still empty.
+      # Reading either lanbat.hasService or lanbat.endpoints here made the two
+      # passes disagree, so the table recorded no edge and the satellite's host
+      # generated a drop with no accept. voiceRooms is static, so both passes
+      # see the same answer.
+      consumes = lib.optional voiceRooms "voice-satellite";
       subdomain = "ha";
       port = 8123;
       auth = "forward-auth";

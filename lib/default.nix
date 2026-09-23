@@ -74,7 +74,44 @@ let
         hosts = deploy'.hosts;
       };
 
-      hosts = lib.mapAttrs (name: cfg: mkHost profileName deploy' name cfg endpoints) deploy'.hosts;
+      built = lib.mapAttrs (name: cfg: mkHost profileName deploy' name cfg endpoints) deploy'.hosts;
+
+      # The first pass runs with an empty table, so a description that reads the
+      # table answers differently in each pass: the table then records the first
+      # answer while the host acts on the second, and the wiring is built from a
+      # description nothing actually has. That is silent — it cost a live voice
+      # pipeline once — so compare the two and say which service disagreed.
+      #
+      # Only the fields the table carries are compared. Settings and the
+      # configuration body may depend on the table; these may not.
+      describedFields = svc: { inherit (svc) endpoint account consumes; };
+
+      disagreements = lib.concatLists (
+        lib.mapAttrsToList (
+          hostName: before:
+          let
+            after = built.${hostName}.config.lanbat.services;
+          in
+          lib.filter (x: x != null) (
+            lib.mapAttrsToList (
+              svcName: svc:
+              if describedFields svc != describedFields after.${svcName} then "${hostName}.${svcName}" else null
+            ) before
+          )
+        ) described
+      );
+
+      hosts =
+        if disagreements != [ ] then
+          builtins.throw (
+            "lanbat profile '${profileName}': the description of "
+            + lib.concatStringsSep ", " disagreements
+            + " changed once the endpoint table was resolved. endpoint, account"
+            + " and consumes are read to build that table, so they must not"
+            + " depend on it — base them on deploy data instead."
+          )
+        else
+          built;
       configurations = lib.mapAttrs' (
         name: cfg: lib.nameValuePair (hostFlakeName profileName name) cfg
       ) hosts;
