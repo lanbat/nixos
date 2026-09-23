@@ -25,6 +25,7 @@ in
     subdomain = "search";
     port = 8888;
     auth = "none";
+    secrets.searxng-secret = { };
     account = {
       uid = 960;
       container = true;
@@ -74,7 +75,9 @@ in
           enable_metrics: false
 
         server:
-          secret_key: "CHANGE_ME_SEARXNG_SECRET"
+          # Replaced below from searxng-secret.age. The heredoc is quoted, so
+          # nothing here is expanded and the real value never reaches the store.
+          secret_key: "@SEARXNG_SECRET@"
           # base_url must match the public URL so that image-proxy thumbnail links
           # embedded in results point to the right host.
           base_url: "https://search.${domain}/"
@@ -106,6 +109,13 @@ in
           - name: wikidata
             timeout: 15.0
         YAML
+                # SearXNG signs sessions and the image proxy with this. Kept out
+                # of the Nix store, which is world readable on the host and
+                # travels with the closure, so a value committed here would be
+                # shared by everyone who deploys this repository.
+                ${pkgs.gnused}/bin/sed -i \
+                  "s|@SEARXNG_SECRET@|$(cat ${config.age.secrets.searxng-secret.path})|" \
+                  /var/lib/searxng/settings.yml
                 chown -R searxng:searxng /var/lib/searxng
                 # 0755: uwsgi workers run as the container's searxng user, not root.
                 # Rootless podman maps the host searxng uid to container root, so 0750

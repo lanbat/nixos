@@ -244,6 +244,7 @@ Until then, use the union-of-keys pattern above.
 | `influxdb-admin-token.age` | plaintext token | InfluxDB + Grafana datasource |
 | `grafana-env.age` | `KEY=value` × 4 | Grafana |
 | `vaultwarden-env.age` | `ADMIN_TOKEN=<value>` | Vaultwarden |
+| `searxng-secret.age` | plaintext value | SearXNG session and image-proxy signing |
 | `homepage-widgets-env.age` | `KEY=value` lines for widget API keys/tokens | Homepage dashboard widgets |
 | `telegraf-token.age` | `TELEGRAF_INFLUXDB_TOKEN=<value>` | Telegraf (server + Pi) |
 | `ha-llm-api-key.age` | plaintext API key | Home Assistant's conversation agent (`lanbat.haLlm`); only with `haLlm` set |
