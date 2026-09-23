@@ -1,19 +1,21 @@
 # modules/pi/nfs-exports.nix
 #
-# NFS server configuration — exports Pi storage to the server.
+# NFS server configuration — exports Pi storage to the hosts that use it.
 #
 # Export model
 # ------------
-# /mnt/storage-<drive>  →  server (read/write, no_root_squash for service
-# accounts), for every key of hosts.<key>.storage.drives
+# /mnt/storage-<drive>  →  every host running a service that uses this storage
+# host (read/write, no_root_squash for service accounts), for every key of
+# hosts.<key>.storage.drives
 #
-# "no_root_squash" is used because the server's service accounts (nextcloud 990,
-# immich 991, jellyfin 992, qbt 994, frigate 995) must write to the NFS paths without
-# being squashed to nobody.  Ownership is stored as the numeric IDs pinned in
-# each service's lanbat.services.<name>.account on the server.
+# "no_root_squash" is used because the clients' service accounts must write to
+# the NFS paths without being squashed to nobody. Ownership is stored as the
+# numeric UID of each service's lanbat.services.<name>.account. The Pi does not
+# run those services, so modules/pi/storage.nix reads the same accounts from
+# the profile-wide lanbat.endpoints table to own the directories it creates.
 #
-# Security note: restrict exports to the server's IP only.
-# The Pi firewall (lib/roles/storage-pi.nix) also drops NFS from other sources.
+# Exports are restricted to those hosts' addresses, and the Pi firewall
+# (lib/roles/storage-pi.nix) drops NFS from any other source.
 {
   config,
   pkgs,
@@ -22,8 +24,13 @@
 }:
 
 let
-  serverIp = config.lanbat.deployment.serverIp;
   drives = config.lanbat.hosts.${config.lanbat.hostKey}.storage.drives;
+
+  # The hosts running a service that declares nfs.drives on this storage host,
+  # read from the profile-wide table: the storage Pi serves whoever uses it
+  # rather than assuming the server. lib/roles/storage-pi.nix restricts the
+  # NFS port to the same hosts.
+  clients = import ../../lib/nfs-clients.nix { inherit config lib; };
 
   # Common NFS export options. mp exports a drive only while it is mounted, so
   # a locked drive is never served as the empty directory on the SD card.
@@ -35,9 +42,15 @@ in
     # NFSv4 only — no portmap required.
     nproc = 8;
 
-    # One line per drive, in the same form for every drive.
-    exports = lib.concatMapStrings (drive: "/mnt/storage-${drive}  ${serverIp}(${exportOpts})\n") (
-      lib.attrNames drives
+    # One line per drive, each exported to every client. With no client there
+    # is no line at all: an export without a client list is open to anyone.
+    exports = lib.optionalString (clients.addresses != [ ]) (
+      lib.concatMapStrings (
+        drive:
+        "/mnt/storage-${drive}  "
+        + lib.concatMapStringsSep " " (address: "${address}(${exportOpts})") clients.addresses
+        + "\n"
+      ) (lib.attrNames drives)
     );
   };
 

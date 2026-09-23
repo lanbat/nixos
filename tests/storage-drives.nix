@@ -1,9 +1,16 @@
 # tests/storage-drives.nix
 #
 # A storage host's drive set is the keys of hosts.<key>.storage.drives, not a
-# fixed a and b. Builds two profiles through lib/, one whose storage host has a
+# fixed a and b. Builds profiles through lib/, one whose storage host has a
 # single drive and one whose has three, and checks that the Pi unlocks,
 # initialises and exports exactly those drives and that the server mounts them.
+#
+# The storage Pi also reaches its peers by what they run rather than by the
+# server's address: it exports to the hosts whose services use its drives, and
+# Telegraf and snapclient find InfluxDB and snapserver through consumes. A
+# profile with a second server that uses the drives and runs both of those
+# shows that none of it assumes the primary server.
+#
 # Pure evaluation: nothing is built.
 {
   lib,
@@ -27,27 +34,47 @@ let
   # A server service that uses the given drives, standing in for Immich or
   # Jellyfin without their dependencies, and stand-ins for the services the
   # storage Pi's own Telegraf and snapclient consume.
-  probePlugin = drives: {
-    name = "storage-probe";
-    version = 1;
-    roles = [ "server" ];
-    modules = [
-      {
-        lanbat.services = {
-          probe = {
-            nfs.drives = drives;
-            units = [ "probe" ];
+  probePlugin =
+    { drives, standIns }:
+    {
+      name = "storage-probe";
+      version = 1;
+      roles = [ "server" ];
+      modules = [
+        {
+          lanbat.services = {
+            probe = {
+              nfs.drives = drives;
+              units = [ "probe" ];
+            };
+          }
+          // lib.optionalAttrs standIns {
+            influxdb.endpoint.port = 8086;
+            snapcast.endpoint.port = 1780;
           };
-          influxdb.endpoint.port = 8086;
-          snapcast.endpoint.port = 1780;
-        };
-        systemd.services.probe.serviceConfig.ExecStart = "/run/current-system/sw/bin/true";
-      }
-    ];
+          systemd.services.probe.serviceConfig.ExecStart = "/run/current-system/sw/bin/true";
+        }
+      ];
+    };
+
+  serverHost = ip: hostname: plugin: {
+    role = "server";
+    system = "x86_64-linux";
+    networking = {
+      inherit ip hostname;
+      interface = "eno1";
+    };
+    disks.system = "/dev/disk/by-id/test-system-disk";
+    plugins = [ plugin ];
   };
 
   mkDeploy =
-    { drives, probeDrives }:
+    {
+      drives,
+      probeDrives,
+      # A second server that also uses the drives and runs what the Pi consumes.
+      second ? false,
+    }:
     {
       deployment = {
         domain = "home.test";
@@ -72,20 +99,14 @@ let
           model = "test-model";
         };
         voiceRooms = { };
-      };
+      }
+      // lib.optionalAttrs second { primaryServer = "server"; };
 
       hosts = {
-        server = {
-          role = "server";
-          system = "x86_64-linux";
-          networking = {
-            ip = "192.0.2.10";
-            interface = "eno1";
-            hostname = "server";
-          };
-          disks.system = "/dev/disk/by-id/test-system-disk";
-          plugins = [ (probePlugin probeDrives) ];
-        };
+        server = serverHost "192.0.2.10" "server" (probePlugin {
+          drives = probeDrives;
+          standIns = !second;
+        });
 
         pi-storage = {
           role = "storage-pi";
@@ -99,6 +120,12 @@ let
           storage = { inherit drives; };
           plugins = [ ];
         };
+      }
+      // lib.optionalAttrs second {
+        server2 = serverHost "192.0.2.12" "server2" (probePlugin {
+          drives = probeDrives;
+          standIns = true;
+        });
       };
     };
 
@@ -117,6 +144,19 @@ let
         "a"
         "c"
       ];
+    };
+    two-clients = mkDeploy {
+      drives = {
+        a = "test-disk-1";
+        b = "test-disk-2";
+      };
+      probeDrives = [ "a" ];
+      second = true;
+    };
+    # Nothing uses the drives, so nobody may mount them.
+    no-clients = mkDeploy {
+      drives.a = "test-disk-1";
+      probeDrives = [ ];
     };
     # The probe names a drive the storage host does not have.
     unknown = mkDeploy {
@@ -203,8 +243,79 @@ let
   three = cfg "three-pi-storage";
   unknownServer = cfg "unknown-server";
 
+  exportOpts = "rw,sync,no_subtree_check,no_root_squash,mp";
+
+  # Where the Pi's own consumers connect, and who it lets mount its drives.
+  peerCases =
+    profile:
+    { peer, clients }:
+    let
+      pi = cfg "${profile}-pi-storage";
+      firewall = pi.networking.firewall.extraCommands;
+      telegraf = pi.services.telegraf.extraConfig;
+    in
+    [
+      (expect "${profile}: Telegraf writes to the host running InfluxDB" (
+        (lib.head telegraf.outputs.influxdb_v2).urls == [ "http://${peer}:8086" ]
+      ))
+      (expect "${profile}: Telegraf pings the host running InfluxDB" (
+        (lib.head telegraf.inputs.ping).urls == [ peer ]
+      ))
+      (expect "${profile}: snapclient connects to the host running snapcast" (
+        lib.hasInfix "--host ${peer} --port 1704 " pi.systemd.services.snapclient.serviceConfig.ExecStart
+      ))
+      (expect "${profile}: every export goes to exactly the NFS clients" (
+        lib.all (
+          line:
+          line == ""
+          ||
+            lib.tail (lib.filter (w: w != "") (lib.splitString " " line))
+            == map (c: "${c}(${exportOpts})") clients
+        ) (lib.splitString "
+" pi.services.nfs.server.exports)
+      ))
+      (expect "${profile}: NFS is dropped from everyone else" (lib.hasInfix "--dport 2049" firewall))
+    ]
+    ++ (
+      if lib.length clients == 1 then
+        [
+          (expect "${profile}: a single client keeps the one-rule form" (
+            lib.hasInfix "iptables -I INPUT -p tcp --dport 2049 ! -s ${lib.head clients} -j DROP\n" firewall
+            && lib.hasInfix "iptables -I INPUT -p udp --dport 2049 ! -s ${lib.head clients} -j DROP\n" firewall
+          ))
+        ]
+      else
+        [
+          (expect "${profile}: NFS is dropped unless a client is accepted above it" (
+            lib.hasInfix "--dport 2049 ! -i lo -j DROP" firewall && !(lib.hasInfix "--dport 2049 ! -s" firewall)
+          ))
+        ]
+        ++ map (
+          c:
+          expect "${profile}: ${c} is admitted to NFS" (
+            lib.hasInfix "-p tcp --dport 2049 -s ${c} -j ACCEPT" firewall
+            && lib.hasInfix "-p udp --dport 2049 -s ${c} -j ACCEPT" firewall
+          )
+        ) clients
+    );
+
   cases =
     driveCases "one" [ "data" ]
+    ++ peerCases "one" {
+      peer = "192.0.2.10";
+      clients = [ "192.0.2.10" ];
+    }
+    ++ driveCases "two-clients" [
+      "a"
+      "b"
+    ]
+    ++ peerCases "two-clients" {
+      peer = "192.0.2.12";
+      clients = [
+        "192.0.2.10"
+        "192.0.2.12"
+      ];
+    }
     ++ driveCases "three" [
       "a"
       "b"
@@ -224,6 +335,16 @@ let
       ))
       (expect "three drives: user quotas follow drive b" (
         three.systemd.services.user-storage-quotas.requires == [ "storage-b-init.service" ]
+      ))
+      (expect "no clients: nothing is exported" (
+        (cfg "no-clients-pi-storage").services.nfs.server.exports == ""
+      ))
+      (expect "no clients: nobody is admitted to NFS" (
+        !(lib.hasInfix "2049 -s" (cfg "no-clients-pi-storage").networking.firewall.extraCommands)
+      ))
+      (expect "two clients: the provider's policy admits the Pi's Telegraf" (
+        lib.hasInfix "--dport 8086 -s 192.0.2.11 -j ACCEPT" (cfg "two-clients-server2")
+        .networking.firewall.extraCommands
       ))
       (expect "a drive the storage host lacks is rejected" (
         lib.any (lib.hasInfix "uses drive b, which pi-storage does not have") (

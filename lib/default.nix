@@ -84,7 +84,10 @@ let
       #
       # Only the fields the table carries are compared. Settings and the
       # configuration body may depend on the table; these may not.
-      describedFields = svc: { inherit (svc) endpoint account consumes; };
+      describedFields = svc: {
+        inherit (svc) endpoint account consumes;
+        nfs = { inherit (svc.nfs) drives storageHost; };
+      };
 
       disagreements = lib.concatLists (
         lib.mapAttrsToList (
@@ -106,8 +109,8 @@ let
           builtins.throw (
             "lanbat profile '${profileName}': the description of "
             + lib.concatStringsSep ", " disagreements
-            + " changed once the endpoint table was resolved. endpoint, account"
-            + " and consumes are read to build that table, so they must not"
+            + " changed once the endpoint table was resolved. endpoint, account,"
+            + " consumes and nfs are read to build that table, so they must not"
             + " depend on it — base them on deploy data instead."
           )
         else

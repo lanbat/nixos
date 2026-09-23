@@ -20,9 +20,10 @@
 # the same trap documented in services/influxdb.nix.
 #
 # Two things are deliberately outside this. NFS is wiring driven by nfs.drives
-# rather than a service, so it has no endpoint to generate from and keeps its
-# literal rules. Tang publishes no endpoint either, and must not: the Pi reaches
-# it to unlock its LUKS storage, and that path cannot depend on generated policy.
+# rather than a service, so it has no endpoint to generate from; the storage
+# Pi's role generates its rules from nfs.drives instead (lib/nfs-clients.nix).
+# Tang publishes no endpoint either, and must not: the Pi reaches it to unlock
+# its LUKS storage, and that path cannot depend on generated policy.
 # modules/wiring/checks.nix rejects a Tang endpoint.
 { config, lib, ... }:
 

@@ -13,11 +13,34 @@ let
   net = host.networking;
   networkLib = import ../network.nix { inherit lib; };
   prefixLength = networkLib.prefixLengthFromCidr config.lanbat.deployment.lanSubnet;
-  serverIp =
-    let
-      serverKey = config.lanbat.deployment.primaryServer;
-    in
-    if serverKey == null then "127.0.0.1" else config.lanbat.hosts.${serverKey}.networking.ip;
+
+  # Only the hosts that mount this Pi's drives may reach NFS, the same hosts
+  # modules/pi/nfs-exports.nix exports to.
+  nfsClients = (import ../nfs-clients.nix { inherit config lib; }).addresses;
+
+  # The rule bodies, without the -I/-D verb, so that the start and stop commands
+  # cannot drift apart. A single client keeps the one-rule form it has always
+  # had. Otherwise each client gets an ACCEPT over a DROP, as
+  # modules/wiring/policy.nix does it: -I inserts at the head of the chain, so
+  # the ACCEPTs emitted after the DROP end up above it. With no client at all
+  # only the DROP remains.
+  nfsSpecs =
+    if lib.length nfsClients == 1 then
+      map (proto: "INPUT -p ${proto} --dport 2049 ! -s ${lib.head nfsClients} -j DROP") [
+        "tcp"
+        "udp"
+      ]
+    else
+      lib.concatMap
+        (
+          proto:
+          [ "INPUT -p ${proto} --dport 2049 ! -i lo -j DROP" ]
+          ++ map (address: "INPUT -p ${proto} --dport 2049 -s ${address} -j ACCEPT") nfsClients
+        )
+        [
+          "tcp"
+          "udp"
+        ];
 in
 {
   networking.hostName = net.hostname;
@@ -60,22 +83,19 @@ in
     ];
     allowedUDPPorts = [ 5353 ];
     # NFS is wiring driven by nfs.drives rather than a service, so it publishes
-    # no endpoint and its restriction stays written out here. The voice
-    # satellite does publish one, so modules/wiring/policy.nix generates its
-    # rule from the declared edge instead.
-    extraCommands = ''
-      iptables -I INPUT -p tcp --dport 2049 ! -s ${serverIp} -j DROP
-      iptables -I INPUT -p udp --dport 2049 ! -s ${serverIp} -j DROP
-    '';
+    # no endpoint for modules/wiring/policy.nix to generate from. Its rules are
+    # generated here instead, from the services that declare nfs.drives on this
+    # host. The voice satellite does publish an endpoint, so policy.nix
+    # generates its rule from the declared edge.
+    extraCommands = lib.concatMapStrings (spec: "iptables -I ${spec}\n") nfsSpecs;
     # extraCommands writes into INPUT, which the firewall's reload does not
-    # flush, so without these the two rules above are inserted again on every
+    # flush, so without these the rules above are inserted again on every
     # reload. Three copies had accumulated on the live Pi before this was
     # noticed. Failures are swallowed: a stop may run when they were never
     # inserted.
-    extraStopCommands = ''
-      iptables -D INPUT -p tcp --dport 2049 ! -s ${serverIp} -j DROP 2>/dev/null || true
-      iptables -D INPUT -p udp --dport 2049 ! -s ${serverIp} -j DROP 2>/dev/null || true
-    '';
+    extraStopCommands = lib.concatMapStrings (
+      spec: "iptables -D ${spec} 2>/dev/null || true\n"
+    ) nfsSpecs;
   };
 
   services.timesyncd.enable = true;

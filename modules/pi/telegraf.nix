@@ -2,9 +2,10 @@
 #
 # Telegraf metrics agent — Pi side.
 #
-# Collects Pi system metrics and writes them to InfluxDB on the server.
-# InfluxDB listens on the server's LAN IP (port 8086) and is firewall-
-# restricted to the Pi's IP only (see services/influxdb.nix).
+# Collects Pi system metrics and writes them to InfluxDB, on whichever host of
+# the profile runs it. Telegraf consumes influxdb, so the address comes from
+# the profile-wide endpoint table and modules/wiring/policy.nix admits this
+# host to InfluxDB's port.
 #
 # Collected metrics
 # -----------------
@@ -16,7 +17,7 @@
 #   system       — load average, uptime
 #   processes    — process states
 #   temp         — Raspberry Pi CPU temperature (via thermal zone)
-#   ping         — reachability of the server
+#   ping         — reachability of the host running InfluxDB
 #   smart        — S.M.A.R.T. attributes for the NVMe drives backing
 #                  /mnt/storage-<drive> (hosts.<key>.storage.drives)
 #
@@ -34,6 +35,21 @@
 
 let
   lanbat = config.lanbat;
+  endpointLib = import ../../lib/endpoints.nix { inherit lib; };
+
+  # InfluxDB is wherever the profile runs it; this names it, not the server.
+  # The address comes from the overlay contract, which without an overlay is
+  # the host's LAN address, and the port and scheme from what InfluxDB
+  # publishes.
+  influx = lanbat.endpoints.influxdb;
+  influxHost = endpointLib.soleHost {
+    endpoints = lanbat.endpoints;
+    name = "influxdb";
+    consumer = "telegraf on ${lanbat.hostKey}";
+  };
+  influxAddress = lanbat.overlay.addressOf influxHost;
+  influxReach = if influxAddress != null then influxAddress else lanbat.overlay.nameOf influxHost;
+
   # Empty on a voice Pi, which has no storage drives.
   storageDrives = lanbat.hosts.${lanbat.hostKey}.storage.drives or { };
   driveNames = lib.attrNames storageDrives;
@@ -57,7 +73,7 @@ in
 
       outputs.influxdb_v2 = [
         {
-          urls = [ "http://${config.lanbat.deployment.serverIp}:8086" ];
+          urls = [ "${influx.endpoint.scheme}://${influxReach}:${toString influx.endpoint.port}" ];
           token = "$TELEGRAF_INFLUXDB_TOKEN";
           organization = "homelab";
           bucket = "metrics";
@@ -96,9 +112,10 @@ in
       # Raspberry Pi CPU temperature via kernel thermal zone.
       inputs.temp = [ { } ];
 
+      # Reachability of the host the metrics go to.
       inputs.ping = [
         {
-          urls = [ lanbat.deployment.serverIp ];
+          urls = [ influxReach ];
         }
       ];
 
