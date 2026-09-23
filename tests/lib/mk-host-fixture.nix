@@ -13,17 +13,24 @@
 let
   lib = nixpkgs.lib;
 
-  lanbatPlugins = {
-    services = import ../../plugins/services;
-    tv = import ../../plugins/tv;
-    voice = import ../../plugins/voice;
-  };
+  # The registry flake.nix exposes as self.lanbatPlugins, so a plugin added
+  # there reaches the fixture without being listed again here.
+  lanbatPlugins = import ../../plugins;
 
-  inputsWithSelf = inputs // {
-    self = (inputs.self or { }) // {
-      inherit lanbatPlugins;
-    };
-  };
+  # Registry plugins the VM tests leave out. tv drives the HDMI output and
+  # pulls Kodi and the emulators into a VM that has no display.
+  vmExcludedPlugins = [ "tv" ];
+
+  # Every host enables each registered plugin that supports its role, as a
+  # deployment enabling everything would, so no plugin's services drop out of
+  # the descriptions pass and the endpoint table.
+  pluginsFor =
+    role:
+    lib.attrValues (
+      lib.filterAttrs (
+        name: plugin: !(lib.elem name vmExcludedPlugins) && lib.elem role plugin.roles
+      ) lanbatPlugins
+    );
 
   mkHost = import ../../lib/mkHost.nix;
 
@@ -71,9 +78,7 @@ let
         disks = {
           system = "/dev/disk/by-id/test-system-disk";
         };
-        plugins = [
-          inputsWithSelf.self.lanbatPlugins.services
-        ];
+        plugins = pluginsFor "server";
       };
 
       pi-storage = {
@@ -91,9 +96,7 @@ let
             b = "test-storage-b";
           };
         };
-        plugins = [
-          inputsWithSelf.self.lanbatPlugins.voice
-        ];
+        plugins = pluginsFor "storage-pi";
       };
 
       voice-pi = {
@@ -105,9 +108,7 @@ let
           interface = "eth1";
           hostname = "voice-pi";
         };
-        plugins = [
-          inputsWithSelf.self.lanbatPlugins.voice
-        ];
+        plugins = pluginsFor "voice-pi";
       };
     };
   };
