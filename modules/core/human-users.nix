@@ -176,7 +176,8 @@ in
                   UID that owns the directory. Defaults to the account the named
                   service runs as, whether it runs on this host or elsewhere in
                   the profile. A service whose user the upstream NixOS module
-                  creates has no lanbat account to take, so give it explicitly.
+                  creates has no lanbat account to take, so give it explicitly,
+                  preferably as that module's entry in `ids.uids`.
                 '';
               };
             }
@@ -186,10 +187,12 @@ in
           cloud.name = "nextcloud";
           photos.name = "immich";
           # Syncthing's user comes from the upstream NixOS module rather than a
-          # lanbat account, so there is nothing to derive it from.
+          # lanbat account, so take the uid that module assigns it. ids.uids is
+          # part of every NixOS system, so the Pi reads the same number without
+          # running Syncthing.
           sync = {
             name = "syncthing";
-            uid = 237;
+            uid = topConfig.ids.uids.syncthing;
           };
         };
       };
