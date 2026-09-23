@@ -2,6 +2,28 @@
 #
 # Frigate NVR — camera recording and detection.
 #
+# Configuration
+# -------------
+# The cameras, zones, detector and retention are deployment settings under
+# lanbat.services.frigate.settings (options below). This module renders them,
+# together with the parts fixed by how the container is run (database path,
+# model, MQTT, go2rtc restream), into Frigate's config.yml. Keys the schema
+# does not model go in settings.extraConfig (global) or
+# settings.cameras.<name>.extraConfig (one camera), merged last.
+#
+# A deployment sets them from a module in deploy.nix (hosts.<key>.modules);
+# deployments/example/frigate.nix is a complete one-camera example.
+#
+# Frigate 0.17 constraints the rendering keeps:
+#   - camera inputs live under cameras.<name>.ffmpeg.inputs (Camera.__init__
+#     reads config['ffmpeg']['inputs']);
+#   - an input takes no output_args (CameraInput has additionalProperties:
+#     false); record output_args belong at cameras.<name>.ffmpeg.output_args,
+#     and a bare preset name inside an output_args list is not expanded;
+#   - retention is record.motion.days and record.{detections,alerts}.retain.days;
+#   - semantic search stays off: its CLIP embeddings cost more CPU than the
+#     detector itself.
+#
 # Temporary UI tuning
 # -------------------
 # The config is mounted read-only so Frigate's web UI can't save changes.
@@ -17,32 +39,34 @@
 #
 # The UI can now save changes. When done, retrieve the tuned config:
 #   cat /var/lib/frigate/config.yml
-# Then port the values back into this file and rebuild. A nixos-rebuild or
-# reboot undoes the bind mount automatically.
+# Then port the values back into the deployment's Frigate settings and
+# rebuild. A nixos-rebuild or reboot undoes the bind mount automatically.
 #
 # Storage
 # -------
 # All state is local (always-on tier):
 #   /var/lib/frigate/db/         — SQLite event metadata
-#   /var/lib/frigate/clips/      — review snapshots/clips (14-day rolling)
-#   /var/lib/frigate/recordings/ — 7-day motion-only recordings (sub stream)
+#   /var/lib/frigate/clips/      — review snapshots/clips
+#   /var/lib/frigate/recordings/ — motion-only recordings
 #   /var/cache/frigate/          — clip buffer (safe to lose)
 #
 # rclone cloud sync will be added later.
 #
 # Detector
 # --------
-# Intel OpenVINO via /dev/dri (iGPU).
+# Intel OpenVINO via /dev/dri (iGPU), running the bundled YOLOv8n model.
 #
 # Credentials
 # -----------
-# Camera RTSP credentials: secrets/frigate-rtsp-env.age
+# Camera credentials: secrets/frigate-rtsp-env.age, an environment file
 #   FRIGATE_RTSP_USER=<camera user>
 #   FRIGATE_RTSP_PASSWORD=<camera password>
+# Frigate substitutes {FRIGATE_*} references in camera sources, so a source
+# names {FRIGATE_RTSP_USER} rather than the credential itself.
 # MQTT password: secrets/mosquitto-frigate-pass.age (plaintext)
 #
 # Both are combined into /run/frigate-env by ExecStartPre and injected
-# into the container via environmentFiles.
+# into the container via --env-file.
 #
 # Home Assistant integration
 # --------------------------
@@ -55,368 +79,574 @@
 }:
 
 let
+  inherit (lib) mkOption types;
+
   yolov8nOpenVinoModel = pkgs.callPackage ../pkgs/frigate-yolov8n-openvino-model { };
+
+  cfg = config.lanbat.services.frigate.settings;
 
   # Frigate records and detects perfectly well on its own; MQTT is how it tells
   # Home Assistant about events. A deployment without a broker keeps the camera
   # side and loses the announcements.
   hasMqtt = config.lanbat.hasService "mosquitto";
 
-  mqttSection =
-    if hasMqtt then
-      ''
-        mqtt:
-          enabled: true
-          host: 127.0.0.1
-          port: 1883
-          user: frigate
-          password: "{FRIGATE_MQTT_PASSWORD}"
-      ''
-    else
-      ''
-        # No broker in this deployment, so no event announcements.
-        mqtt:
-          enabled: false
-      '';
+  # go2rtc re-serves every camera stream here; extraPorts below opens it.
+  restreamPort = 8554;
 
-  frigateConfig = pkgs.writeText "frigate.yml" ''
-    ${mqttSection}
+  # Frigate's own name rule for cameras, zones and go2rtc streams.
+  frigateName = "[A-Za-z0-9_-]+";
 
-    database:
-      path: /media/frigate/db/frigate.db
+  # "x1,y1,x2,y2,...": at least three points, as Frigate's zone editor writes
+  # them (fractions of the frame, or pixels).
+  number = "[0-9]+(\\.[0-9]+)?";
+  coordinates = types.strMatching "${number},${number}(,${number},${number}){2,}";
 
-    record:
-      enabled: true
-      # Motion-only recording on the sub stream, 7-day rolling window. Time with
-      # no motion produces no recording, so the retained volume stays bounded
-      # (was: 5MP 24/7 with no real retain = ~27G/day).
-      motion:
-        days: 7
-      # Retain detection/alert event clips + snapshots (the review "pictures")
-      # for 14 days — the 2nd data sink (~3.7G/day on the busy Tennison Road).
-      detections:
-        retain:
-          days: 14
-      alerts:
-        retain:
-          days: 14
+  score = types.numbers.between 0 1;
 
-    snapshots:
-      enabled: true
-      retain:
-        default: 30
-
-    # Global model config — read by all detectors via detector_config.model
-    # (OvDetectorConfig inherits model from BaseDetectorConfig, not its own field)
-    model:
-      path: /models/yolov8n_openvino_model/yolov8n.xml
-      labelmap_path: /labelmap/coco-80.txt
-      model_type: yolo-generic
-      width: 640
-      height: 640
-      input_tensor: nchw
-      input_dtype: float
-      input_pixel_format: rgb
-
-    detectors:
-      ov:
-        type: openvino
-        device: AUTO
-
-    # LPR uses YOLOv9 plate detection + PaddleOCR on detected cars/motorcycles.
-    # Requires car/motorcycle in objects.track — do not add license_plate (Frigate+ only).
-    lpr:
-      enabled: true
-      detection_threshold: 0.55
-      min_area: 800
-      recognition_threshold: 0.85
-      min_plate_length: 7
-      match_distance: 1
-      format: "^[A-Z]{2}[0-9]{2} ?[A-Z]{3}$"
-      debug_save_plates: true
-      replace_rules:
-        - pattern: "O"
-          replacement: "0"
-        - pattern: "I"
-          replacement: "1"
-
-    # go2rtc ingests camera feeds and re-serves them as local RTSP.
-    # http-flv is the recommended transport for Reolink ≤5 MP cameras.
-    go2rtc:
-      streams:
-        c1:
-          - "ffmpeg:http://c1.${config.lanbat.deployment.rootDomain}/flv?port=1935&app=bcs&stream=channel0_main.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}#video=copy#audio=copy#audio=opus"
-        c1_sub:
-          - "ffmpeg:http://c1.${config.lanbat.deployment.rootDomain}/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}"
-
-    ffmpeg:
-      # Disable auto-detected vaapi hwaccel — fails in rootless Podman without DRM access.
-      hwaccel_args: []
-
-    cameras:
-      c1:
-        ffmpeg:
-          inputs:
-            # Main stream (2560x1920) for detection — sub stream is too soft for
-            # overhead/distant objects on Tennison Road.
-            - path: rtsp://127.0.0.1:8554/c1
-              input_args: preset-rtsp-restream
-              roles: [ detect ]
-            # Sub stream for recording — far smaller than the 5MP main, so the
-            # 7-day motion-only rolling window stays bounded. Detection (and all
-            # AI: LPR, zones) still runs on the main stream.
-            - path: rtsp://127.0.0.1:8554/c1_sub
-              input_args: preset-rtsp-restream
-              roles: [ record ]
-        detect:
-          enabled: true
-          width:  1280
-          height: 960
-          # 5 fps (Frigate default) is plenty for driveway/road traffic and cuts
-          # ~30% of YOLO inference CPU vs 7. Detection/LPR/zones all still run;
-          # only the sampling rate drops.
-          fps:    5
-          min_initialized: 2
-        lpr:
-          enabled: true
-          # Overhead first-storey view — mild enhancement helps OCR without blurring.
-          enhancement: 3
-          # Lower than global default; plates are smaller at driveway distance.
-          min_area: 600
-        zones:
-          driveway:
-            coordinates: 0,0.928,0,0.298,0.328,0.124,0.586,0.044,0.712,0.014,0.793,0,1,0,1,1,0.435,1,0.438,0.922,0.012,0.92,0.012,0.978,0.441,0.978,0.433,1,0,1
-            inertia: 3
-            loitering_time: 0
-          pavement:
-            coordinates: 0.003,0.212,0.183,0.092,0.315,0.024,0.37,0,0,0
-            inertia: 3
-            loitering_time: 0
-            friendly_name: Pavement
-          road:
-            coordinates: 0,0,1,0,1,0.22,0,0.22
-            inertia: 3
-            loitering_time: 0
-            friendly_name: Tennison Road
-        objects:
-          track:
-            - person
-            - bicycle
-            - car
-            - motorcycle
-            - bus
-            - truck
-            - dog
-            - cat
-            - bird
-          filters:
-            person:
-              min_score: 0.35
-              threshold: 0.45
-            car:
-              min_score: 0.35
-              threshold: 0.45
-            truck:
-              min_score: 0.35
-              threshold: 0.45
-            motorcycle:
-              min_score: 0.5
-              threshold: 0.6
-            bus:
-              min_score: 0.5
-              threshold: 0.65
-            bicycle:
-              min_score: 0.5
-              threshold: 0.65
-            dog:
-              min_score: 0.45
-              threshold: 0.55
-            cat:
-              min_score: 0.45
-              threshold: 0.55
-            bird:
-              min_score: 0.55
-              threshold: 0.65
-        review:
-          # Long cutoff merges nearby detections into a single event, cutting the
-          # per-event snapshot/thumbnail count (clips/ is ~99% images: jpg + webp).
-          # Labels are unchanged — only the event granularity gets coarser.
-          alerts:
-            cutoff_time: 60
-            labels:
-              - person
-              - car
-              - motorcycle
-              - bus
-              - truck
-              - bicycle
-          detections:
-            cutoff_time: 60
-            labels:
-              - person
-              - car
-              - motorcycle
-              - bus
-              - truck
-              - bicycle
-              - dog
-              - cat
-              - bird
-        motion:
-          # Overhead driveway + distant road traffic need sensitive motion to
-          # trigger object detection. Do not mask the road area.
-          threshold: 10
-          contour_area: 5
-        notifications:
-          enabled: true
-
-    notifications:
-      enabled: true
-
-    semantic_search:
-      # Disabled — the CLIP embeddings manager was the container's #1 CPU user
-      # (~1.5 cores, dwarfing the YOLO detector). Natural-language clip search is
-      # not in use; detection/LPR/zones are unaffected.
-      enabled: false
-      model_size: small
-
-    face_recognition:
-      enabled: false
-      model_size: small
-
-    classification:
-      bird:
-        enabled: false
-
-    version: 0.17-0
-  '';
-in
-{
-  lanbat.services.frigate = {
-    subdomain = "nvr";
-    port = 5000;
-    consumes = lib.optional hasMqtt "mosquitto";
-    extraPorts = [ 8554 ]; # RTSP restream
-    auth = "forward-auth";
-    # Homepage's Frigate widget calls /api/* without an Authentik session.
-    caddy.authBypassPaths = [ "/api/*" ];
-    account = {
-      uid = 995;
-      container = true;
-      # media: writes recordings to NFS. render + video: /dev/dri for OpenVINO.
-      extraGroups = [
-        "media"
-        "render"
-        "video"
-      ];
-      # Map the host video (26) and render (303) groups into the container.
-      extraSubGidRanges = [
-        {
-          startGid = 26;
-          count = 1;
-        }
-        {
-          startGid = 303;
-          count = 1;
-        }
-      ];
+  optional =
+    type: description:
+    mkOption {
+      type = types.nullOr type;
+      default = null;
+      inherit description;
     };
-    secrets = {
-      frigate-rtsp-env.owner = "root"; # read by ExecStartPre
-      rclone-frigate-config = { };
+
+  rawConfig =
+    description:
+    mkOption {
+      type = types.attrsOf types.anything;
+      default = { };
+      inherit description;
     };
-    dashboard = {
-      group = "Surveillance";
-      name = "Frigate";
-      description = "NVR & object detection";
-      widget = {
-        type = "frigate";
-        enableRecentEvents = true;
+
+  inputModule = {
+    options = {
+      stream = mkOption {
+        type = types.strMatching frigateName;
+        example = "driveway_sub";
+        description = ''
+          go2rtc stream name. Unique across all cameras: go2rtc has one stream
+          namespace, and Frigate reads the stream back from
+          rtsp://127.0.0.1:${toString restreamPort}/<stream>.
+        '';
+      };
+      source = mkOption {
+        type = types.str;
+        example = "rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@camera.example.com:554/sub";
+        description = ''
+          go2rtc source for the stream (rtsp://, ffmpeg:..., and so on).
+          Reference credentials as {FRIGATE_RTSP_USER} and
+          {FRIGATE_RTSP_PASSWORD}, which Frigate substitutes from the
+          frigate-rtsp-env secret; never write them here.
+        '';
+      };
+      roles = mkOption {
+        type = types.nonEmptyListOf (
+          types.enum [
+            "detect"
+            "record"
+            "audio"
+          ]
+        );
+        example = [ "record" ];
+        description = "What Frigate uses this input for. Exactly one input per camera has detect.";
+      };
+      inputArgs = mkOption {
+        type = types.str;
+        default = "preset-rtsp-restream";
+        description = "ffmpeg input_args for reading the restreamed input.";
       };
     };
   };
 
-  # ---------------------------------------------------------------------------
-  # Frigate container
-  # ---------------------------------------------------------------------------
-  virtualisation.oci-containers.containers."frigate" = {
-    image = "ghcr.io/blakeblackshear/frigate:stable";
-
-    # environmentFiles would become systemd EnvironmentFile= (read before
-    # ExecStartPre runs, so the file doesn't exist yet).  Use --env-file in
-    # extraOptions instead — podman reads it during ExecStart, after ExecStartPre
-    # has already created /run/frigate-env.
-
-    volumes = [
-      "${frigateConfig}:/config/config.yml:ro"
-      "/var/lib/frigate/db:/media/frigate/db"
-      "/var/lib/frigate/clips:/media/frigate/clips"
-      "/var/lib/frigate/recordings:/media/frigate/recordings"
-      "/var/cache/frigate:/tmp/cache"
-      "/etc/localtime:/etc/localtime:ro"
-      "${yolov8nOpenVinoModel}:/models/yolov8n_openvino_model:ro"
-    ];
-
-    extraOptions = [
-      "--network=host"
-      "--shm-size=256m"
-      "--device=/dev/dri"
-      # Pass the host frigate user's supplemental groups (render, video) into the
-      # container by GID.  --group-add=keep-groups is the rootless Podman way —
-      # using group names would look them up in the container's /etc/group, which
-      # doesn't have render/video.
-      "--group-add=keep-groups"
-      # Env file created by ExecStartPre — pass directly to the container.
-      "--env-file=/run/frigate-env"
-    ];
-
-    podman.user = "frigate";
-    user = "0";
-    autoStart = true;
-  };
-
-  # ---------------------------------------------------------------------------
-  # Write combined env file before container starts
-  # ---------------------------------------------------------------------------
-  systemd.services."podman-frigate" = {
-    # Order after the frigate user's systemd session (linger bus at
-    # /run/user/995) — crun's systemd cgroup manager needs that bus to place
-    # the pause process in its sandbox cgroup.
-    after = [ "user@995.service" ];
-    wants = [ "user@995.service" ];
-    serviceConfig = {
-      Restart = lib.mkForce "on-failure";
-      RestartSec = "15s";
-      ExecStartPre = [
-        # Runs as root (+ prefix) even though the service User=frigate.
-        # Combines both secrets into /run/frigate-env and hands ownership
-        # to the frigate user so Podman (running rootless as frigate) can
-        # read the env file.
-        "+${pkgs.writeShellScript "frigate-write-env" ''
-          set -euo pipefail
-          {
-            # awk 1 ensures a trailing newline even if the secret file lacks one,
-            # preventing the next printf from being appended to the last line.
-            ${pkgs.gawk}/bin/awk 1 ${config.age.secrets.frigate-rtsp-env.path}
-            ${lib.optionalString hasMqtt ''
-              printf 'FRIGATE_MQTT_PASSWORD=%s\n' \
-                "$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.age.secrets.mosquitto-frigate-pass.path})"
-            ''}
-          } > /run/frigate-env
-          chown frigate:frigate /run/frigate-env
-          chmod 600 /run/frigate-env
-        ''}"
-      ];
+  zoneModule = {
+    options = {
+      coordinates = mkOption {
+        type = coordinates;
+        example = "0,0,1,0,1,0.22,0,0.22";
+        description = "Zone polygon as comma-separated x,y pairs, as Frigate's zone editor writes it.";
+      };
+      friendlyName = optional types.str "Name shown in the UI (friendly_name).";
+      inertia = optional types.ints.positive "Frames an object must be in the zone before it counts (inertia).";
+      loiteringTime = optional types.ints.unsigned "Seconds an object must stay to count as loitering (loitering_time).";
+      objects = optional (types.listOf types.str) "Only these labels count in the zone (objects).";
     };
   };
 
-  # ---------------------------------------------------------------------------
-  # State directories
-  # ---------------------------------------------------------------------------
-  systemd.tmpfiles.rules = [
-    "d /var/cache/frigate           0750 frigate frigate -"
-    "d /var/lib/frigate/db          0750 frigate frigate -"
-    "d /var/lib/frigate/clips       0750 frigate frigate -"
-    "d /var/lib/frigate/recordings  0750 frigate frigate -"
-  ];
+  filterModule = {
+    options = {
+      minScore = optional score "Minimum score for a detection to start tracking (min_score).";
+      threshold = optional score "Median score a tracked object needs to count (threshold).";
+    };
+  };
+
+  reviewModule = {
+    options = {
+      labels = optional (types.listOf types.str) "Labels that produce this review item (labels).";
+      cutoffTime = optional types.ints.unsigned "Seconds without activity that end the review item (cutoff_time).";
+    };
+  };
+
+  cameraModule = {
+    options = {
+      inputs = mkOption {
+        type = types.nonEmptyListOf (types.submodule inputModule);
+        description = ''
+          The camera's streams, in order. Each is ingested by go2rtc and read
+          by Frigate from the local restream, so the camera sees one client
+          per stream however many consumers there are.
+        '';
+      };
+
+      detect = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+          description = "Run object detection on this camera (detect.enabled).";
+        };
+        width = optional types.ints.positive "Width of the detect stream (detect.width).";
+        height = optional types.ints.positive "Height of the detect stream (detect.height).";
+        fps = mkOption {
+          type = types.ints.positive;
+          default = 5;
+          description = "Frames per second sent to the detector (detect.fps).";
+        };
+        minInitialized = optional types.ints.positive "Consecutive hits before an object is tracked (detect.min_initialized).";
+      };
+
+      zones = mkOption {
+        type = types.attrsOf (types.submodule zoneModule);
+        default = { };
+        description = "Zones by name. The name must match ${frigateName}.";
+      };
+
+      objects = {
+        track = optional (types.listOf types.str) "Labels to track (objects.track); Frigate's default is person.";
+        filters = mkOption {
+          type = types.attrsOf (types.submodule filterModule);
+          default = { };
+          description = "Score filters by label (objects.filters).";
+        };
+      };
+
+      review = {
+        alerts = mkOption {
+          type = types.submodule reviewModule;
+          default = { };
+          description = "Which detections become alerts (review.alerts).";
+        };
+        detections = mkOption {
+          type = types.submodule reviewModule;
+          default = { };
+          description = "Which detections become review detections (review.detections).";
+        };
+      };
+
+      motion = {
+        threshold = optional (types.ints.between 1 255) "Pixel change that counts as motion (motion.threshold).";
+        contourArea = optional types.ints.positive "Smallest moving area that counts (motion.contour_area).";
+      };
+
+      lpr = {
+        enable = optional types.bool "Licence plate recognition on this camera (lpr.enabled).";
+        enhancement = optional (types.ints.between 0 10) "Image enhancement before OCR (lpr.enhancement).";
+        minArea = optional types.ints.positive "Smallest plate area to read (lpr.min_area).";
+      };
+
+      notifications = optional types.bool "Web push notifications for this camera (notifications.enabled).";
+
+      extraConfig = rawConfig ''
+        Raw Frigate configuration for this camera, merged last over what the
+        options above render (lib.recursiveUpdate: attribute sets merge, any
+        other value, lists included, replaces).
+      '';
+    };
+  };
+
+  frigateSettings = {
+    options = {
+      cameras = mkOption {
+        type = types.attrsOf (types.submodule cameraModule);
+        default = { };
+        example = lib.literalExpression ''
+          {
+            driveway = {
+              inputs = [
+                {
+                  stream = "driveway";
+                  source = "rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@camera.example.com:554/main";
+                  roles = [ "detect" ];
+                }
+                {
+                  stream = "driveway_sub";
+                  source = "rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@camera.example.com:554/sub";
+                  roles = [ "record" ];
+                }
+              ];
+              detect = { width = 1280; height = 720; };
+              zones.drive.coordinates = "0,0.5,1,0.5,1,1,0,1";
+            };
+          }
+        '';
+        description = "Cameras by name. The name must match ${frigateName}.";
+      };
+
+      detector.device = mkOption {
+        type = types.str;
+        default = "AUTO";
+        example = "CPU";
+        description = ''
+          OpenVINO device the bundled YOLOv8n model runs on: AUTO, GPU (the
+          iGPU through /dev/dri) or CPU.
+        '';
+      };
+
+      retention = {
+        motionDays = mkOption {
+          type = types.ints.unsigned;
+          default = 7;
+          description = "Days of motion-only recording kept (record.motion.days).";
+        };
+        detectionDays = mkOption {
+          type = types.ints.unsigned;
+          default = 14;
+          description = "Days detection clips are kept (record.detections.retain.days).";
+        };
+        alertDays = mkOption {
+          type = types.ints.unsigned;
+          default = 14;
+          description = "Days alert clips are kept (record.alerts.retain.days).";
+        };
+        snapshotDays = mkOption {
+          type = types.ints.unsigned;
+          default = 30;
+          description = "Days snapshots are kept (snapshots.retain.default).";
+        };
+      };
+
+      extraConfig = rawConfig ''
+        Raw Frigate configuration, merged last over the whole rendered config
+        (lib.recursiveUpdate: attribute sets merge, any other value, lists
+        included, replaces). The escape hatch for keys the options above do not
+        model, such as the global lpr section; it can also override anything
+        this module renders.
+      '';
+    };
+  };
+
+  # Drop unset (null) options, and sections left empty by that, so the
+  # rendered config names only what a deployment chose.
+  clean =
+    v:
+    if lib.isAttrs v then
+      lib.filterAttrs (_: x: x != null && x != { }) (lib.mapAttrs (_: clean) v)
+    else
+      v;
+
+  renderCamera =
+    _: cam:
+    lib.recursiveUpdate (clean {
+      ffmpeg.inputs = map (input: {
+        path = "rtsp://127.0.0.1:${toString restreamPort}/${input.stream}";
+        input_args = input.inputArgs;
+        inherit (input) roles;
+      }) cam.inputs;
+      detect = {
+        enabled = cam.detect.enable;
+        inherit (cam.detect) width height fps;
+        min_initialized = cam.detect.minInitialized;
+      };
+      lpr = {
+        enabled = cam.lpr.enable;
+        inherit (cam.lpr) enhancement;
+        min_area = cam.lpr.minArea;
+      };
+      zones = lib.mapAttrs (_: zone: {
+        inherit (zone) coordinates inertia objects;
+        loitering_time = zone.loiteringTime;
+        friendly_name = zone.friendlyName;
+      }) cam.zones;
+      objects = {
+        inherit (cam.objects) track;
+        filters = lib.mapAttrs (_: f: {
+          min_score = f.minScore;
+          inherit (f) threshold;
+        }) cam.objects.filters;
+      };
+      review = lib.mapAttrs (_: r: {
+        inherit (r) labels;
+        cutoff_time = r.cutoffTime;
+      }) cam.review;
+      motion = {
+        inherit (cam.motion) threshold;
+        contour_area = cam.motion.contourArea;
+      };
+      notifications.enabled = cam.notifications;
+    }) cam.extraConfig;
+
+  allInputs = lib.concatMap (cam: cam.inputs) (lib.attrValues cfg.cameras);
+
+  rendered = lib.recursiveUpdate {
+    mqtt =
+      if hasMqtt then
+        {
+          enabled = true;
+          host = "127.0.0.1";
+          port = 1883;
+          user = "frigate";
+          password = "{FRIGATE_MQTT_PASSWORD}";
+        }
+      else
+        # No broker in this deployment, so no event announcements.
+        { enabled = false; };
+
+    database.path = "/media/frigate/db/frigate.db";
+
+    record = {
+      enabled = true;
+      motion.days = cfg.retention.motionDays;
+      detections.retain.days = cfg.retention.detectionDays;
+      alerts.retain.days = cfg.retention.alertDays;
+    };
+
+    snapshots = {
+      enabled = true;
+      retain.default = cfg.retention.snapshotDays;
+    };
+
+    # Global model config — read by all detectors via detector_config.model
+    # (OvDetectorConfig inherits model from BaseDetectorConfig, not its own field).
+    model = {
+      path = "/models/yolov8n_openvino_model/yolov8n.xml";
+      labelmap_path = "/labelmap/coco-80.txt";
+      model_type = "yolo-generic";
+      width = 640;
+      height = 640;
+      input_tensor = "nchw";
+      input_dtype = "float";
+      input_pixel_format = "rgb";
+    };
+
+    detectors.ov = {
+      type = "openvino";
+      inherit (cfg.detector) device;
+    };
+
+    go2rtc.streams = lib.listToAttrs (
+      map (input: lib.nameValuePair input.stream [ input.source ]) allInputs
+    );
+
+    # Auto-detected vaapi hwaccel fails in rootless Podman without DRM access.
+    ffmpeg.hwaccel_args = [ ];
+
+    cameras = lib.mapAttrs renderCamera cfg.cameras;
+
+    notifications.enabled = true;
+
+    # The CLIP embeddings manager was the container's biggest CPU user (about
+    # 1.5 cores, more than the detector). Detection, LPR and zones are unaffected.
+    semantic_search = {
+      enabled = false;
+      model_size = "small";
+    };
+
+    face_recognition = {
+      enabled = false;
+      model_size = "small";
+    };
+
+    classification.bird.enabled = false;
+
+    version = "0.17-0";
+  } cfg.extraConfig;
+
+  frigateConfig = (pkgs.formats.yaml { }).generate "frigate.yml" rendered;
+
+  badNames =
+    what: names:
+    map (n: {
+      assertion = builtins.match frigateName n != null;
+      message = "lanbat.services.frigate: ${what} name \"${n}\" must match ${frigateName}.";
+    }) names;
+
+  streamNames = map (i: i.stream) allInputs;
+  duplicateStreams = lib.unique (lib.filter (s: lib.count (x: x == s) streamNames > 1) streamNames);
+in
+{
+  # The schema is declared inside this service's own settings submodule, so it
+  # is typed and documented exactly where a deployment sets it.
+  options.lanbat.services = mkOption {
+    type = types.attrsOf (
+      types.submodule (
+        { name, ... }:
+        {
+          options.settings = mkOption {
+            type = types.submodule (lib.optionalAttrs (name == "frigate") frigateSettings);
+          };
+        }
+      )
+    );
+  };
+
+  options.lanbat.frigate.renderedConfig = mkOption {
+    type = types.attrsOf types.anything;
+    readOnly = true;
+    internal = true;
+    description = "The Frigate configuration rendered from the settings, as written to config.yml.";
+  };
+
+  config = {
+    lanbat.frigate.renderedConfig = rendered;
+
+    assertions =
+      badNames "camera" (lib.attrNames cfg.cameras)
+      ++ lib.concatLists (
+        lib.mapAttrsToList (
+          camName: cam: badNames "camera ${camName} zone" (lib.attrNames cam.zones)
+        ) cfg.cameras
+      )
+      ++ lib.mapAttrsToList (camName: cam: {
+        assertion = lib.count (i: lib.elem "detect" i.roles) cam.inputs == 1;
+        message = "lanbat.services.frigate: camera ${camName} needs exactly one input with the detect role.";
+      }) cfg.cameras
+      ++ [
+        {
+          assertion = duplicateStreams == [ ];
+          message = "lanbat.services.frigate: go2rtc stream names used more than once: ${lib.concatStringsSep ", " duplicateStreams}.";
+        }
+      ];
+
+    warnings = lib.optional (cfg.cameras == { }) ''
+      lanbat.services.frigate has no cameras. Set lanbat.services.frigate.settings.cameras
+      from a module in deploy.nix (see deployments/example/frigate.nix).
+    '';
+
+    lanbat.services.frigate = {
+      subdomain = "nvr";
+      port = 5000;
+      consumes = lib.optional hasMqtt "mosquitto";
+      extraPorts = [ restreamPort ]; # RTSP restream
+      auth = "forward-auth";
+      # Homepage's Frigate widget calls /api/* without an Authentik session.
+      caddy.authBypassPaths = [ "/api/*" ];
+      account = {
+        uid = 995;
+        container = true;
+        # media: writes recordings to NFS. render + video: /dev/dri for OpenVINO.
+        extraGroups = [
+          "media"
+          "render"
+          "video"
+        ];
+        # Map the host video (26) and render (303) groups into the container.
+        extraSubGidRanges = [
+          {
+            startGid = 26;
+            count = 1;
+          }
+          {
+            startGid = 303;
+            count = 1;
+          }
+        ];
+      };
+      secrets = {
+        frigate-rtsp-env.owner = "root"; # read by ExecStartPre
+        rclone-frigate-config = { };
+      };
+      dashboard = {
+        group = "Surveillance";
+        name = "Frigate";
+        description = "NVR & object detection";
+        widget = {
+          type = "frigate";
+          enableRecentEvents = true;
+        };
+      };
+    };
+
+    # ---------------------------------------------------------------------------
+    # Frigate container
+    # ---------------------------------------------------------------------------
+    virtualisation.oci-containers.containers."frigate" = {
+      image = "ghcr.io/blakeblackshear/frigate:stable";
+
+      # environmentFiles would become systemd EnvironmentFile= (read before
+      # ExecStartPre runs, so the file doesn't exist yet).  Use --env-file in
+      # extraOptions instead — podman reads it during ExecStart, after ExecStartPre
+      # has already created /run/frigate-env.
+
+      volumes = [
+        "${frigateConfig}:/config/config.yml:ro"
+        "/var/lib/frigate/db:/media/frigate/db"
+        "/var/lib/frigate/clips:/media/frigate/clips"
+        "/var/lib/frigate/recordings:/media/frigate/recordings"
+        "/var/cache/frigate:/tmp/cache"
+        "/etc/localtime:/etc/localtime:ro"
+        "${yolov8nOpenVinoModel}:/models/yolov8n_openvino_model:ro"
+      ];
+
+      extraOptions = [
+        "--network=host"
+        "--shm-size=256m"
+        "--device=/dev/dri"
+        # Pass the host frigate user's supplemental groups (render, video) into the
+        # container by GID.  --group-add=keep-groups is the rootless Podman way —
+        # using group names would look them up in the container's /etc/group, which
+        # doesn't have render/video.
+        "--group-add=keep-groups"
+        # Env file created by ExecStartPre — pass directly to the container.
+        "--env-file=/run/frigate-env"
+      ];
+
+      podman.user = "frigate";
+      user = "0";
+      autoStart = true;
+    };
+
+    # ---------------------------------------------------------------------------
+    # Write combined env file before container starts
+    # ---------------------------------------------------------------------------
+    systemd.services."podman-frigate" = {
+      # Order after the frigate user's systemd session (linger bus at
+      # /run/user/995) — crun's systemd cgroup manager needs that bus to place
+      # the pause process in its sandbox cgroup.
+      after = [ "user@995.service" ];
+      wants = [ "user@995.service" ];
+      serviceConfig = {
+        Restart = lib.mkForce "on-failure";
+        RestartSec = "15s";
+        ExecStartPre = [
+          # Runs as root (+ prefix) even though the service User=frigate.
+          # Combines both secrets into /run/frigate-env and hands ownership
+          # to the frigate user so Podman (running rootless as frigate) can
+          # read the env file.
+          "+${pkgs.writeShellScript "frigate-write-env" ''
+            set -euo pipefail
+            {
+              # awk 1 ensures a trailing newline even if the secret file lacks one,
+              # preventing the next printf from being appended to the last line.
+              ${pkgs.gawk}/bin/awk 1 ${config.age.secrets.frigate-rtsp-env.path}
+              ${lib.optionalString hasMqtt ''
+                printf 'FRIGATE_MQTT_PASSWORD=%s\n' \
+                  "$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.age.secrets.mosquitto-frigate-pass.path})"
+              ''}
+            } > /run/frigate-env
+            chown frigate:frigate /run/frigate-env
+            chmod 600 /run/frigate-env
+          ''}"
+        ];
+      };
+    };
+
+    # ---------------------------------------------------------------------------
+    # State directories
+    # ---------------------------------------------------------------------------
+    systemd.tmpfiles.rules = [
+      "d /var/cache/frigate           0750 frigate frigate -"
+      "d /var/lib/frigate/db          0750 frigate frigate -"
+      "d /var/lib/frigate/clips       0750 frigate frigate -"
+      "d /var/lib/frigate/recordings  0750 frigate frigate -"
+    ];
+  };
 }
