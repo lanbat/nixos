@@ -37,6 +37,34 @@ Main Server
     └── b/   →  NFS  →  pi5:/mnt/storage-b
 ```
 
+### Drives are named, not counted
+
+The drives are the keys of `hosts.<key>.storage.drives` in `deploy.nix`. Two drives
+named `a` and `b` are the layout above, but a storage host may have one drive or more
+than two. Everything is derived from each key:
+
+| Derived from key `<d>` | Where |
+|---|---|
+| `storage-<d>-unlock.service` and its retry timer | `modules/pi/clevis-unlock.nix` |
+| LUKS mapper `/dev/mapper/storage-<d>`, mount point `/mnt/storage-<d>` | `modules/pi/clevis-unlock.nix` |
+| `storage-<d>-init.service` (directory tree, then `exportfs -ra`) | `modules/pi/storage.nix` |
+| NFS export of `/mnt/storage-<d>` | `modules/pi/nfs-exports.nix` |
+| Server mount `/srv/storage/<d>` (`srv-storage-<d>.mount`) | `modules/wiring/nfs.nix` |
+| Disk usage and SMART metrics | `modules/pi/telegraf.nix` |
+
+Keys must be lowercase letters and digits (`lib/validate-deploy.nix`), because systemd
+escapes a `-` in a mount path and the mount unit would no longer be
+`srv-storage-<d>.mount`. A service names the drives it uses in
+`lanbat.services.<name>.nfs.drives`; evaluation rejects a name the storage host does not
+have.
+
+What lives on which drive is a layout choice kept by name: the directory trees in
+`modules/pi/storage.nix` belong to `a` and `b`, the per-user directories and their quotas
+to `lanbat.userStorage.drive` (`b` by default), and the services' paths
+(`/srv/storage/b/...`) name their drive. A drive without a tree is still unlocked,
+initialised and exported, and starts empty. A profile with different drive names moves
+the services' paths and `lanbat.userStorage.drive` to match.
+
 ## Server disk
 
 The server's disk is laid out by `hosts/server/disk.nix` (disko) during installation:

@@ -300,14 +300,14 @@ let
             '';
           };
           drives = mkOption {
-            type = types.listOf (
-              types.enum [
-                "a"
-                "b"
-              ]
-            );
+            type = types.listOf (types.strMatching "[a-z0-9]+");
             default = [ ];
-            description = "Pi storage drives the service reads or writes (/srv/storage/<drive>).";
+            example = [ "a" ];
+            description = ''
+              Pi storage drives the service reads or writes (/srv/storage/<drive>),
+              by their keys in the storage host's storage.drives.
+              modules/wiring/checks.nix rejects a name that host does not have.
+            '';
           };
           units = mkOption {
             type = types.listOf types.str;

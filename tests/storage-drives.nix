@@ -1,0 +1,244 @@
+# tests/storage-drives.nix
+#
+# A storage host's drive set is the keys of hosts.<key>.storage.drives, not a
+# fixed a and b. Builds two profiles through lib/, one whose storage host has a
+# single drive and one whose has three, and checks that the Pi unlocks,
+# initialises and exports exactly those drives and that the server mounts them.
+# Pure evaluation: nothing is built.
+{
+  lib,
+  pkgs,
+  inputs,
+  self,
+  agenix,
+  disko,
+  deploy-rs,
+  nixpkgs,
+  nixos-raspberrypi,
+}:
+
+let
+  inputsWithSelf = inputs // {
+    self = self // {
+      lanbatPlugins = import ../plugins;
+    };
+  };
+
+  # A server service that uses the given drives, standing in for Immich or
+  # Jellyfin without their dependencies, and stand-ins for the services the
+  # storage Pi's own Telegraf and snapclient consume.
+  probePlugin = drives: {
+    name = "storage-probe";
+    version = 1;
+    roles = [ "server" ];
+    modules = [
+      {
+        lanbat.services = {
+          probe = {
+            nfs.drives = drives;
+            units = [ "probe" ];
+          };
+          influxdb.endpoint.port = 8086;
+          snapcast.endpoint.port = 1780;
+        };
+        systemd.services.probe.serviceConfig.ExecStart = "/run/current-system/sw/bin/true";
+      }
+    ];
+  };
+
+  mkDeploy =
+    { drives, probeDrives }:
+    {
+      deployment = {
+        domain = "home.test";
+        rootDomain = "test";
+        secrets = {
+          provider = "none";
+          root = ../secrets;
+        };
+        gatewayIp = "192.0.2.1";
+        lanSubnet = "192.0.2.0/24";
+        nfsIdmapdDomain = "home.test";
+        timezone = "UTC";
+        phoneRegion = "GB";
+        haLatitude = "51.5";
+        haLongitude = "-0.1";
+        haElevation = 0;
+        zigbeeVendorId = "10c4";
+        zigbeeProductId = "ea60";
+        adminSshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExampleExample test";
+        haLlm = {
+          baseUrl = "https://llm.test/v1";
+          model = "test-model";
+        };
+        voiceRooms = { };
+      };
+
+      hosts = {
+        server = {
+          role = "server";
+          system = "x86_64-linux";
+          networking = {
+            ip = "192.0.2.10";
+            interface = "eno1";
+            hostname = "server";
+          };
+          disks.system = "/dev/disk/by-id/test-system-disk";
+          plugins = [ (probePlugin probeDrives) ];
+        };
+
+        pi-storage = {
+          role = "storage-pi";
+          system = "aarch64-linux";
+          platform = "raspberry-pi";
+          networking = {
+            ip = "192.0.2.11";
+            interface = "end0";
+            hostname = "pi5";
+          };
+          storage = { inherit drives; };
+          plugins = [ ];
+        };
+      };
+    };
+
+  profiles = {
+    one = mkDeploy {
+      drives.data = "test-disk-1";
+      probeDrives = [ "data" ];
+    };
+    three = mkDeploy {
+      drives = {
+        a = "test-disk-1";
+        b = "test-disk-2";
+        c = "test-disk-3";
+      };
+      probeDrives = [
+        "a"
+        "c"
+      ];
+    };
+    # The probe names a drive the storage host does not have.
+    unknown = mkDeploy {
+      drives.a = "test-disk-1";
+      probeDrives = [ "b" ];
+    };
+  };
+
+  lanbatLib = import ../lib {
+    self = inputsWithSelf.self;
+    inputs = inputsWithSelf;
+    inherit
+      nixpkgs
+      nixos-raspberrypi
+      agenix
+      disko
+      deploy-rs
+      profiles
+      ;
+  };
+
+  cfg = name: lanbatLib.configurations.${name}.config;
+
+  failedAssertions = c: map (a: a.message) (lib.filter (a: !a.assertion) c.assertions);
+
+  # Everything a drive name is turned into, on the Pi and on the server.
+  driveCases =
+    profile: drives:
+    let
+      pi = cfg "${profile}-pi-storage";
+      server = cfg "${profile}-server";
+    in
+    lib.concatMap (drive: [
+      (expect "${profile}: storage-${drive}-unlock exists" (
+        pi.systemd.services ? "storage-${drive}-unlock"
+      ))
+      (expect "${profile}: storage-${drive}-unlock opens its drive into its own mapper and mount point" (
+        lib.hasSuffix
+          " ${pi.lanbat.hosts.pi-storage.storage.drives.${drive}} storage-${drive} /mnt/storage-${drive}"
+          pi.systemd.services."storage-${drive}-unlock".serviceConfig.ExecStart
+      ))
+      (expect "${profile}: storage-${drive}-unlock is retried" (
+        pi.systemd.timers ? "storage-${drive}-unlock"
+      ))
+      (expect "${profile}: storage-${drive}-init follows its unlock" (
+        pi.systemd.services."storage-${drive}-init".after == [ "storage-${drive}-unlock.service" ]
+      ))
+      (expect "${profile}: /mnt/storage-${drive} is exported" (
+        lib.hasInfix "/mnt/storage-${drive}  " pi.services.nfs.server.exports
+      ))
+      (expect "${profile}: /mnt/storage-${drive} has a mount point stub" (
+        lib.elem "d /mnt/storage-${drive} 0755 root root -" pi.systemd.tmpfiles.rules
+      ))
+      (expect "${profile}: the server mounts /srv/storage/${drive}" (
+        (server.fileSystems."/srv/storage/${drive}".device or null) == "pi5:/mnt/storage-${drive}"
+      ))
+    ]) drives
+    ++ [
+      (expect "${profile}: no unlock units beyond the drives" (
+        lib.sort (x: y: x < y) (
+          lib.filter (n: lib.hasPrefix "storage-" n && lib.hasSuffix "-unlock" n) (
+            lib.attrNames pi.systemd.services
+          )
+        ) == map (d: "storage-${d}-unlock") drives
+      ))
+      (expect "${profile}: one export line per drive" (
+        lib.length (lib.filter (l: l != "") (lib.splitString "\n" pi.services.nfs.server.exports))
+        == lib.length drives
+      ))
+      (expect "${profile}: SMART reads every drive" (
+        lib.length (lib.head pi.services.telegraf.extraConfig.inputs.smart).devices == lib.length drives
+      ))
+      (expect "${profile}: the Pi's assertions hold: ${toString (failedAssertions pi)}" (
+        failedAssertions pi == [ ]
+      ))
+      (expect "${profile}: the server's assertions hold: ${toString (failedAssertions server)}" (
+        failedAssertions server == [ ]
+      ))
+    ];
+
+  expect = name: cond: if cond then null else "FAIL: ${name}";
+
+  one = cfg "one-pi-storage";
+  three = cfg "three-pi-storage";
+  unknownServer = cfg "unknown-server";
+
+  cases =
+    driveCases "one" [ "data" ]
+    ++ driveCases "three" [
+      "a"
+      "b"
+      "c"
+    ]
+    ++ [
+      (expect "one drive: nothing refers to the absent a or b" (
+        !(one.systemd.services ? "storage-a-unlock")
+        && !(one.systemd.services ? "storage-b-init")
+        && !(one.systemd.services ? user-storage-quotas)
+      ))
+      (expect "three drives: the probe binds to the drives it names" (
+        (cfg "three-server").systemd.services.probe.bindsTo == [
+          "srv-storage-a.mount"
+          "srv-storage-c.mount"
+        ]
+      ))
+      (expect "three drives: user quotas follow drive b" (
+        three.systemd.services.user-storage-quotas.requires == [ "storage-b-init.service" ]
+      ))
+      (expect "a drive the storage host lacks is rejected" (
+        lib.any (lib.hasInfix "uses drive b, which pi-storage does not have") (
+          failedAssertions unknownServer
+        )
+      ))
+    ];
+
+  failures = lib.filter (x: x != null) cases;
+in
+pkgs.runCommand "storage-drives-check" { } ''
+  if [ ${toString (lib.length failures)} -ne 0 ]; then
+    echo "storage drive checks failed:" >&2
+    ${lib.concatStringsSep "\n" (map (msg: "echo \"  - ${msg}\" >&2") failures)}
+    exit 1
+  fi
+  touch $out
+''

@@ -1,6 +1,7 @@
 # modules/pi/user-quotas.nix
 #
-# Apply per-user XFS project quotas on Drive B after storage is unlocked.
+# Apply per-user XFS project quotas on the user storage drive
+# (lanbat.userStorage.drive, B by default) after it is unlocked.
 # Each human user's entire directory tree (files, cloud, sync, photos) shares
 # one project quota — the single enforcement point for unified storage limits.
 {
@@ -13,6 +14,8 @@
 let
   cfg = config.lanbat;
   userStorage = cfg.userStorage;
+  drive = userStorage.drive;
+  hasDrive = (cfg.hosts.${cfg.hostKey}.storage.drives or { }) ? ${drive};
   humanUsers = cfg.humanUsers;
   sortedUsers = lib.sort (a: b: a < b) (lib.attrNames humanUsers);
 
@@ -40,13 +43,13 @@ let
       PROJID_FILE=/etc/projid
 
       if ! mountpoint -q "$STORAGE_B"; then
-        echo "storage-b not mounted; skipping user quota setup."
+        echo "storage-${drive} not mounted; skipping user quota setup."
         exit 0
       fi
 
       fstype=$(findmnt -n -o FSTYPE "$STORAGE_B")
       if [[ "$fstype" != "xfs" ]]; then
-        echo "storage-b is $fstype, expected xfs; skipping."
+        echo "storage-${drive} is $fstype, expected xfs; skipping."
         exit 0
       fi
 
@@ -96,11 +99,13 @@ let
   );
 in
 {
-  systemd.services.user-storage-quotas = {
-    description = "Apply per-user XFS project quotas on storage-b";
-    requires = [ "storage-b-init.service" ];
-    after = [ "storage-b-init.service" ];
-    wantedBy = [ "storage-b-init.service" ];
+  # Only on the host that has the drive: elsewhere storage-<drive>-init does not
+  # exist and this would require a unit nothing defines.
+  systemd.services.user-storage-quotas = lib.mkIf hasDrive {
+    description = "Apply per-user XFS project quotas on storage-${drive}";
+    requires = [ "storage-${drive}-init.service" ];
+    after = [ "storage-${drive}-init.service" ];
+    wantedBy = [ "storage-${drive}-init.service" ];
 
     serviceConfig = {
       Type = "oneshot";

@@ -162,6 +162,19 @@
             nixos-raspberrypi
             ;
         };
+        storage-drives = import ./tests/storage-drives.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         server = import ./tests/server.nix {
           inherit pkgs inputs;
           inherit (inputs) agenix disko;

@@ -177,6 +177,28 @@ let
       assertion = s.nfs.drives == [ ] || s.nfs.units != [ ];
       message = "lanbat: ${s.name} uses Pi storage but declares no units to stop when it disappears";
     }
+    (
+      # The drive set is whatever the storage host declares, so a drive name is
+      # only valid against that host's storage.drives.
+      let
+        storageHost =
+          if s.nfs.storageHost == null then config.lanbat.deployment.primaryStorage else s.nfs.storageHost;
+        host = config.lanbat.hosts.${storageHost} or null;
+        available = if host == null then [ ] else lib.attrNames host.storage.drives;
+        missing = lib.subtractLists available s.nfs.drives;
+      in
+      {
+        assertion = s.nfs.drives == [ ] || (host != null && host.role == "storage-pi" && missing == [ ]);
+        message =
+          if storageHost == null || host == null then
+            "lanbat: ${s.name} uses Pi storage, but no storage-pi host in this profile exports it"
+          else if host.role != "storage-pi" then
+            "lanbat: ${s.name} takes Pi storage from ${storageHost}, which is not a storage-pi host"
+          else
+            "lanbat: ${s.name} uses drive ${lib.concatStringsSep ", " missing}, which ${storageHost} does"
+            + " not have; its drives are ${lib.concatStringsSep ", " available}";
+      }
+    )
     {
       assertion = s.onDemand == null || s.port != null;
       message = "lanbat: ${s.name} is on-demand but has no port for the activator to proxy to";

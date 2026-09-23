@@ -18,7 +18,7 @@
 #   temp         — Raspberry Pi CPU temperature (via thermal zone)
 #   ping         — reachability of the server
 #   smart        — S.M.A.R.T. attributes for the NVMe drives backing
-#                  /mnt/storage-a and /mnt/storage-b (lanbat.piStorageDrive*)
+#                  /mnt/storage-<drive> (hosts.<key>.storage.drives)
 #
 # Secrets
 # -------
@@ -34,7 +34,9 @@
 
 let
   lanbat = config.lanbat;
+  # Empty on a voice Pi, which has no storage drives.
   storageDrives = lanbat.hosts.${lanbat.hostKey}.storage.drives or { };
+  driveNames = lib.attrNames storageDrives;
 in
 
 {
@@ -74,11 +76,7 @@ in
       inputs.disk = [
         {
           # Include the LUKS-mounted drives to track fill levels.
-          mount_points = [
-            "/"
-            "/mnt/storage-a"
-            "/mnt/storage-b"
-          ];
+          mount_points = [ "/" ] ++ map (drive: "/mnt/storage-${drive}") driveNames;
           ignore_fs = [
             "tmpfs"
             "devtmpfs"
@@ -111,10 +109,7 @@ in
           use_sudo = false;
           path_smartctl = "${pkgs.smartmontools}/bin/smartctl";
           path_nvme = "${pkgs.nvme-cli}/bin/nvme";
-          devices = lib.optionals (storageDrives ? a && storageDrives ? b) [
-            "/dev/disk/by-id/${storageDrives.a}"
-            "/dev/disk/by-id/${storageDrives.b}"
-          ];
+          devices = map (drive: "/dev/disk/by-id/${storageDrives.${drive}}") driveNames;
         }
       ];
     };

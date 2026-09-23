@@ -4,8 +4,8 @@
 #
 # Export model
 # ------------
-# /mnt/storage-a  →  server (read/write, no_root_squash for service accounts)
-# /mnt/storage-b  →  server (read/write, no_root_squash)
+# /mnt/storage-<drive>  →  server (read/write, no_root_squash for service
+# accounts), for every key of hosts.<key>.storage.drives
 #
 # "no_root_squash" is used because the server's service accounts (nextcloud 990,
 # immich 991, jellyfin 992, qbt 994, frigate 995) must write to the NFS paths without
@@ -23,6 +23,7 @@
 
 let
   serverIp = config.lanbat.deployment.serverIp;
+  drives = config.lanbat.hosts.${config.lanbat.hostKey}.storage.drives;
 
   # Common NFS export options. mp exports a drive only while it is mounted, so
   # a locked drive is never served as the empty directory on the SD card.
@@ -34,10 +35,10 @@ in
     # NFSv4 only — no portmap required.
     nproc = 8;
 
-    exports = ''
-      /mnt/storage-a  ${serverIp}(${exportOpts})
-      /mnt/storage-b  ${serverIp}(${exportOpts})
-    '';
+    # One line per drive, in the same form for every drive.
+    exports = lib.concatMapStrings (drive: "/mnt/storage-${drive}  ${serverIp}(${exportOpts})\n") (
+      lib.attrNames drives
+    );
   };
 
   # The NFS server starts at boot without waiting for the drives: each drive is

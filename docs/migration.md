@@ -27,7 +27,7 @@ deploy path:.#homelab-pi-storage
 | `lanbat.serverIp` | `hosts.server.networking.ip` in profile deploy |
 | `lanbat.piIp` | `hosts.pi-storage.networking.ip` |
 | `lanbat.serverDisk` | `hosts.server.disks.system` |
-| `lanbat.piStorageDriveA/B` | `hosts.pi-storage.storage.drives.a/b` |
+| `lanbat.piStorageDriveA/B` | `hosts.pi-storage.storage.drives.a/b` (any number of drives, named by key) |
 | `lanbat.piTvFrontend` | enable `lanbatPlugins.tv` on that host |
 | `lanbat.voiceRooms.server` | `deployment.voiceRooms."Office" = "server"` |
 | `lanbat.voiceRooms.pi` | `deployment.voiceRooms."Living Room" = "pi-storage"` |

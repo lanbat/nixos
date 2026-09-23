@@ -32,7 +32,7 @@ echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
   defaults; the options are documented in `modules/core/settings.nix` and `docs/extensibility.md`.
   - **Deployment:** `domain`, `rootDomain`, `gatewayIp`, `lanSubnet`, `timezone`, `adminSshKey`, …
   - **Server host** (`hosts.server`): `networking.ip`, `networking.interface`, `disks.system`
-  - **Storage Pi host** (`hosts.pi-storage`): `networking`, `storage.drives.a/b`
+  - **Storage Pi host** (`hosts.pi-storage`): `networking`, `storage.drives` (one entry per NVMe drive; the layout here uses `a` and `b`)
   - **Home Assistant location:** `haLatitude`, `haLongitude`, `haElevation`
   - **Server disk:** `hosts.server.disks.system` — filled in at step 1b
   - **Raspberry Pi drives:** `hosts.pi-storage.storage.drives` — filled in at step 2c
