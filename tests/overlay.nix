@@ -40,6 +40,34 @@ let
       ];
     }).config.lanbat.overlay;
 
+  # Endpoint transport under a given provider. Only the schema is evaluated,
+  # so the provider need not exist — the default reads the name alone.
+  transportsUnder =
+    provider:
+    lib.mapAttrs (_: svc: svc.endpoint.transport)
+      (lib.nixosSystem {
+        modules = [
+          ../modules/core/settings.nix
+          ../modules/core/services.nix
+          {
+            boot.isContainer = true;
+            nixpkgs.hostPlatform = "x86_64-linux";
+            system.stateVersion = "25.11";
+            lanbat.deployment.overlay.provider = provider;
+            lanbat.services = {
+              web.port = 8080;
+              pinned.endpoint = {
+                port = 9000;
+                transport = "lan";
+              };
+            };
+          }
+        ];
+      }).config.lanbat.services;
+
+  noOverlay = transportsUnder "none";
+  mesh = transportsUnder "wireguard-mesh";
+
   expect = name: cond: if cond then null else "FAIL: ${name}";
 
   cases = [
@@ -50,6 +78,9 @@ let
     (expect "no host is on an overlay there is not" (!(evalOverlay.onOverlay "pi")))
     (expect "there is no interface to bind to" (evalOverlay.interface == null))
     (expect "there is no unit to order after" (evalOverlay.unit == null))
+    (expect "without an overlay an endpoint stays on the LAN" (noOverlay.web == "lan"))
+    (expect "with an overlay an endpoint moves onto it" (mesh.web == "overlay"))
+    (expect "an endpoint pinned to the LAN stays there" (mesh.pinned == "lan"))
   ];
 
   failures = lib.filter (x: x != null) cases;
