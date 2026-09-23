@@ -48,5 +48,36 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: system-features = nixos-test benchmark big-parallel kvm
-      - name: Run the wiring tests
-        run: nix build -L .#checks.x86_64-linux.assertions .#checks.x86_64-linux.workload-gate .#checks.x86_64-linux.postgresql .#checks.x86_64-linux.plugins .#checks.x86_64-linux.settings-guard .#checks.x86_64-linux.validate-deploy .#checks.x86_64-linux.load-deployments .#checks.x86_64-linux.deploy-rs-fixture .#checks.x86_64-linux.pkgs-build
+      # Every x86_64 check except the full server VM test, which runs nightly.
+      # Listing them from the flake means a new check cannot be left out.
+      - name: Run the wiring and VM tests
+        shell: bash
+        run: |
+          list=$(
+            nix eval --json .#checks.x86_64-linux \
+              --apply 'cs: builtins.filter (n: n != "server") (builtins.attrNames cs)' |
+              jq -r '.[] | ".#checks.x86_64-linux." + .'
+          )
+          mapfile -t checks <<<"$list"
+          printf '%s\n' "${checks[@]}"
+          nix build -L "${checks[@]}"
+
+  # GitHub's arm64 runners have no /dev/kvm, so the Pi VM tests cannot boot
+  # here. Building each test's driver still builds the hosts' full system
+  # closures natively, which catches everything short of the boot itself.
+  aarch64:
+    name: aarch64
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: cachix/install-nix-action@v31
+      - name: Build the Pi VM tests' systems
+        shell: bash
+        run: |
+          list=$(
+            nix eval --json .#checks.aarch64-linux --apply 'builtins.attrNames' |
+              jq -r '.[] | ".#checks.aarch64-linux." + . + ".driver"'
+          )
+          mapfile -t drivers <<<"$list"
+          printf '%s\n' "${drivers[@]}"
+          nix build -L "${drivers[@]}"

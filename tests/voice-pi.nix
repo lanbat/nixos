@@ -42,18 +42,18 @@ pkgs.testers.runNixOSTest {
     };
 
   testScript = ''
-    voice-pi.start()
-    voice-pi.wait_for_unit("multi-user.target")
+    voice_pi.start()
+    voice_pi.wait_for_unit("multi-user.target")
 
     with subtest("admin user and SSH"):
-        voice-pi.wait_for_unit("sshd.service")
-        voice-pi.succeed("id admin")
+        voice_pi.wait_for_unit("sshd.service")
+        voice_pi.succeed("id admin")
 
     with subtest("Wyoming satellite unit"):
-        voice-pi.succeed("systemctl cat wyoming-satellite.service >/dev/null")
+        voice_pi.succeed("systemctl cat wyoming-satellite.service >/dev/null")
 
     with subtest("firewall restricts port 10700 to server IP"):
-        voice-pi.succeed("iptables -S | grep -q -- '--dport 10700'")
-        voice-pi.succeed("iptables -S | grep -q '10700.*192.0.2.10'")
+        voice_pi.succeed("iptables -S | grep -q -- '--dport 10700'")
+        voice_pi.succeed("iptables -S | grep -q '10700.*192.0.2.10'")
   '';
 }
