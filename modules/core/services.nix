@@ -197,6 +197,43 @@ let
           '';
         };
 
+        # ── Single sign-on (services/authentik/catalogue.nix) ─────────────────
+        oidc = mkOption {
+          type = types.nullOr (
+            types.submodule {
+              options = {
+                redirectPaths = mkOption {
+                  type = types.listOf types.str;
+                  default = [ ];
+                  example = [ "/login/generic_oauth" ];
+                  description = "Login callback paths on https://<subdomain>.<domain>.";
+                };
+                redirectUris = mkOption {
+                  type = types.listOf types.str;
+                  default = [ ];
+                  example = [ "app.immich:///oauth-callback" ];
+                  description = "Further callback URIs, such as a mobile app's custom scheme.";
+                };
+                secretVariable = mkOption {
+                  type = types.nullOr types.str;
+                  default = null;
+                  description = ''
+                    Variable in the authentication provider's client-secret file
+                    that holds this client's secret. Null lets the provider
+                    derive it from the service name.
+                  '';
+                };
+              };
+            }
+          );
+          default = null;
+          description = ''
+            Register the service as an OpenID Connect client of the
+            authentication provider, with the service name as client ID.
+            Independent of auth: a forward-auth service can be a client too.
+          '';
+        };
+
         caddy = {
           extraConfig = mkOption {
             type = types.lines;

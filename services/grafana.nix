@@ -51,6 +51,7 @@ in
     consumes = lib.optional hasInflux "influxdb";
     subdomain = "grafana";
     port = 3030;
+    oidc.redirectPaths = [ "/login/generic_oauth" ];
     secrets.grafana-env = { };
     dashboard = {
       group = "Monitoring";
