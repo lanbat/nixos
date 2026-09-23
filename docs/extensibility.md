@@ -76,6 +76,44 @@ Roles bundle infrastructure modules for a host type. They are not optional — e
 
 Add a new role by creating `lib/roles/<name>.nix` and registering it in `lib/roles.nix` and `modules/core/settings.nix`.
 
+## Overlay providers
+
+How hosts in a profile reach each other is chosen per profile with
+`deployment.overlay.provider`. Each provider is a module that answers the
+contract in `modules/core/overlay.nix`, registered by name in
+`lib/overlay-providers.nix`. The name is read from deploy data before any module
+is evaluated, so `lib/mkHost.nix` imports the chosen module directly. Adding a
+provider means writing one module and adding one line to the registry.
+
+| Provider | Fits | Needs | Gives up |
+|---|---|---|---|
+| `none` (default) | No overlay wanted; LAN traffic with generated allowlists | nothing | Isolation from the LAN segment |
+| `wireguard-mesh` | 2–20 hosts you control, reachable from each other or through one that has an endpoint | `overlay.subnet`, `overlay.domain`, and per host `overlay.{ip,publicKey,endpoint?}` plus `secrets/overlay-<host>.age` | Hosts that roam between networks with nobody dialable |
+
+A mesh profile, with keys from `nix run .#overlay-keys`:
+
+```nix
+deployment.overlay = {
+  provider = "wireguard-mesh";
+  subnet = "10.100.0.0/24";
+  domain = "lanbat.internal";
+};
+hosts.server.overlay = {
+  ip = "10.100.0.1";
+  publicKey = "…";                     # printed by overlay-keys
+  endpoint = "192.0.2.10:51820";       # this host can be dialled
+};
+hosts.pi-storage.overlay = {
+  ip = "10.100.0.2";
+  publicKey = "…";                     # no endpoint: dials out
+};
+```
+
+A host without an `overlay` block stays off the mesh, and its edges stay on the
+LAN. To pin one edge to the LAN whatever the profile runs, set
+`endpoint.transport = "lan"` on the service. Tang and NFS never move: see
+[architecture.md](architecture.md#overlay-network).
+
 ## Plugins
 
 Plugins add optional features to compatible roles. Built-in plugins:

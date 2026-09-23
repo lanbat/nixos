@@ -146,6 +146,36 @@ this is harmless until the next manual maintenance window.
 
 ---
 
+## Overlay down
+
+This applies only when the profile runs an overlay
+(`deployment.overlay.provider` is not `"none"`). With `"none"` there is no
+overlay to lose.
+
+**Unaffected, by design:**
+- **Tang**, so the storage Pi still unlocks its drives. Tang publishes no
+  endpoint and is reached over the LAN.
+- **NFS**, so Pi storage and the services that depend on it stay up.
+- **Boot.** The overlay interface is not required for `network-online.target`,
+  so no host waits for it.
+- **Clients.** They reach Caddy over the LAN.
+
+**Breaks:** cross-host service edges whose endpoint transport is `"overlay"`.
+In the example layout these are the Pi's Telegraf writing to InfluxDB, and Home
+Assistant talking to the storage Pi's voice satellite. Each fails on its own,
+and the services themselves keep running.
+
+**Diagnose:** `networkctl status lanbat0`, and `wg show lanbat0` for the latest
+handshakes. The usual causes are a stale `publicKey` in `deploy.nix`, a missing
+`secrets/overlay-<host>.age` or one encrypted to the wrong host, and a host with
+an `endpoint` that nobody can reach.
+
+**Break-glass:** set `deployment.overlay.provider = "none"` and redeploy. Every
+edge goes back to the LAN, together with its generated rules and the addresses
+consumers dial. The per-host `overlay` blocks can stay where they are.
+
+---
+
 ## What needs manual intervention
 
 | Situation | Manual action needed? |
@@ -163,6 +193,7 @@ this is harmless until the next manual maintenance window.
 | Server new kernel | Yes — manual reboot required, then unlock both layers |
 | Pi new kernel | No — Pi reboots automatically via Clevis/Tang |
 | Container image updates | Yes — bump the tag and deploy |
+| Overlay down | No for Tang, NFS and boot; overlay edges pause until it returns, or set `overlay.provider = "none"` and redeploy (see [Overlay down](#overlay-down)) |
 | Server root or workload fills up | Yes — grow the volume from LVM free space (`docs/operations.md`) |
 
 ---

@@ -205,6 +205,45 @@ so they are `iptables` rather than `ip6tables`. A service that also listens on
 IPv6 is not covered by them, and is reachable over IPv6 on the LAN if its port
 is open. Closing that needs a v6 address in the host schema.
 
+## Overlay network
+
+Cross-host service traffic can run on a private encrypted network instead of
+the LAN segment shared with IoT devices and guests. Which network, if any, is a
+per-profile choice, `deployment.overlay.provider`, answered by a provider
+module selected in `lib/mkHost.nix` from `lib/overlay-providers.nix`. Every
+provider answers the same contract, `lanbat.overlay` in
+`modules/core/overlay.nix`: `nameOf`, `addressOf`, `onOverlay`, `interface` and
+`unit`.
+
+| Provider | Cross-host traffic runs over | Names |
+|---|---|---|
+| `none` (default) | the LAN, exactly as without an overlay | LAN hostname and address |
+| `wireguard-mesh` | a WireGuard interface, `lanbat0`, on every host with an `overlay` block | `<hostname>.<overlay.domain>` in `networking.hosts` |
+
+An endpoint's `transport` says whether its edges use the overlay. It defaults to
+`"overlay"` once the profile runs one and `"lan"` otherwise. An edge runs on the
+overlay only when its transport is `"overlay"` and both hosts are on it.
+Otherwise it stays on the LAN, so a host can join later. Both ends make the same
+choice. The providing host's generated rule admits the consumer's overlay
+address on the overlay interface, and the consumer dials the overlay name
+(`lanbat.endpointHost`). A LAN edge admits and dials the LAN address.
+
+In the mesh, every member has a peer entry for every other member. A host with
+an `endpoint` can be dialled. A host without one sends keepalives toward those
+that have one, so a host behind NAT joins by dialling out, and a rendezvous host
+is just a host with an endpoint. Each host's private key is
+`secrets/overlay-<host>.age`, created with `nix run .#overlay-keys`, which also
+prints the public keys for `deploy.nix`.
+
+The overlay is never required for a host to come online. **Tang and NFS stay on
+the LAN by design:** Tang publishes no endpoint, so it has no transport to move,
+and NFS is wiring with its own literal rules. A broken overlay therefore cannot
+stop the storage Pi unlocking its drives or the server mounting them. See
+[failure-modes.md](failure-modes.md#overlay-down).
+
+Clients (phones, TVs, laptops) are not overlay members. They reach Caddy on the
+LAN as before, and discovery (mDNS, Jellyfin, Snapcast) stays on the LAN.
+
 ## NFS dependency model
 
 Services that read/write Pi storage set `lanbat.services.<name>.nfs.drives`.

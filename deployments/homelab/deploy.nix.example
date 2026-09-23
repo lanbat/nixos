@@ -43,6 +43,16 @@
     zigbeeVendorId = "CHANGE_ME";
     zigbeeProductId = "CHANGE_ME";
     immich.adminEmail = "CHANGE_ME";
+    # Optional — a WireGuard mesh for cross-host service traffic. Leave it out
+    # to keep that traffic on the LAN. Tang and NFS stay on the LAN either way.
+    # Needs an overlay block on each host below and secrets/overlay-<host>.age,
+    # both from: nix run .#overlay-keys
+    # overlay = {
+    #   provider = "wireguard-mesh";
+    #   subnet = "10.100.0.0/24";
+    #   domain = "lanbat.internal";
+    # };
+
     secrets = {
       provider = "agenix";
       root = ../../secrets;
@@ -67,6 +77,11 @@
         interface = "CHANGE_ME";
         hostname = "server";
       };
+      # overlay = {
+      #   ip = "10.100.0.1";
+      #   publicKey = "CHANGE_ME";
+      #   endpoint = "CHANGE_ME:51820"; # an address the other hosts can reach
+      # };
       disks = {
         system = "/dev/disk/by-id/CHANGE_ME";
       };
@@ -86,6 +101,10 @@
         interface = "end0";
         hostname = "pi5";
       };
+      # overlay = {
+      #   ip = "10.100.0.2";
+      #   publicKey = "CHANGE_ME";
+      # };
       storage = {
         drives = {
           a = "CHANGE_ME";
