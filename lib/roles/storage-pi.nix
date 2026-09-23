@@ -67,6 +67,15 @@ in
       iptables -I INPUT -p tcp --dport 2049 ! -s ${serverIp} -j DROP
       iptables -I INPUT -p udp --dport 2049 ! -s ${serverIp} -j DROP
     '';
+    # extraCommands writes into INPUT, which the firewall's reload does not
+    # flush, so without these the two rules above are inserted again on every
+    # reload. Three copies had accumulated on the live Pi before this was
+    # noticed. Failures are swallowed: a stop may run when they were never
+    # inserted.
+    extraStopCommands = ''
+      iptables -D INPUT -p tcp --dport 2049 ! -s ${serverIp} -j DROP 2>/dev/null || true
+      iptables -D INPUT -p udp --dport 2049 ! -s ${serverIp} -j DROP 2>/dev/null || true
+    '';
   };
 
   services.timesyncd.enable = true;
