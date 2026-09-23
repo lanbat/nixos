@@ -106,6 +106,9 @@ OWNER_PASSWORD=$(rand 24)"
 # ---- Bitmagnet ----
 encrypt bitmagnet-db-pass.age "POSTGRES_PASSWORD=$(rand 36)"
 
+# SearXNG signs sessions and image-proxy links with this.
+encrypt searxng-secret.age "$(rand 48)"
+
 # ---- Vaultwarden ----
 encrypt vaultwarden-env.age "ADMIN_TOKEN=$(rand 48)"
 
