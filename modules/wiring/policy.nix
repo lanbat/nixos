@@ -9,7 +9,12 @@
 # lib/roles/voice-pi.nix and services/influxdb.nix each required.
 #
 # Policy is expressed against service identity rather than addresses, so it is
-# unchanged when the transport between hosts changes.
+# unchanged when the transport between hosts changes. Only the address differs:
+# an edge whose endpoint transport is "overlay", between two hosts on the
+# overlay, admits the consumer's overlay address on the overlay interface
+# (lanbat.overlay.addressOf); every other edge admits its LAN address. Under
+# the none provider every edge is a LAN edge, so the rules are what they were
+# before the overlay existed.
 #
 # Rule order matters and is why every rule uses -I. iptables -I inserts at the
 # head of the chain, so the DROP emitted first ends up below the ACCEPTs emitted
@@ -44,7 +49,16 @@ let
       )
     );
 
-  addressOf = hostKey: config.lanbat.hosts.${hostKey}.networking.ip;
+  overlay = config.lanbat.overlay;
+
+  lanAddressOf = hostKey: config.lanbat.hosts.${hostKey}.networking.ip;
+
+  # Whether an edge between two hosts runs on the overlay: the endpoint must
+  # ask for it and both ends must be on one. Otherwise it stays on the LAN,
+  # which is also what every edge does under the none provider.
+  viaOverlay =
+    endpoint: a: b:
+    endpoint.transport == "overlay" && overlay.onOverlay a && overlay.onOverlay b;
 
   # The rule bodies, without the -I/-D verb, so that the start and stop commands
   # cannot drift apart.
@@ -55,13 +69,42 @@ let
       remote = lib.filter (h: h != thisHost) (consumerHostsOf name);
     in
     [ "INPUT -p tcp --dport ${port} ! -i lo -j DROP" ]
-    ++ map (h: "INPUT -p tcp --dport ${port} -s ${addressOf h} -j ACCEPT") remote;
+    ++ map (
+      h:
+      if viaOverlay svc.endpoint thisHost h then
+        "INPUT -p tcp --dport ${port} -s ${overlay.addressOf h} -i ${overlay.interface} -j ACCEPT"
+      else
+        "INPUT -p tcp --dport ${port} -s ${lanAddressOf h} -j ACCEPT"
+    ) remote;
 
   specs = lib.concatLists (lib.mapAttrsToList specsFor provided);
 
 in
 {
-  networking.firewall.extraCommands = lib.concatStringsSep "\n" (
+  options.lanbat.endpointHost = lib.mkOption {
+    type = lib.types.functionTo (lib.types.functionTo lib.types.str);
+    internal = true;
+    readOnly = true;
+    description = ''
+      Where this host reaches a service on another host, given the service's
+      name and that host's key: the overlay name when the edge runs on the
+      overlay, the LAN address otherwise. It makes the same choice as the rule
+      generated on the providing host, so a consumer always dials the address
+      that rule admits.
+    '';
+  };
+
+  config.lanbat.endpointHost =
+    name: hostKey:
+    let
+      endpoint = (config.lanbat.endpoints.${name} or { endpoint = null; }).endpoint;
+    in
+    if endpoint != null && viaOverlay endpoint thisHost hostKey then
+      overlay.nameOf hostKey
+    else
+      lanAddressOf hostKey;
+
+  config.networking.firewall.extraCommands = lib.concatStringsSep "\n" (
     map (spec: "iptables -I ${spec}") specs
   );
 
@@ -70,7 +113,7 @@ in
   # services/mosquitto.nix carries the same pairing and the comment explaining
   # why. Failures are swallowed because a stop may run when the rules were never
   # inserted.
-  networking.firewall.extraStopCommands = lib.concatStringsSep "\n" (
+  config.networking.firewall.extraStopCommands = lib.concatStringsSep "\n" (
     map (spec: "iptables -D ${spec} 2>/dev/null || true") specs
   );
 }

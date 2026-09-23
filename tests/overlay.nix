@@ -111,27 +111,7 @@ let
         ../modules/core/services.nix
         ../modules/wiring/secrets.nix
         ../modules/overlay/wireguard-mesh.nix
-        # agenix's option, without agenix: only the declaration is inspected.
-        (
-          { lib, ... }:
-          {
-            options.age.secrets = lib.mkOption {
-              type = lib.types.attrsOf (
-                lib.types.submodule (
-                  { name, ... }:
-                  {
-                    freeformType = lib.types.attrsOf lib.types.anything;
-                    options.path = lib.mkOption {
-                      type = lib.types.str;
-                      default = "/run/agenix/${name}";
-                    };
-                  }
-                )
-              );
-              default = { };
-            };
-          }
-        )
+        ./lib/age-option-stub.nix
         {
           boot.isContainer = true;
           nixpkgs.hostPlatform = "x86_64-linux";

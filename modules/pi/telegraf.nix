@@ -38,17 +38,16 @@ let
   endpointLib = import ../../lib/endpoints.nix { inherit lib; };
 
   # InfluxDB is wherever the profile runs it; this names it, not the server.
-  # The address comes from the overlay contract, which without an overlay is
-  # the host's LAN address, and the port and scheme from what InfluxDB
-  # publishes.
+  # It is reached at the address its generated rule admits this host from —
+  # the overlay name when the edge runs on the overlay, the LAN address
+  # otherwise — and on the port and scheme InfluxDB publishes.
   influx = lanbat.endpoints.influxdb;
   influxHost = endpointLib.soleHost {
     endpoints = lanbat.endpoints;
     name = "influxdb";
     consumer = "telegraf on ${lanbat.hostKey}";
   };
-  influxAddress = lanbat.overlay.addressOf influxHost;
-  influxReach = if influxAddress != null then influxAddress else lanbat.overlay.nameOf influxHost;
+  influxReach = lanbat.endpointHost "influxdb" influxHost;
 
   # Empty on a voice Pi, which has no storage drives.
   storageDrives = lanbat.hosts.${lanbat.hostKey}.storage.drives or { };
