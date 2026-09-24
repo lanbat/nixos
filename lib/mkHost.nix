@@ -18,13 +18,21 @@
 }:
 
 let
-  inherit (import ./plugins.nix { inherit lib; }) resolvePlugins;
+  inherit (import ./plugins.nix { inherit lib; }) resolvePlugins settingsModules legacyPlugins;
   inherit (import ./roles.nix { inherit lib; }) getRoleModules;
 
   platform = hostCfg.platform or "generic";
   system = hostCfg.system;
 
   pluginModules = resolvePlugins hostCfg.role (hostCfg.plugins or [ ]) (hostCfg.services or [ ]);
+
+  # Deployment settings are profile-wide, so every host declares the namespaces
+  # of every plugin enabled anywhere in the profile.
+  pluginSettingsModules = settingsModules (
+    lib.concatMap (h: h.plugins or [ ]) (lib.attrValues hosts)
+  );
+
+  legacy = legacyPlugins (hostCfg.plugins or [ ]);
 
   # Merged last of all, so a deployment overrides anything core, the role or
   # a plugin set without having to edit a tracked file.
@@ -45,6 +53,12 @@ let
         # Needed by the endpoint wiring to work out which host runs a service.
         services = host.services or [ ];
       }) hosts;
+
+      warnings = map (
+        name:
+        "lanbat plugin '${name}' uses contract version 1. It still loads; see"
+        + " docs/plugins.md for moving it to version 2."
+      ) legacy;
     };
 
   # Chosen from deploy data, which exists before any evaluation, so the module
@@ -66,6 +80,7 @@ let
   ]
   ++ [ overlayModule ]
   ++ getRoleModules hostCfg.role
+  ++ pluginSettingsModules
   ++ pluginModules;
 
   raspberryPiModules = commonModules ++ [
