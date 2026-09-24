@@ -66,6 +66,11 @@ let
 
     profile = resolveProfile;
 
+    # One host key per line, for nix run .#overlay-keys.
+    "host-keys" =
+      optionalProfile:
+      lib.concatStringsSep "\n" (lib.attrNames (deployFor (resolveProfile optionalProfile)).hosts);
+
     "flake-server" =
       optionalProfile:
       let

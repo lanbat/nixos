@@ -17,6 +17,15 @@
     zigbeeVendorId = "10c4";
     zigbeeProductId = "ea60";
     adminSshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExampleExampleExample example";
+    # How hosts reach each other. "none" keeps cross-host traffic on the LAN,
+    # which is also what leaving this out means. For a WireGuard mesh, set
+    # provider = "wireguard-mesh" with subnet and domain, and give each host
+    # an overlay block (commented out below); see docs/extensibility.md.
+    overlay = {
+      provider = "none";
+      # subnet = "10.100.0.0/24";
+      # domain = "lanbat.internal";
+    };
     # The example profile is read and evaluated, never deployed, so it resolves
     # secrets to placeholders. That is what lets somebody add a service with
     # secrets and run nix flake check without holding any keys or committing an
@@ -56,6 +65,11 @@
         interface = "eno1";
         hostname = "server";
       };
+      # overlay = {
+      #   ip = "10.100.0.1";
+      #   publicKey = "<from nix run .#overlay-keys>";
+      #   endpoint = "192.0.2.10:51820"; # can be dialled
+      # };
       disks = {
         system = "/dev/disk/by-id/example-system-disk";
       };
@@ -75,6 +89,11 @@
         interface = "end0";
         hostname = "pi5";
       };
+      # overlay = {
+      #   ip = "10.100.0.2";
+      #   publicKey = "<from nix run .#overlay-keys>";
+      #   # No endpoint: dials out to the server.
+      # };
       storage = {
         drives = {
           a = "example-storage-a";

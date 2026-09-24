@@ -151,6 +151,12 @@ agenix -e vaultwarden-env.age
 # One KEY=value line:
 #   TELEGRAF_INFLUXDB_TOKEN=<write token>
 agenix -e telegraf-token.age
+
+# ---- Overlay (only with deployment.overlay.provider = "wireguard-mesh") ----
+# One WireGuard private key per host on the mesh. Needs a rule per
+# overlay-<host>.age in secrets.nix. Generates the keys, encrypts them without
+# writing plaintext to disk, and prints the public keys for deploy.nix:
+nix run .#overlay-keys
 ```
 
 ### 3. Re-key if host keys change
@@ -255,3 +261,4 @@ Until then, use the union-of-keys pattern above.
 | `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |
 | `romm-db-pass.age` | `POSTGRES_PASSWORD=<value>` and `DB_PASSWD=<same value>` | RomM database password (PostgreSQL setup and the container) |
 | `romm-env.age` | `ROMM_AUTH_SECRET_KEY=<openssl rand -hex 32>` and metadata provider keys (`IGDB_CLIENT_ID=`, `SCREENSCRAPER_USER=`, …) | RomM container |
+| `overlay-<host>.age` | WireGuard private key (`wg genkey`) | systemd-networkd on that host (`root:systemd-network`, 0440); only with `deployment.overlay.provider = "wireguard-mesh"` |

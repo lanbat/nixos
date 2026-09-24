@@ -9,4 +9,5 @@
 # import is needed.
 {
   none = ../modules/overlay/none.nix;
+  wireguard-mesh = ../modules/overlay/wireguard-mesh.nix;
 }

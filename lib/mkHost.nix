@@ -54,6 +54,7 @@ let
         networking = host.networking;
         disks = host.disks or { };
         storage = host.storage or { };
+        overlay = host.overlay or null;
         # Needed by the endpoint wiring to work out which host runs a service.
         services = host.services or [ ];
       }) hosts;

@@ -193,6 +193,10 @@
           inherit pkgs inputs;
           inherit (inputs) agenix disko;
         };
+        overlay-mesh = import ./tests/overlay-mesh.nix {
+          inherit pkgs;
+          inherit (inputs) agenix;
+        };
         workload-gate = import ./tests/workload-gate.nix { inherit pkgs; };
       }
       // lib.optionalAttrs hasDeploy (
@@ -269,6 +273,13 @@
               exec ${pkgs.nix}/bin/nix build .#checks.x86_64-linux.validate-deploy --no-link
             ''
           );
+        };
+
+        overlay-keys = {
+          type = "app";
+          program = "${
+            pkgs.callPackage ./pkgs/overlay-keys { agenix = agenix.packages.x86_64-linux.default; }
+          }/bin/overlay-keys";
         };
 
         android-provision = {

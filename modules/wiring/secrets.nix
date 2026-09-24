@@ -61,6 +61,23 @@ in
     '';
   };
 
+  options.lanbat.secretFile = mkOption {
+    type = types.functionTo (types.either types.path types.str);
+    internal = true;
+    readOnly = true;
+    description = ''
+      Encrypted source file of a secret, by name, resolved through the profile's
+      secrets provider.
+
+      For the few secrets that are declared with age.secrets directly because
+      no single service owns them, such as a host's overlay key, so that they
+      follow deployment.secrets like every other secret instead of pointing
+      into this repository.
+    '';
+  };
+
+  config.lanbat.secretFile = fileFor;
+
   config.lanbat.secretPath =
     name:
     (config.age.secrets.${name} or (throw (

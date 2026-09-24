@@ -29,6 +29,7 @@ in
       networking = host.networking;
       disks = host.disks or { };
       storage = host.storage or { };
+      overlay = host.overlay or null;
     }) deploy.hosts
   );
 }

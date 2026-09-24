@@ -81,6 +81,14 @@ let
   # A satellite with a room hands its replies to the voice_reply script.
   voiceRooms = config.lanbat.deployment.voiceRooms != { };
   xiaomiBle = config.lanbat.deployment.haXiaomiBle;
+  # The storage Pi's satellite, reached the way policy on the Pi admits Home
+  # Assistant: over the overlay when the profile runs one, the LAN otherwise.
+  storageKey = config.lanbat.deployment.primaryStorage;
+  piHost =
+    if storageKey == null then
+      config.lanbat.deployment.storageIp
+    else
+      config.lanbat.endpointHost "voice-satellite" storageKey;
 in
 {
   options.lanbat.homeAssistant = {
@@ -238,7 +246,7 @@ in
         ''}
         export FRIGATE_URL="http://127.0.0.1:5000/"
         export MUSIC_ASSISTANT_URL="http://127.0.0.1:8095"
-        export PI_HOST="${config.lanbat.deployment.storageIp}"
+        export PI_HOST="${piHost}"
         ${lib.optionalString satellite.enable ''
           export LOCAL_SATELLITE_PORT="${lib.last (lib.splitString ":" satellite.uri)}"
         ''}
