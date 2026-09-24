@@ -205,6 +205,20 @@ let
         + " in extraPorts and the literal firewall rule in services/tang.nix."
       );
 
+  # A service that declares its settings keys accepts only those, unless it
+  # passes the rest through on purpose (settingsFreeform).
+  unknownSettings = lib.concatMap (
+    s:
+    lib.optionals (!s.settingsFreeform) (
+      map (
+        key:
+        "lanbat: ${s.name} has no setting \"${key}\"; it declares "
+        + lib.concatStringsSep ", " s.settingsKeys
+        + ". Fix the key, or set settingsFreeform on ${s.name} if it passes keys through."
+      ) (lib.subtractLists s.settingsKeys (lib.attrNames s.settings))
+    )
+  ) services;
+
   errors =
     clashes "port" portClaims
     ++ clashes "subdomain" subdomainClaims
@@ -214,7 +228,8 @@ let
     ++ map (r: "lanbat: ${r.owner} references unit ${r.unit}, which no module defines") undefinedUnits
     ++ gatedPulls
     ++ ungatedTriggers
-    ++ tangEndpoint;
+    ++ tangEndpoint
+    ++ unknownSettings;
 in
 {
   assertions =
