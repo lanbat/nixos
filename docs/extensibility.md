@@ -103,7 +103,10 @@ hosts.server.plugins = [
 ];
 ```
 
-See [plugins.md](plugins.md) for the plugin author contract.
+See [plugins.md](plugins.md) for the plugin author contract (version 2: plugins
+register their services for `hosts.<key>.services` to select, and declare their
+own `deployment.<namespace>` settings). Version 1 plugins still load, with a
+warning.
 
 **Worked example — parking-guard.** The reference homelab adds
 [*parking-guard*](https://github.com/lanbat/lanbat-justpark-parking), a Frigate-LPR
@@ -138,6 +141,37 @@ It runs as a small set of systemd units on the server: a continuous LPR evaluato
 (`parking-guard.service`), a JustPark/CSV allowlist sync timer
 (`parking-guard-sync.*`), and a CSV-import path unit
 (`parking-guard-csv-import.*`).
+
+## Local modules
+
+A fork often needs a change no option covers: a firewall rule, a package, an
+override of a service's configuration. Rather than editing a tracked file, put
+a NixOS module in the deployment's `local/` directory, which is gitignored:
+
+```
+deployments/<profile>/local/*.nix              # every host of the profile
+deployments/<profile>/local/hosts/<key>/*.nix  # host <key> only
+```
+
+Each `.nix` file directly in those directories is imported, in name order,
+profile-wide files first; anything else, such as a subdirectory holding a
+module's data, is left alone. They are merged after every other module source,
+including a host's `modules` list in the deploy file, so they can override
+anything core, a role or a plugin sets. A single-profile `deploy.nix` without a
+`profiles` wrapper uses `deployments/default/local/`.
+
+```nix
+# deployments/homelab/local/hosts/server/firewall.nix
+{ ... }:
+{
+  networking.firewall.allowedTCPPorts = [ 25565 ];
+}
+```
+
+Because the directory is untracked, a flake evaluated from git (`.#`, and CI)
+does not see it; evaluate and deploy the real site from the working tree
+(`path:.`), as you already do for `deploy.nix`. With no `local/` directory
+nothing changes, which is why the example profile is unaffected.
 
 ## Multiple machines per profile
 

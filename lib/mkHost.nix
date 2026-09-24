@@ -15,6 +15,9 @@
   # Profile-wide service table from lib/default.nix. Empty during the first,
   # descriptions-only pass that produces it.
   endpoints ? { },
+  # Modules from the deployment's gitignored local/ directory
+  # (lib/local-modules.nix).
+  localModules ? [ ],
 }:
 
 let
@@ -35,8 +38,9 @@ let
   legacy = legacyPlugins (hostCfg.plugins or [ ]);
 
   # Merged last of all, so a deployment overrides anything core, the role or
-  # a plugin set without having to edit a tracked file.
-  userModules = hostCfg.modules or [ ];
+  # a plugin set without having to edit a tracked file. The deploy entry's own
+  # modules come first, then the ones found in the deployment's local/.
+  userModules = (hostCfg.modules or [ ]) ++ localModules;
 
   hostContextModule =
     { ... }:

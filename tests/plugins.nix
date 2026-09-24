@@ -105,6 +105,15 @@ let
 
   resolve = pluginLib.resolvePlugins "server";
 
+  # lib/local-modules.nix, against a tracked copy of the gitignored layout.
+  localModules = (import ../lib/local-modules.nix { inherit lib; }).localModules;
+  localRoot = ./fixtures/local-modules;
+  localNames =
+    profile: host:
+    map (p: lib.removePrefix "${toString localRoot}/" (toString p)) (
+      localModules localRoot profile host
+    );
+
   expectThrow =
     name: thunk:
     if (builtins.tryEval thunk).success then "expected ${name} to throw, but it succeeded" else null;
@@ -243,6 +252,26 @@ let
         parking
         parkingRival
       ]
+    ))
+
+    # ── Local modules ─────────────────────────────────────────────────────
+    (expect "local modules: profile-wide files in name order, then the host's" (
+      localNames "demo" "server" == [
+        "deployments/demo/local/10-a.nix"
+        "deployments/demo/local/20-b.nix"
+        "deployments/demo/local/hosts/server/host.nix"
+      ]
+    ))
+
+    (expect "local modules: a host without a directory gets the profile-wide ones" (
+      localNames "demo" "voice" == [
+        "deployments/demo/local/10-a.nix"
+        "deployments/demo/local/20-b.nix"
+      ]
+    ))
+
+    (expect "local modules: a profile without local/ contributes nothing" (
+      localModules localRoot "example" "server" == [ ]
     ))
 
     (expect "offeredServices merges what every plugin offers" (
