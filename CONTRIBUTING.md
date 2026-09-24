@@ -102,7 +102,8 @@ Follow this checklist every time:
      };
    };
    ```
-2. **Add** it to `plugins/services/default.nix` (or ship as an external plugin).
+2. **Register** it in `plugins/services/registry.nix` (or ship it as an external plugin's
+   `services`; see [docs/plugins.md](docs/plugins.md)).
 3. **Describe what applies** (all fields are documented in `modules/core/services.nix`):
 
    | Field | Set it when the service |
@@ -120,6 +121,7 @@ Follow this checklist every time:
    | `account` | runs as a rootless container (`container = true`) or needs a pinned UID |
    | `secrets.<file> = { }` | reads `secrets/<file>.age` |
    | `dashboard` | should appear on Homepage |
+   | `lanbat.settingsSchema.<name>` | reads `settings`; declared keys are type checked and others rejected |
 
 4. **Forward auth**: add a proxy provider and application for the service to
    `services/authentik/blueprints.nix`, and add the provider to the embedded outpost there.
