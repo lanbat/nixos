@@ -42,3 +42,6 @@ __pycache__/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Per-deployment modules found by lib/local-modules.nix (see docs/extensibility.md)
+deployments/*/local/

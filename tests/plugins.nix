@@ -1,7 +1,8 @@
 # tests/plugins.nix
 #
 # Pure eval checks for the lanbat plugin contract, including the service
-# selection that lets a host import only some of what a plugin offers.
+# selection that lets a host import only some of what a plugin offers. The
+# fixtures without a version comment are contract version 1, which still loads.
 { lib, pkgs }:
 
 let
@@ -56,7 +57,62 @@ let
     jellyfin = "a-different-jellyfin";
   };
 
+  # Version 2: modules are always imported, services are selectable.
+  v2 = {
+    name = "v2-media";
+    version = 2;
+    roles = [ "server" ];
+    modules = [ "v2-common" ];
+    services = {
+      jellyfin = "v2-jellyfin";
+      immich = "v2-immich";
+    };
+  };
+
+  v2ServicesOnly = {
+    name = "v2-infra";
+    version = 2;
+    roles = [ "server" ];
+    services.caddy = "v2-caddy";
+  };
+
+  withSettings = name: settings: {
+    inherit name settings;
+    version = 2;
+    roles = [ "server" ];
+    modules = [ "${name}-module" ];
+  };
+
+  parking = withSettings "parking" {
+    parkingDemo =
+      lib:
+      lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+      };
+  };
+
+  parkingRival = withSettings "rival" {
+    parkingDemo = lib: lib.mkOption { type = lib.types.str; };
+  };
+
+  # Evaluates the namespaces as a host would see them, with a deploy value.
+  evalSettings =
+    plugins: deployment:
+    (lib.evalModules {
+      modules = pluginLib.settingsModules plugins ++ [ { lanbat.deployment = deployment; } ];
+    }).config.lanbat.deployment;
+
   resolve = pluginLib.resolvePlugins "server";
+
+  # lib/local-modules.nix, against a tracked copy of the gitignored layout.
+  localModules = (import ../lib/local-modules.nix { inherit lib; }).localModules;
+  localRoot = ./fixtures/local-modules;
+  localNames =
+    profile: host:
+    map (p: lib.removePrefix "${toString localRoot}/" (toString p)) (
+      localModules localRoot profile host
+    );
 
   expectThrow =
     name: thunk:
@@ -106,6 +162,117 @@ let
     (expectThrow "a service no enabled plugin offers" (resolve [ media ] [ "nextcloud" ]))
 
     (expectThrow "two plugins offering the same service" (resolve [ media clashing ] [ "jellyfin" ]))
+
+    # ── Contract version 2 ────────────────────────────────────────────────
+    (expect "v2: an empty selection takes the modules and every service" (
+      sorted (resolve [ v2 ] [ ]) == [
+        "v2-common"
+        "v2-immich"
+        "v2-jellyfin"
+      ]
+    ))
+
+    (expect "v2: a selection keeps the modules and takes only the named services" (
+      sorted (resolve [ v2 ] [ "jellyfin" ]) == [
+        "v2-common"
+        "v2-jellyfin"
+      ]
+    ))
+
+    (expect "v2: a plugin may offer services and no modules" (
+      resolve [ v2ServicesOnly ] [ ] == [ "v2-caddy" ]
+    ))
+
+    (expect "v1 and v2 plugins load side by side" (
+      sorted (
+        resolve
+          [ media v2ServicesOnly ]
+          [
+            "caddy"
+            "immich"
+          ]
+      ) == [
+        "immich-module"
+        "v2-caddy"
+      ]
+    ))
+
+    (expectThrow "v2: neither modules nor services" (
+      pluginLib.validatePlugin {
+        name = "empty";
+        version = 2;
+        roles = [ "server" ];
+      }
+    ))
+
+    (expectThrow "v2: an unknown field" (pluginLib.validatePlugin (v2 // { module = [ ]; })))
+
+    (expectThrow "v2: a setting that is not a function of lib" (
+      pluginLib.validatePlugin (withSettings "bad" { demo = { }; })
+    ))
+
+    (expectThrow "v1: settings need version 2" (
+      pluginLib.validatePlugin (monolith // { settings.demo = lib: lib.mkOption { }; })
+    ))
+
+    (expectThrow "an unsupported version" (pluginLib.validatePlugin (v2 // { version = 3; })))
+
+    (expectThrow "a missing version" (pluginLib.validatePlugin (removeAttrs v2 [ "version" ])))
+
+    (expect "legacyPlugins names the version 1 plugins" (
+      pluginLib.legacyPlugins [
+        media
+        v2
+        monolith
+      ] == [
+        "media"
+        "monolith"
+      ]
+    ))
+
+    # ── Settings namespaces ───────────────────────────────────────────────
+    (expect "a plugin's namespace is declared under lanbat.deployment" (
+      (evalSettings [ parking ] { parkingDemo = [ "AB12CDE" ]; }).parkingDemo == [ "AB12CDE" ]
+    ))
+
+    (expect "a namespace takes its default when the deploy file leaves it out" (
+      (evalSettings [ parking ] { }).parkingDemo == [ ]
+    ))
+
+    (expect "the same plugin on two hosts declares its namespace once" (
+      (evalSettings [ parking parking ] { }).parkingDemo == [ ]
+    ))
+
+    (expectThrow "a key no plugin declares" (
+      (evalSettings [ parking ] { parkingDeom = [ ]; }).parkingDemo
+    ))
+
+    (expectThrow "two plugins declaring one namespace" (
+      pluginLib.settingsModules [
+        parking
+        parkingRival
+      ]
+    ))
+
+    # ── Local modules ─────────────────────────────────────────────────────
+    (expect "local modules: profile-wide files in name order, then the host's" (
+      localNames "demo" "server" == [
+        "deployments/demo/local/10-a.nix"
+        "deployments/demo/local/20-b.nix"
+        "deployments/demo/local/hosts/server/host.nix"
+      ]
+    ))
+
+    (expect "local modules: a host without a directory gets the profile-wide ones" (
+      localNames "demo" "voice" == [
+        "deployments/demo/local/10-a.nix"
+        "deployments/demo/local/20-b.nix"
+      ]
+    ))
+
+    (expect "local modules: a profile without local/ contributes nothing" (
+      localModules localRoot "example" "server" == [ ]
+    ))
 
     (expect "offeredServices merges what every plugin offers" (
       sorted (

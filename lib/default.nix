@@ -21,6 +21,7 @@ let
   pluginLib = import ./plugins.nix { inherit lib; };
   validateLib = import ./validate-deploy.nix { inherit lib; };
   endpointLib = import ./endpoints.nix { inherit lib; };
+  localLib = import ./local-modules.nix { inherit lib; };
 
   hostFlakeName =
     profileName: hostName: if profileName == "default" then hostName else "${profileName}-${hostName}";
@@ -52,6 +53,7 @@ let
         ;
       deployment = deploy.deployment;
       hosts = deploy.hosts;
+      localModules = localLib.localModules root profileName hostName;
     };
 
   mkProfile =

@@ -5,7 +5,7 @@
 # configures nothing.
 {
   name = "lanbat-android";
-  version = 1;
+  version = 2;
   roles = [ "server" ];
   modules = [
     ../../modules/server/android-devices.nix

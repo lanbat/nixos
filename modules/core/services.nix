@@ -27,6 +27,9 @@
 let
   inherit (lib) mkOption types;
 
+  # The host's configuration, for the submodules below that shadow config.
+  hostConfig = config;
+
   dirSubmodule = types.submodule (
     { config, ... }:
     {
@@ -104,7 +107,12 @@ let
   };
 
   serviceSubmodule = types.submodule (
-    { name, config, ... }:
+    {
+      name,
+      config,
+      options,
+      ...
+    }:
     {
       options = {
         name = mkOption {
@@ -121,7 +129,15 @@ let
 
         # ── Service configuration (the service module itself) ─────────────────
         settings = mkOption {
-          type = types.submodule { freeformType = types.attrsOf types.anything; };
+          type = types.submoduleWith {
+            shorthandOnlyDefinesConfig = true;
+            modules = [
+              { freeformType = types.attrsOf types.anything; }
+            ]
+            ++ lib.optional (
+              hostConfig.lanbat.settingsSchema ? ${name}
+            ) hostConfig.lanbat.settingsSchema.${name};
+          };
           default = { };
           example = {
             detectors.ov.device = "CPU";
@@ -130,10 +146,47 @@ let
           description = ''
             The service's own configuration, rendered by its module.
 
-            The type is freeform, so keys the module does not model still reach
-            the generated config. A module supplies its own values with
-            lib.mkDefault in config, never as an option default, so a profile or
-            a user module overrides them without lib.mkForce.
+            A service declares the keys it accepts as typed options of this
+            submodule, through lanbat.settingsSchema.<name>:
+
+              lanbat.settingsSchema.frigate = {
+                options.record = lib.mkOption { type = ...; };
+              };
+
+            Once it declares any, modules/wiring/checks.nix rejects a key it
+            does not declare, unless settingsFreeform is set. A service that
+            declares none keeps the whole set freeform: every key reaches its
+            module, which renders what it knows.
+
+            A module supplies its own values with lib.mkDefault in config, never
+            as an option default, so a profile or a user module overrides them
+            without lib.mkForce.
+          '';
+        };
+
+        settingsKeys = mkOption {
+          type = types.listOf types.str;
+          internal = true;
+          readOnly = true;
+          default = lib.attrNames (
+            removeAttrs (options.settings.type.getSubOptions [ ]) [
+              "_module"
+              "_freeformOptions"
+            ]
+          );
+          defaultText = lib.literalMD "the options declared under `settings`";
+          description = "The settings keys this service declares as options.";
+        };
+
+        settingsFreeform = mkOption {
+          type = types.bool;
+          default = config.settingsKeys == [ ];
+          defaultText = lib.literalExpression "settingsKeys == [ ]";
+          description = ''
+            Whether settings keys the service does not declare are passed
+            through rather than rejected. The default is strict as soon as the
+            service declares any key; set it for a service that models some keys
+            and renders the rest into its configuration unchanged.
           '';
         };
 
@@ -482,6 +535,47 @@ in
       across the profile, this is the single definition that widens to answer
       for the whole deployment, and its callers do not change.
     '';
+  };
+
+  options.lanbat.settingsSchema = mkOption {
+    type = types.attrsOf types.deferredModule;
+    default = { };
+    example = lib.literalExpression ''
+      {
+        frigate = {
+          options.record.days = lib.mkOption {
+            type = lib.types.ints.positive;
+            description = "Days of recordings to keep.";
+          };
+        };
+      }
+    '';
+    description = ''
+      The settings a service accepts, by service name: a module whose options
+      are the keys of lanbat.services.<name>.settings. It is merged into that
+      service's settings submodule, so the declared keys are type checked and
+      modules/wiring/checks.nix rejects any other key, naming the service and
+      the key, unless the service sets settingsFreeform.
+    '';
+  };
+
+  # Which placement-dependent wiring this host carries. Each wiring module sets
+  # its own flag, so modules/wiring/checks.nix can reject a service placed on a
+  # host whose role leaves that wiring out, rather than let its description be
+  # silently ignored there.
+  options.lanbat.wiring = {
+    onDemand = mkOption {
+      type = types.bool;
+      internal = true;
+      default = false;
+      description = "Whether modules/wiring/on-demand.nix is imported on this host.";
+    };
+    workloadGate = mkOption {
+      type = types.bool;
+      internal = true;
+      default = false;
+      description = "Whether modules/wiring/workload-gate.nix is imported on this host.";
+    };
   };
 
   config.lanbat.hasService = name: config.lanbat.services ? ${name};

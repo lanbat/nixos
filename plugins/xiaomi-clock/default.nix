@@ -6,7 +6,7 @@
 # addresses -- with none listed the plugin configures nothing.
 {
   name = "lanbat-xiaomi-clock";
-  version = 1;
+  version = 2;
   roles = [ "server" ];
   modules = [
     ../../modules/server/xiaomi-clock.nix

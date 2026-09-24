@@ -1,7 +1,8 @@
 # lanbat-plugin-minimal
 
-Minimal external lanbat plugin. Exports a `lanbatPlugin` attribute that writes
-`/etc/lanbat-plugin-example` on server hosts — nothing else.
+Minimal external lanbat plugin (contract version 2). Exports a `lanbatPlugin`
+attribute that writes `/etc/lanbat-plugin-example` on server hosts — nothing
+else.
 
 This directory is an **example only**. It is not wired into the main lanbat
 flake or CI; copy or fork it as a starting point for your own plugin repo.

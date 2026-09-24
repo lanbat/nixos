@@ -200,6 +200,24 @@ let
       }
     )
     {
+      # The wiring comes with the host's role, not with the service, so a
+      # description placed on a host without it would otherwise be ignored:
+      # the service would start at boot, or never stop when idle.
+      assertion = s.onDemand == null || config.lanbat.wiring.onDemand;
+      message =
+        "lanbat: ${s.name} is on-demand, but this host has no on-demand wiring"
+        + " (modules/wiring/on-demand.nix, which the server role imports). Place it"
+        + " on a server host, or drop onDemand.";
+    }
+    {
+      assertion = s.tier != "workload" || config.lanbat.wiring.workloadGate;
+      message =
+        "lanbat: ${s.name} is workload-gated, but this host has no workload gate"
+        + " (modules/wiring/workload-gate.nix, which the server role imports), so its"
+        + " state would sit on the host root and its units start at boot. Place it"
+        + " on a server host, or leave it always-on.";
+    }
+    {
       assertion = s.onDemand == null || s.port != null;
       message = "lanbat: ${s.name} is on-demand but has no port for the activator to proxy to";
     }
@@ -227,6 +245,20 @@ let
         + " in extraPorts and the literal firewall rule in services/tang.nix."
       );
 
+  # A service that declares its settings keys accepts only those, unless it
+  # passes the rest through on purpose (settingsFreeform).
+  unknownSettings = lib.concatMap (
+    s:
+    lib.optionals (!s.settingsFreeform) (
+      map (
+        key:
+        "lanbat: ${s.name} has no setting \"${key}\"; it declares "
+        + lib.concatStringsSep ", " s.settingsKeys
+        + ". Fix the key, or set settingsFreeform on ${s.name} if it passes keys through."
+      ) (lib.subtractLists s.settingsKeys (lib.attrNames s.settings))
+    )
+  ) services;
+
   errors =
     clashes "port" portClaims
     ++ clashes "subdomain" subdomainClaims
@@ -236,7 +268,8 @@ let
     ++ map (r: "lanbat: ${r.owner} references unit ${r.unit}, which no module defines") undefinedUnits
     ++ gatedPulls
     ++ ungatedTriggers
-    ++ tangEndpoint;
+    ++ tangEndpoint
+    ++ unknownSettings;
 in
 {
   assertions =
