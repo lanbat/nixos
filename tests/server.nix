@@ -125,7 +125,10 @@ pkgs.testers.runNixOSTest {
           ADMIN_TOKEN=test
           SSO_CLIENT_SECRET=test
         '';
-        telegraf-token = "TELEGRAF_INFLUXDB_TOKEN=test-influx-token-0123456789\n";
+        # A token of its own: InfluxDB provisioning sets the Telegraf auth to
+        # this value, and an auth sharing the operator token's value would
+        # take the operator token over.
+        telegraf-token = "TELEGRAF_INFLUXDB_TOKEN=test-telegraf-token-0123456789\n";
       };
     };
 
