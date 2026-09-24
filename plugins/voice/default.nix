@@ -3,7 +3,7 @@
 # Wyoming voice satellite plugin for Pi hosts.
 {
   name = "lanbat-voice";
-  version = 1;
+  version = 2;
   roles = [
     "storage-pi"
     "voice-pi"

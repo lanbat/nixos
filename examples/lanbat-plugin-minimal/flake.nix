@@ -6,7 +6,7 @@
     {
       lanbatPlugin = {
         name = "example-noop";
-        version = 1;
+        version = 2;
         roles = [ "server" ];
         modules = [ ./module.nix ];
       };
