@@ -137,7 +137,14 @@ let
       incompatible = lib.filter (p: !(lib.elem hostRole p.roles)) validated;
       available = offeredServices validated;
       unknown = lib.filter (name: !(available ? ${name})) selected;
-      selectedOf = p: map (name: p.services.${name}) (lib.filter (name: p.services ? ${name}) selected);
+      # A plugin may offer no services at all (a version 2 plugin with only
+      # modules), so an absent services attribute offers nothing to select.
+      selectedOf =
+        p:
+        let
+          offered = p.services or { };
+        in
+        map (name: offered.${name}) (lib.filter (name: offered ? ${name}) selected);
       modulesFor =
         p:
         if p.version == 1 then
