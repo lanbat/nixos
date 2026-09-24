@@ -486,20 +486,6 @@ let
   duplicateStreams = lib.unique (lib.filter (s: lib.count (x: x == s) streamNames > 1) streamNames);
 in
 {
-  # The schema is declared inside this service's own settings submodule, so it
-  # is typed and documented exactly where a deployment sets it.
-  options.lanbat.services = mkOption {
-    type = types.attrsOf (
-      types.submodule (
-        { name, ... }:
-        {
-          options.settings = mkOption {
-            type = types.submodule (lib.optionalAttrs (name == "frigate") frigateSettings);
-          };
-        }
-      )
-    );
-  };
 
   options.lanbat.frigate.renderedConfig = mkOption {
     type = types.attrsOf types.anything;
@@ -509,6 +495,11 @@ in
   };
 
   config = {
+    # The schema is merged into this service's settings submodule, so it is typed
+    # and documented exactly where a deployment sets it, and
+    # modules/wiring/checks.nix rejects any key it does not declare.
+    lanbat.settingsSchema.frigate = frigateSettings;
+
     lanbat.frigate.renderedConfig = rendered;
 
     assertions =
