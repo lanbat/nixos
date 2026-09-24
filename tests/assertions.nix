@@ -18,6 +18,11 @@ let
             nixpkgs.hostPlatform = "x86_64-linux";
             system.stateVersion = "25.11";
             lanbat.services = services;
+            # A server carries both; the placement cases take one away.
+            lanbat.wiring = {
+              onDemand = lib.mkDefault true;
+              workloadGate = lib.mkDefault true;
+            };
             systemd.services.demo.script = "true";
           }
           extraConfig
@@ -139,6 +144,26 @@ let
         timerConfig.OnBootSec = "5m";
       };
     } gatedDemo [ "demo.timer starts the workload-gated demo.service outside the gate" ])
+
+    (expectWith "workload-gated service on a host without the gate" {
+      lanbat.wiring.workloadGate = false;
+    } gatedDemo [ "demo is workload-gated, but this host has no workload gate" ])
+
+    (expectWith "always-on service on a host without the gate passes" {
+      lanbat.wiring.workloadGate = false;
+    } { demo.units = [ "demo" ]; } [ ])
+
+    (expectWith "on-demand service on a host without on-demand wiring"
+      { lanbat.wiring.onDemand = false; }
+      {
+        demo = {
+          port = 8000;
+          units = [ "demo" ];
+          onDemand.activatorPort = 3000;
+        };
+      }
+      [ "demo is on-demand, but this host has no on-demand wiring" ]
+    )
 
     (expect "tang with an endpoint" {
       tang.endpoint.port = 7500;

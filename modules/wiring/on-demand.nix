@@ -73,6 +73,8 @@ let
   };
 in
 {
+  lanbat.wiring.onDemand = true;
+
   systemd.services =
     lib.mapAttrs' (n: s: lib.nameValuePair "ondemand-activator-${n}" (mkActivatorService n s)) onDemand
     // lib.mapAttrs' (n: s: lib.nameValuePair "ondemand-idle-stop-${n}" (mkIdleService n s)) onDemand;

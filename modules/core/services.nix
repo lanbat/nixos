@@ -559,5 +559,24 @@ in
     '';
   };
 
+  # Which placement-dependent wiring this host carries. Each wiring module sets
+  # its own flag, so modules/wiring/checks.nix can reject a service placed on a
+  # host whose role leaves that wiring out, rather than let its description be
+  # silently ignored there.
+  options.lanbat.wiring = {
+    onDemand = mkOption {
+      type = types.bool;
+      internal = true;
+      default = false;
+      description = "Whether modules/wiring/on-demand.nix is imported on this host.";
+    };
+    workloadGate = mkOption {
+      type = types.bool;
+      internal = true;
+      default = false;
+      description = "Whether modules/wiring/workload-gate.nix is imported on this host.";
+    };
+  };
+
   config.lanbat.hasService = name: config.lanbat.services ? ${name};
 }

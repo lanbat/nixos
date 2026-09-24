@@ -44,6 +44,10 @@ pkgs.testers.runNixOSTest {
         ../hosts/server/hardware.nix
         ../hosts/server/disk.nix
         ../modules/server/control-layer.nix
+        # The server role's placement-dependent wiring: bitmagnet and romm are
+        # on-demand, and modules/wiring/checks.nix rejects them on a host
+        # without the activators.
+        ../modules/wiring/on-demand.nix
         ../modules/wiring/workload-gate.nix
         ./lib/example-host-context.nix
         ./lib/test-secrets.nix

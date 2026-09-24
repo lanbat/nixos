@@ -62,6 +62,8 @@ in
   };
 
   config = {
+    lanbat.wiring.workloadGate = true;
+
     systemd.tmpfiles.rules = [
       "d /mnt/workload :0000 :root :root -"
     ]
