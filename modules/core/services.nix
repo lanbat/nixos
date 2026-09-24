@@ -209,7 +209,11 @@ let
           type = types.nullOr types.str;
           default = null;
           example = "media";
-          description = "Serve the service at https://<subdomain>.<lanbat.domain> through Caddy.";
+          description = ''
+            Serve the service at https://<subdomain>.<lanbat.domain> through Caddy.
+            When the service runs on a host without Caddy, Caddy proxies to its
+            endpoint on that host, and that host's generated policy admits Caddy's.
+          '';
         };
 
         port = mkOption {
@@ -541,7 +545,9 @@ in
     description = ''
       Every service in this deployment profile and where it runs, keyed by
       service name: the host key, that host's address and hostname, the
-      endpoint it publishes, and its service account.
+      endpoint it publishes, its service account, and the part of its web
+      description (subdomain, auth, caddy, oidc) a Caddy or Authentik on
+      another host needs to serve it.
 
       lib/ builds this by evaluating each host's service descriptions once,
       before building the hosts themselves, and hands the result to every host.
@@ -550,9 +556,9 @@ in
       package set behind them.
 
       Because the first pass runs with this table empty, a description must not
-      depend on it. Settings and configuration bodies may; endpoint and account
-      may not, or the two passes would disagree about the very thing being
-      resolved.
+      depend on it. Settings and configuration bodies may; endpoint, account
+      and the web description may not, or the two passes would disagree about
+      the very thing being resolved.
     '';
   };
 

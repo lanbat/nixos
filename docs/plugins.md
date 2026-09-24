@@ -131,6 +131,11 @@ activation and workload gating are imported by the server role only. A service
 with `onDemand` or `tier = "workload"` placed on another role's host fails
 evaluation instead of starting at boot or keeping its state on the host root.
 
+A service with a subdomain may run on a host without Caddy: Caddy proxies its
+vhost to that host, and the host's generated firewall policy admits Caddy's host
+(see [architecture.md](architecture.md#services-on-another-host) for what this
+rejects, such as a remote on-demand service).
+
 ## Consuming a plugin
 
 ```nix
