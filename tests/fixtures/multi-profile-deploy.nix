@@ -46,6 +46,8 @@
           plugins = [
             inputs.self.lanbatPlugins.services
           ];
+          # The fixture has no cameras; Frigate refuses that unless told.
+          modules = [ { lanbat.services.frigate.settings.allowNoCameras = true; } ];
         };
 
         pi-storage = {
@@ -112,6 +114,8 @@
           plugins = [
             inputs.self.lanbatPlugins.services
           ];
+          # The fixture has no cameras; Frigate refuses that unless told.
+          modules = [ { lanbat.services.frigate.settings.allowNoCameras = true; } ];
         };
       };
     };

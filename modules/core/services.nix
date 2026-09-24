@@ -140,8 +140,8 @@ let
           };
           default = { };
           example = {
-            detectors.ov.device = "CPU";
-            record.motion.days = 30;
+            detector.device = "CPU";
+            retention.motionDays = 30;
           };
           description = ''
             The service's own configuration, rendered by its module.

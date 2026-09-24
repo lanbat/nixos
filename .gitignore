@@ -2,6 +2,9 @@
 deploy.nix
 deployments/*/deploy.nix
 !deployments/example/deploy.nix
+# A profile's camera layout (see docs/deployment-checklist.md, step 3f)
+deployments/*/frigate.nix
+!deployments/example/frigate.nix
 local.nix
 
 # Agent session scratch (not part of the flake)

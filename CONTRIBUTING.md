@@ -122,7 +122,7 @@ Follow this checklist every time:
    | `account` | runs as a rootless container (`container = true`) or needs a pinned UID |
    | `secrets.<file> = { }` | reads `secrets/<file>.age` |
    | `dashboard` | should appear on Homepage |
-   | `lanbat.settingsSchema.<name>` | reads `settings`; declared keys are type checked and others rejected |
+   | `lanbat.settingsSchema.<name>` | has configuration that differs between sites (cameras, shares, devices): declare typed options there, as `services/frigate.nix` does, and set the values from the profile (see [docs/extensibility.md](docs/extensibility.md#service-settings)). Declared keys are type checked and others rejected |
 
 4. **Authentik**: nothing to edit. The blueprints are generated from the
    description (`services/authentik/catalogue.nix`): `auth = "forward-auth"` gives the

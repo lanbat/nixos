@@ -78,6 +78,8 @@
         inputs.self.lanbatPlugins.android
         inputs.self.lanbatPlugins.xiaomi-clock
       ];
+      # Merged last, so they override anything core, the role or a plugin set.
+      modules = [ ./frigate.nix ];
     };
 
     pi-storage = {

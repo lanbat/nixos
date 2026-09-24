@@ -100,9 +100,10 @@ These paths live on `/dev/lanbat/root` and are accessible at boot without any un
 ├── hass/              Home Assistant config (history is in PostgreSQL)
 ├── authentik/         Authentik media, certs
 ├── postgresql-always-on/  PostgreSQL always-on instance: Authentik, Home Assistant, Grafana
-├── frigate/
-│   ├── config/        frigate.yml
-│   └── db/            Frigate SQLite event DB
+├── frigate/           (config.yml is rendered into the Nix store from the settings)
+│   ├── db/            Frigate SQLite event DB
+│   ├── clips/         Review snapshots and clips
+│   └── recordings/    Motion-only recordings
 ├── grafana/           Grafana dashboards, users, alert state
 ├── influxdb2/         InfluxDB data + WAL (BACK THIS UP)
 ├── mosquitto/         Mosquitto broker state
