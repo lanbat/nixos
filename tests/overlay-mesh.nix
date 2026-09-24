@@ -18,7 +18,7 @@ let
   inherit (pkgs) lib;
 
   # The throwaway keys nixpkgs' own WireGuard tests use.
-  snakeoil = import "${pkgs.path}/nixos/tests/wireguard/snakeoil-keys.nix";
+  snakeoil = import (pkgs.path + "/nixos/tests/wireguard/snakeoil-keys.nix");
 
   hosts = {
     a = {
