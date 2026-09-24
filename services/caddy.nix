@@ -5,7 +5,8 @@
 # Design
 # ------
 # - Every service is HTTPS-only through Caddy's built-in CA; backends run
-#   plain HTTP on localhost.
+#   plain HTTP on localhost, or at their endpoint on another host when they
+#   run elsewhere in the profile.
 # - Service vhosts are generated from lanbat.services.<name>.subdomain by
 #   modules/wiring/caddy.nix. This file configures Caddy itself and the CA
 #   landing page at ca.<domain>, where clients download the root certificate.

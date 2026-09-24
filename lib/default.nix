@@ -89,6 +89,7 @@ let
       describedFields = svc: {
         inherit (svc) endpoint account consumes;
         nfs = { inherit (svc.nfs) drives storageHost; };
+        web = endpointLib.webOf svc;
       };
 
       disagreements = lib.concatLists (
@@ -112,7 +113,8 @@ let
             "lanbat profile '${profileName}': the description of "
             + lib.concatStringsSep ", " disagreements
             + " changed once the endpoint table was resolved. endpoint, account,"
-            + " consumes and nfs are read to build that table, so they must not"
+            + " consumes, nfs and the web description (subdomain, auth, caddy, oidc)"
+            + " are read to build that table, so they must not"
             + " depend on it — base them on deploy data instead."
           )
         else

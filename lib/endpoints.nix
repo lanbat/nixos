@@ -14,6 +14,31 @@ let
     inherit (svc.nfs) drives storageHost;
   };
 
+  # The part of a service's web description a Caddy on another host needs to
+  # serve its subdomain, and an Authentik on another host needs to list it.
+  # Null for a service without a subdomain, which is read with `or` so that the
+  # hand-written descriptions in the tests need not carry web fields at all.
+  webOf =
+    svc:
+    if (svc.subdomain or null) == null then
+      null
+    else
+      {
+        inherit (svc)
+          subdomain
+          auth
+          apiClients
+          oidc
+          ;
+        caddy = {
+          inherit (svc.caddy) extraConfig proxyOptions authBypassPaths;
+        };
+        # Whether it is on-demand, not the activator: the activator only exists
+        # on the service's own host, which is why Caddy rejects proxying to one.
+        onDemand = svc.onDemand != null;
+        dashboard = if svc.dashboard == null then null else { inherit (svc.dashboard) name; };
+      };
+
   mkTable =
     {
       profileName,
@@ -65,6 +90,8 @@ let
               # The storage Pi exports its drives to the hosts of the services
               # that use them, which it can only learn from here.
               nfs = nfsOf first;
+              # A Caddy on another host serves the subdomain from this.
+              web = webOf first;
             }
         )
       ) allServiceNames
@@ -90,6 +117,25 @@ let
         "lanbat: ${consumer} consumes ${name}, which runs on more than one host"
         + " (${lib.concatStringsSep ", " hostNames}), and it can only connect to one"
       );
+
+  # The hosts whose Caddy proxies `name`'s subdomain to it over the network:
+  # every host running Caddy that does not run `name` itself. A Caddy that runs
+  # the service serves it on localhost, so it is no network consumer. The
+  # service's host admits these in its generated policy
+  # (modules/wiring/policy.nix), and modules/wiring/caddy.nix proxies from
+  # exactly these, so the two cannot disagree.
+  proxyHostsOf =
+    {
+      endpoints,
+      name,
+    }:
+    let
+      entry = endpoints.${name} or { };
+    in
+    if (entry.web or null) == null then
+      [ ]
+    else
+      lib.filter (h: !(lib.elem h entry.hosts)) (endpoints.caddy or { hosts = [ ]; }).hosts;
 
   # The hosts that mount drives from `storageHost` over NFS: every host running
   # a service whose nfs.drives is non-empty and whose storage host resolves to
@@ -119,5 +165,11 @@ let
     );
 in
 {
-  inherit mkTable soleHost nfsClientsOf;
+  inherit
+    mkTable
+    webOf
+    soleHost
+    proxyHostsOf
+    nfsClientsOf
+    ;
 }
