@@ -53,6 +53,14 @@ let
     ];
   };
 
+  # Version 2 with modules only: nothing to select, always imported.
+  modulesOnly = {
+    name = "modules-only";
+    version = 2;
+    roles = [ "server" ];
+    modules = [ "modules-only-module" ];
+  };
+
   clashing = offering "other-media" {
     jellyfin = "a-different-jellyfin";
   };
@@ -130,6 +138,13 @@ let
       sorted (resolve [ media ] [ ]) == [
         "immich-module"
         "jellyfin-module"
+      ]
+    ))
+
+    (expect "a modules-only plugin is imported alongside a selection" (
+      sorted (resolve [ media modulesOnly ] [ "jellyfin" ]) == [
+        "jellyfin-module"
+        "modules-only-module"
       ]
     ))
 
