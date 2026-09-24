@@ -78,7 +78,7 @@ automatically — those that depend on external setup:
 | `mosquitto-ha-pass.age` | Choose a password for the HA MQTT user |
 | `mosquitto-frigate-pass.age` | Choose a password for the Frigate MQTT user |
 | `rclone-frigate-config.age` | Run `rclone config`, paste result (step 3g) |
-| `telegraf-token.age` | After deploying InfluxDB (step 3i) |
+| `telegraf-token.age` | Choose a random value, different from the InfluxDB admin token |
 
 All of these files **must exist** before installing. Create placeholders now for the
 ones you can't fill in yet, and overwrite them at the relevant post-install step.
@@ -100,8 +100,9 @@ NEXTCLOUD_OIDC_CLIENT_SECRET=CHANGE_ME" | agenix -e nextcloud-oidc-env.age
 echo "IMMICH_OAUTH_CLIENT_ID=CHANGE_ME
 IMMICH_OAUTH_CLIENT_SECRET=CHANGE_ME" | agenix -e immich-oidc-env.age
 
-# Telegraf — placeholder, overwritten at step 3i
-echo "TELEGRAF_INFLUXDB_TOKEN=CHANGE_ME" | agenix -e telegraf-token.age
+# Telegraf — a random value; InfluxDB provisions a write-only token with it.
+# It must differ from influxdb-admin-token.age.
+echo "TELEGRAF_INFLUXDB_TOKEN=$(openssl rand -hex 32)" | agenix -e telegraf-token.age
 
 # rclone — placeholder, overwritten at step 3g
 printf "[remote]\ntype = s3\n" | agenix -e rclone-frigate-config.age
@@ -643,29 +644,15 @@ deploy path:.#homelab-server
 Visit `https://grafana.<domain>` — the InfluxDB datasource is provisioned
 automatically. Log in with Authentik or the local `admin` break-glass account.
 
-### 3i. Telegraf token setup
+### 3i. Telegraf token check
 
-Telegraf needs a write-only InfluxDB token (separate from the operator token
-used by Grafana).
+Telegraf's write-only InfluxDB token is provisioned declaratively from
+`telegraf-token.age` (Phase 0), separately from the operator token Grafana
+uses, so there is nothing to create in the InfluxDB UI. The two values must
+differ: the provisioning sets the Telegraf token to the file's value, and a
+shared value would turn the operator token into the write-only one.
 
-1. Open the InfluxDB UI through an SSH tunnel (it is not exposed via Caddy):
-   `ssh -L 8086:localhost:8086 admin@<server-ip>`, then `http://localhost:8086`.
-2. **Data → API Tokens → Generate API Token → Custom API Token**
-   - Description: `telegraf`
-   - Buckets: Write → `metrics`
-3. Copy the generated token.
-4. Store it on your workstation:
-   ```bash
-   cd secrets
-   agenix -e telegraf-token.age
-   # File content: TELEGRAF_INFLUXDB_TOKEN=<paste token here>
-   ```
-5. Deploy:
-   ```bash
-   deploy path:.#homelab-server
-   deploy path:.#homelab-pi-storage
-   ```
-6. Verify both agents are running and writing:
+1. Verify both agents are running and writing:
    ```bash
    systemctl status telegraf              # on server
    ssh admin@pi5 systemctl status telegraf  # on Pi

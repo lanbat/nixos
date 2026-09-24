@@ -10,15 +10,14 @@
 #
 # What this script does:
 #   - Generates random values for all secrets that don't need external input.
-#   - Skips secrets that require manual steps (OIDC client IDs, rclone config,
-#     Telegraf token) and prints instructions for those instead.
+#   - Skips secrets that require manual steps (OIDC client IDs, rclone config)
+#     and prints instructions for those instead.
 #   - Never overwrites an existing .age file — safe to re-run.
 #
 # Secrets that still need manual input AFTER running this script:
 #   secrets/mosquitto-ha-pass.age      — choose a password for the HA MQTT user
 #   secrets/mosquitto-frigate-pass.age — choose a password for the Frigate MQTT user
 #   secrets/rclone-frigate-config.age  — run: rclone config, then paste the result
-#   secrets/telegraf-token.age         — fill in after deploying InfluxDB (step 3i)
 #
 # OIDC client secrets (Grafana, Nextcloud, Immich, HA, Jellyfin) are handled
 # by a separate script once Authentik is running:
@@ -72,6 +71,12 @@ encrypt immich-db-password.age "POSTGRES_PASSWORD=$(rand 36)"
 # ---- InfluxDB ----
 encrypt influxdb-admin-password.age "$(rand 24)"
 encrypt influxdb-admin-token.age    "$(rand 48)"
+
+# ---- Telegraf ----
+# InfluxDB provisions a write-only token with this value (services/influxdb.nix).
+# Its own random value: sharing the operator token's would make provisioning
+# rewrite the operator token into the write-only one.
+encrypt telegraf-token.age "TELEGRAF_INFLUXDB_TOKEN=$(rand 48)"
 
 # ---- Grafana ----
 # GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET is left blank — fill in after Phase 3b.
@@ -127,10 +132,6 @@ echo "Done. Secrets that still need manual input:"
 echo
 echo "  secrets/rclone-frigate-config.age  — run 'rclone config' then paste the result:"
 echo "    agenix -e secrets/rclone-frigate-config.age"
-echo
-echo "  secrets/telegraf-token.age         — fill in after deploying InfluxDB (step 3i):"
-echo "    TELEGRAF_INFLUXDB_TOKEN=<value>"
-echo "    agenix -e secrets/telegraf-token.age"
 echo
 echo "  secrets/grafana-env.age            — update INFLUXDB_TOKEN after step 3h:"
 echo "    agenix -e secrets/grafana-env.age"
