@@ -5,6 +5,11 @@
 # generates a throwaway SSH host key while building, encrypts a dummy value for
 # every secret the services declare, and points agenix at them.
 #
+# Caddy's root CA key is declared with age.secrets directly, and Caddy refuses
+# a key that does not match the pinned root certificate. When the host runs
+# Caddy, this module also generates a throwaway root certificate and key, and
+# replaces the committed certificate with it.
+#
 # Never import it into a real host.
 {
   config,
@@ -23,12 +28,18 @@ let
   );
   contents = config.lanbat.testSecrets;
 
+  # services/caddy.nix pins the internal CA's root to the committed
+  # certificate and its agenix-encrypted key.
+  caddyCa = config.lanbat.services ? caddy;
+  caddyCaKey = "caddy-ca-root-key";
+
   secrets =
     pkgs.runCommand "lanbat-test-secrets"
       {
         nativeBuildInputs = [
           pkgs.age
           pkgs.openssh
+          pkgs.openssl
         ];
       }
       ''
@@ -38,6 +49,15 @@ let
           printf '%s' ${lib.escapeShellArg (contents.${name} or "test-value")} \
             | age -R $out/host_key.pub -o $out/${name}.age
         '') names}
+        ${lib.optionalString caddyCa ''
+          openssl ecparam -name prime256v1 -genkey -noout -out ca-root.key
+          openssl req -x509 -new -key ca-root.key -sha256 -days 3650 \
+            -subj "/CN=Lanbat Test Root CA" \
+            -addext "basicConstraints=critical,CA:TRUE" \
+            -addext "keyUsage=critical,keyCertSign,cRLSign" \
+            -out $out/caddy-ca-root.crt
+          age -R $out/host_key.pub -o $out/${caddyCaKey}.age < ca-root.key
+        ''}
       '';
 in
 {
@@ -47,10 +67,16 @@ in
     description = "Plaintext of test secrets by name. Secrets not listed get \"test-value\".";
   };
 
-  config = {
-    age.identityPaths = [ "${secrets}/host_key" ];
-    age.secrets = lib.genAttrs names (name: {
-      file = lib.mkForce "${secrets}/${name}.age";
-    });
-  };
+  config = lib.mkMerge [
+    {
+      age.identityPaths = [ "${secrets}/host_key" ];
+      age.secrets = lib.genAttrs names (name: {
+        file = lib.mkForce "${secrets}/${name}.age";
+      });
+    }
+    (lib.mkIf caddyCa {
+      age.secrets.${caddyCaKey}.file = lib.mkForce "${secrets}/${caddyCaKey}.age";
+      environment.etc."caddy/ca-root.crt".source = lib.mkForce "${secrets}/caddy-ca-root.crt";
+    })
+  ];
 }
