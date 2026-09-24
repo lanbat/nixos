@@ -111,6 +111,12 @@ in
       port = 8123;
       auth = "forward-auth";
       apiClients = true; # companion apps — /auth/token and /api/* bypass forward-auth
+      # Sign-in is forward auth plus hass-auth-header; the OIDC client stays
+      # for optional native OAuth integrations.
+      oidc = {
+        redirectPaths = [ "/auth/external/callback" ];
+        secretVariable = "AUTHENTIK_HA_CLIENT_SECRET";
+      };
       secrets = {
         hass-bootstrap-env.owner = "hass";
       }

@@ -127,6 +127,19 @@
         android-devices = import ./tests/android-devices.nix { inherit lib pkgs; };
         android-provision = pkgs.callPackage ./pkgs/android-provision { };
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };
+        authentik-catalogue = import ./tests/authentik-catalogue.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         music-assistant = import ./tests/music-assistant.nix { inherit pkgs; };
         pkgs-build = import ./tests/pkgs-build.nix { inherit pkgs; };
         plugins = import ./tests/plugins.nix { inherit lib pkgs; };

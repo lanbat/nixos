@@ -70,6 +70,11 @@ in
       extraPorts = [ 3003 ]; # machine learning
       auth = "forward-auth";
       apiClients = true; # mobile app — /api/* bypasses Authentik at Caddy
+      # Browser login after the forward-auth gate, and the mobile app.
+      oidc = {
+        redirectPaths = [ "/auth/login" ];
+        redirectUris = [ "app.immich:///oauth-callback" ];
+      };
       tier = "workload";
       state = [ "immich" ];
       units = [

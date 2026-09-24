@@ -57,6 +57,8 @@ in
     port = 8096;
     extraPorts = [ 7359 ]; # UDP auto-discovery for TV and mobile apps
     apiClients = true; # TV and mobile apps
+    # The SSO Authentication plugin, configured by jellyfin-bootstrap.
+    oidc.redirectPaths = [ "/sso/OID/redirect/authentik" ];
     tier = "workload";
     state = [ "jellyfin" ];
     units = [

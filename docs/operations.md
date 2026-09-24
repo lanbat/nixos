@@ -375,10 +375,18 @@ Or via the self-service recovery flow:
 
 ### Adding a new forward-auth service
 
-1. Set `auth = "forward-auth"` in the service's `lanbat.services.<name>`.
-2. In `services/authentik/blueprints.nix`, add a proxy provider (`mode: forward_single`)
-   and an application for the service, and add the provider to the embedded outpost.
-3. Deploy. Authentik applies the blueprints on startup.
+1. Set `auth = "forward-auth"` and a `subdomain` in the service's `lanbat.services.<name>`.
+2. Deploy. The blueprints are generated from the service descriptions
+   (`services/authentik/catalogue.nix`), so the service's proxy provider, application
+   and embedded-outpost entry come with it, and Authentik applies them on startup.
+
+An OpenID Connect client works the same way: set `oidc.redirectPaths` on the service
+and add its `AUTHENTIK_<NAME>_CLIENT_SECRET` to `authentik-oidc-secrets.age`.
+
+Provider names and application slugs are how Authentik recognises its objects, so they
+must not change for a service that is already deployed; `catalogue.nix` documents how
+they are derived. Removing a service from a host drops it from the blueprints, but
+Authentik does not delete objects a blueprint no longer lists: remove them in the UI.
 
 ## Vaultwarden
 

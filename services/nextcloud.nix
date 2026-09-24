@@ -52,6 +52,7 @@ in
     subdomain = "cloud";
     port = 8080;
     apiClients = true; # desktop and mobile sync clients
+    oidc.redirectPaths = [ "/apps/user_oidc/code" ];
     caddy.extraConfig = ''
       redir /.well-known/carddav /remote.php/dav 301
       redir /.well-known/caldav  /remote.php/dav 301
