@@ -113,7 +113,7 @@ in
     config = {
       dbtype = "pgsql";
       adminuser = "admin";
-      adminpassFile = config.age.secrets.nextcloud-admin-pass.path;
+      adminpassFile = config.lanbat.secrets.nextcloud-admin-pass.path;
     };
 
     phpOptions = {
@@ -153,7 +153,7 @@ in
     after = [ "nextcloud-setup.service" ];
     wantedBy = [ "nextcloud-setup.service" ];
     # Only runs if the env file exists and is non-empty.
-    unitConfig.ConditionPathExists = config.age.secrets.nextcloud-oidc-env.path;
+    unitConfig.ConditionPathExists = config.lanbat.secrets.nextcloud-oidc-env.path;
     serviceConfig = {
       Type = "oneshot";
       User = "nextcloud";
@@ -162,7 +162,7 @@ in
       #   NEXTCLOUD_OIDC_CLIENT_SECRET=<value>
       ExecStart = pkgs.writeShellScript "nextcloud-oidc-setup" ''
         set -euo pipefail
-        . ${config.age.secrets.nextcloud-oidc-env.path}
+        . ${config.lanbat.secrets.nextcloud-oidc-env.path}
 
         OCC="${config.services.nextcloud.occ}/bin/nextcloud-occ"
 

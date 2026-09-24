@@ -212,7 +212,7 @@ matching its service's tier, so workload data never lands on the unencrypted hos
 ```nix
 lanbat.postgresql.databases.<name> = {
   instance = "always-on";   # or "workload"
-  # passwordFile = config.age.secrets.<name>-env.path;   # only for TCP logins (containers)
+  # passwordFile = config.lanbat.secrets.<name>-env.path;   # only for TCP logins (containers)
 };
 ```
 This creates a database and owner role named `<name>`. A NixOS-native service running as
@@ -246,20 +246,28 @@ entire app (including OIDC login) when NFS drops; external folders fail individu
 instead. Document the reason in the service file if you add another soft dependency.
 
 ### Secrets
-- **Primary pattern:** declare secrets in `lanbat.services.<name>.secrets`. Wiring
-  (`modules/wiring/secrets.nix`) turns each entry into an `age.secrets` definition with
-  the right owner and `secrets/<name>.age` path.
-- **Exceptions:** secrets not tied to one service account (e.g. `caddy-ca-root-key` in
-  `services/caddy.nix`) may declare `age.secrets` directly in the service module.
+- **Declare a requirement, read through the accessor.** A service lists the secrets it
+  needs in `lanbat.services.<name>.secrets` (owner, group, mode); it never says where
+  the file comes from. The profile's provider (`deployment.secrets.provider`) satisfies
+  each requirement, and the service reads the decrypted file as
+  `config.lanbat.secrets.<secret>.path`, never through `config.age.secrets`. Wiring
+  (`modules/wiring/secrets.nix`) does the rest: under `agenix` it decrypts
+  `<deployment.secrets.root>/<secret>.age`, under `none` it resolves to a placeholder.
+- **A missing provision fails evaluation by name.** Under `agenix`, a requirement with no
+  `<secret>.age` in the profile's secrets root stops evaluation with a message naming
+  the secret, the service that requires it and the host.
+- **Host secrets:** a secret that belongs to a host rather than a service (the overlay
+  key) is declared in `lanbat.hostSecrets.<secret>` and read the same way.
+- **Exceptions:** `caddy-ca-root-key` in `services/caddy.nix` still declares
+  `age.secrets` directly.
 - Add every new secret to `secrets/secrets.nix.example` and `secrets/README.md`.
-- Inject secrets at runtime via `environmentFile` or `config.age.secrets.<name>.path` —
+- Inject secrets at runtime via `environmentFile` or `config.lanbat.secrets.<name>.path` —
   never inline plaintext in Nix expressions.
-- Only declare a secret that the service actually reads: every declared `.age` file must
-  exist or evaluation fails.
+- Only declare a secret that the service actually reads.
 - For environment variable injection into NixOS-native services, set:
   ```nix
   systemd.services.<name>.serviceConfig.EnvironmentFile = [
-    config.age.secrets.<name>-env.path
+    config.lanbat.secrets.<name>-env.path
   ];
   ```
 
@@ -289,7 +297,7 @@ throw a duplicate attribute error. Merge all rules into a single list.
 
 - **Hardcoding the domain** — use `config.lanbat.deployment.domain`
 - **Wiring a service by hand** — Caddy vhosts, workload stubs and bind mounts, NFS
-  dependencies, service accounts and `age.secrets` come from `lanbat.services.<name>`
+  dependencies, service accounts and secrets come from `lanbat.services.<name>`
 - **Declaring unused secrets** — only declare what a service actually uses
 - **Using `linux_rpi4` kernel packages on the Pi 5** — use `boot.kernelModules`
   for kernel module loading instead of package references

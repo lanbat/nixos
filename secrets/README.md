@@ -6,8 +6,11 @@ Each secret is an age-encrypted `.age` file in this directory.
 They are decrypted at activation time using the host's SSH host key.
 
 Services declare the secrets they read in `lanbat.services.<name>.secrets`; each entry
-`<secret> = { }` refers to `secrets/<secret>.age` and is decrypted to
-`/run/agenix/<secret>`.
+`<secret> = { }` is a requirement that the profile's provider satisfies. Under `agenix`
+that is `<deployment.secrets.root>/<secret>.age`, decrypted to `/run/agenix/<secret>`;
+services read the path as `config.lanbat.secrets.<secret>.path`. A requirement whose
+`.age` file is missing fails evaluation with the secret's name and the service that
+requires it.
 
 ## Chicken-and-egg: secrets before first install
 

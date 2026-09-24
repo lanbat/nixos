@@ -3,7 +3,7 @@
 # The service interface. Every service file describes itself once under
 # lanbat.services.<name>, and the wiring modules (modules/wiring/) turn those
 # descriptions into Caddy vhosts, workload gating, NFS dependencies,
-# on-demand activators, container accounts, agenix secrets and Homepage
+# on-demand activators, container accounts, secrets and Homepage
 # entries. modules/wiring/checks.nix rejects inconsistent descriptions at
 # evaluation time.
 #
@@ -65,12 +65,12 @@ let
         group = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Group of the decrypted secret (agenix default when null).";
+          description = "Group of the decrypted secret (the provider's default when null).";
         };
         mode = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Mode of the decrypted secret (agenix default 0400 when null).";
+          description = "Mode of the decrypted secret (the provider's default, 0400, when null).";
         };
       };
     };
@@ -490,7 +490,12 @@ let
           example = {
             vaultwarden-env = { };
           };
-          description = "agenix secrets read from secrets/<name>.age.";
+          description = ''
+            Secrets this service requires, by name. The profile's secrets
+            provider satisfies each one (under agenix, from
+            <deployment.secrets.root>/<name>.age), and the service reads the
+            decrypted file as lanbat.secrets.<name>.path.
+          '';
         };
 
         # ── Dashboard (services/homepage.nix) ─────────────────────────────────

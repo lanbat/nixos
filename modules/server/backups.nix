@@ -37,7 +37,7 @@
 #
 #  2. Add them to secrets/secrets.nix (serverKeys recipients).
 #
-#  3. Declare them with age.secrets in this module.
+#  3. Declare them in lanbat.hostSecrets in this module (owner root).
 #
 #  4. Initialise each restic repository before the first timer fires:
 #       restic -r <host-repo>     init
@@ -243,7 +243,7 @@ in
   #   (mkResticService {
   #     name = "host";
   #     repoPath = cfg.backups.hostRepo;
-  #     passwordFile = config.age.secrets.restic-host-password.path;
+  #     passwordFile = config.lanbat.secrets.restic-host-password.path;
   #     paths = [
   #       "/etc"
   #       "/root"
@@ -253,7 +253,7 @@ in
   #   (mkResticService {
   #     name = "control";
   #     repoPath = cfg.backups.controlRepo;
-  #     passwordFile = config.age.secrets.restic-control-password.path;
+  #     passwordFile = config.lanbat.secrets.restic-control-password.path;
   #     paths = [ "/mnt/control" ];
   #     extraRequires = [ "control-online.target" ];
   #     extraAfter = [ "control-online.target" ];
@@ -261,7 +261,7 @@ in
   #   (mkResticService {
   #     name = "workload";
   #     repoPath = cfg.backups.workloadRepo;
-  #     passwordFile = config.age.secrets.restic-workload-password.path;
+  #     passwordFile = config.lanbat.secrets.restic-workload-password.path;
   #     paths = [ "/mnt/workload" ];
   #     extraRequires = [ "workload-online.target" ];
   #     extraAfter = [ "workload-online.target" ];

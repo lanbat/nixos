@@ -117,10 +117,10 @@ in
     # These are appended to the existing environmentFiles list (which already
     # contains authentik-env from authentik.nix).
     virtualisation.oci-containers.containers."authentik-server".environmentFiles = [
-      config.age.secrets.authentik-oidc-secrets.path
+      config.lanbat.secrets.authentik-oidc-secrets.path
     ];
     virtualisation.oci-containers.containers."authentik-worker".environmentFiles = [
-      config.age.secrets.authentik-oidc-secrets.path
+      config.lanbat.secrets.authentik-oidc-secrets.path
     ];
   };
 }

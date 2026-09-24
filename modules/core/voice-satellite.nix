@@ -262,7 +262,7 @@ in
         map (args: "-+${alsa}/bin/amixer -q ${lib.replaceStrings [ "%" ] [ "%%" ] args}") cfg.mixer
         ++
           lib.optional (cfg.room != null)
-            "-+${coreutils}/bin/install -m 0400 -o wyoming-satellite -g wyoming-satellite ${config.age.secrets.ha-voice-token.path} ${runtimeDir}/ha-token";
+            "-+${coreutils}/bin/install -m 0400 -o wyoming-satellite -g wyoming-satellite ${config.lanbat.secrets.ha-voice-token.path} ${runtimeDir}/ha-token";
       RuntimeDirectory = "voice-satellite";
       RuntimeDirectoryMode = "0700";
     };

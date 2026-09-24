@@ -159,7 +159,7 @@ in
 
     script = ''
       set -a
-      . ${config.age.secrets.hass-bootstrap-env.path}
+      . ${config.lanbat.secrets.hass-bootstrap-env.path}
       set +a
       export MA_URL="http://127.0.0.1:8095"
       export MA_PUBLIC_URL="https://music.${domain}"

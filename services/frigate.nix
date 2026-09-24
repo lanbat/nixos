@@ -634,10 +634,10 @@ in
             {
               # awk 1 ensures a trailing newline even if the secret file lacks one,
               # preventing the next printf from being appended to the last line.
-              ${pkgs.gawk}/bin/awk 1 ${config.age.secrets.frigate-rtsp-env.path}
+              ${pkgs.gawk}/bin/awk 1 ${config.lanbat.secrets.frigate-rtsp-env.path}
               ${lib.optionalString hasMqtt ''
                 printf 'FRIGATE_MQTT_PASSWORD=%s\n' \
-                  "$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.age.secrets.mosquitto-frigate-pass.path})"
+                  "$(${pkgs.coreutils}/bin/tr -d '\n' < ${config.lanbat.secrets.mosquitto-frigate-pass.path})"
               ''}
             } > /run/frigate-env
             chown frigate:frigate /run/frigate-env

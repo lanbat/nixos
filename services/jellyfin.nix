@@ -130,8 +130,8 @@ in
 
     script = ''
       set -a
-      . ${config.age.secrets.hass-bootstrap-env.path}
-      . ${config.age.secrets.authentik-oidc-secrets.path}
+      . ${config.lanbat.secrets.hass-bootstrap-env.path}
+      . ${config.lanbat.secrets.authentik-oidc-secrets.path}
       set +a
       export JELLYFIN_URL="http://127.0.0.1:8096"
       export EXTERNAL_URL="https://media.${domain}"

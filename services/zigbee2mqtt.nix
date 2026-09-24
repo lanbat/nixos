@@ -129,7 +129,7 @@ in
     let
       script = pkgs.writeShellScript "z2m-write-secret" ''
         set -euo pipefail
-        password=$(cat ${config.lanbat.secretPath "mosquitto-z2m-pass"})
+        password=$(cat ${config.lanbat.secrets.mosquitto-z2m-pass.path})
         printf 'mqtt_password: %s\n' "$password" \
           > /var/lib/zigbee2mqtt/secret.yaml
         chmod 0600 /var/lib/zigbee2mqtt/secret.yaml

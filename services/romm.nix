@@ -126,7 +126,7 @@ in
 
   lanbat.postgresql.databases.romm = {
     instance = "workload";
-    passwordFile = config.age.secrets.romm-db-pass.path;
+    passwordFile = config.lanbat.secrets.romm-db-pass.path;
   };
 
   virtualisation.oci-containers.containers."romm" = {
@@ -154,8 +154,8 @@ in
       TZ = config.lanbat.deployment.timezone;
     };
     environmentFiles = [
-      config.age.secrets.romm-db-pass.path
-      config.age.secrets.romm-env.path
+      config.lanbat.secrets.romm-db-pass.path
+      config.lanbat.secrets.romm-env.path
     ];
 
     volumes = [

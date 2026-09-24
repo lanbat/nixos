@@ -53,7 +53,7 @@
 
   lanbat.postgresql.databases.bitmagnet = {
     instance = "workload";
-    passwordFile = config.age.secrets.bitmagnet-db-pass.path;
+    passwordFile = config.lanbat.secrets.bitmagnet-db-pass.path;
   };
 
   # ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@
       # POSTGRES_PASSWORD via env file
       REDIS_ADDR = ""; # Bitmagnet doesn't require Redis
     };
-    environmentFiles = [ config.age.secrets.bitmagnet-db-pass.path ];
+    environmentFiles = [ config.lanbat.secrets.bitmagnet-db-pass.path ];
 
     volumes = [
       "/var/lib/bitmagnet:/root/.config/bitmagnet"

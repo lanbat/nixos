@@ -202,8 +202,9 @@ hosts.server.plugins = [
 Plugins use the repo's agenix `secrets/` directory. If your plugin needs new
 secrets:
 
-1. Declare them under `lanbat.services.<name>.secrets` (or `age.secrets` for
-   non-service secrets).
+1. Declare them under `lanbat.services.<name>.secrets` (or `lanbat.hostSecrets`
+   for secrets that belong to no service), and read each one as
+   `config.lanbat.secrets.<secret>.path`.
 2. Add entries to `secrets/secrets.nix.example` and the inventory in
    `secrets/README.md`.
 3. **In your pull request:** document the required secrets in your plugin

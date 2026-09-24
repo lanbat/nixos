@@ -196,14 +196,14 @@ in
         RemainAfterExit = true;
         User = "hass";
         Group = "hass";
-        EnvironmentFile = config.age.secrets.hass-bootstrap-env.path;
+        EnvironmentFile = config.lanbat.secrets.hass-bootstrap-env.path;
       };
 
       path = [ bootstrap ];
 
       script = ''
         set -a
-        . ${config.age.secrets.hass-bootstrap-env.path}
+        . ${config.lanbat.secrets.hass-bootstrap-env.path}
         set +a
         export INTERNAL_URL="http://127.0.0.1:8123"
         export EXTERNAL_URL="https://ha.${domain}"
@@ -242,7 +242,7 @@ in
           export MQTT_BROKER="127.0.0.1"
           export MQTT_PORT="1883"
           export MQTT_USERNAME="homeassistant"
-          export MQTT_PASSWORD="$(cat ${config.age.secrets.mosquitto-ha-pass.path})"
+          export MQTT_PASSWORD="$(cat ${config.lanbat.secrets.mosquitto-ha-pass.path})"
         ''}
         export FRIGATE_URL="http://127.0.0.1:5000/"
         export MUSIC_ASSISTANT_URL="http://127.0.0.1:8095"
@@ -257,15 +257,15 @@ in
         ${lib.optionalString (llm != null) ''
           export LLM_BASE_URL="${llm.baseUrl}"
           export LLM_MODEL="${llm.model}"
-          export LLM_API_KEY_FILE="${config.age.secrets.ha-llm-api-key.path}"
+          export LLM_API_KEY_FILE="${config.lanbat.secrets.ha-llm-api-key.path}"
           export LLM_MAX_TOKENS="150"
           export LLM_USE_TOOLS="false"
         ''}
         ${lib.optionalString voiceRooms ''
-          export VOICE_TOKEN_RECORD_FILE="${config.age.secrets.ha-voice-refresh-token.path}"
+          export VOICE_TOKEN_RECORD_FILE="${config.lanbat.secrets.ha-voice-refresh-token.path}"
         ''}
         ${lib.optionalString xiaomiBle ''
-          export XIAOMI_BLE_KEYS_FILE="${config.age.secrets.ha-xiaomi-ble.path}"
+          export XIAOMI_BLE_KEYS_FILE="${config.lanbat.secrets.ha-xiaomi-ble.path}"
         ''}
         exec home-assistant-post-setup
       '';
@@ -522,7 +522,7 @@ in
         pkgs.coreutils
       ];
       script = ''
-        key=$(cat ${config.age.secrets.ha-llm-api-key.path})
+        key=$(cat ${config.lanbat.secrets.ha-llm-api-key.path})
         curl -sS --max-time 45 \
           -H "Authorization: Bearer $key" \
           -H "Content-Type: application/json" \

@@ -142,7 +142,7 @@ in
   systemd.services.telegraf.serviceConfig = {
     AmbientCapabilities = "CAP_NET_RAW";
     EnvironmentFile = [
-      config.age.secrets.telegraf-token.path
+      config.lanbat.secrets.telegraf-token.path
     ];
   };
 
