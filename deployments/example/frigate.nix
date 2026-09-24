@@ -1,163 +1,122 @@
 # deployments/example/frigate.nix
 #
-# Frigate settings for the example profile (services/frigate.nix documents
-# every option): one overhead camera covering a driveway, the pavement and
-# the road beyond, with licence plate recognition.
+# Frigate settings for the example profile. services/frigate.nix documents
+# every option; the values here are placeholders that show each of them.
 #
-# The camera serves HTTP-FLV, the recommended transport for Reolink cameras up
-# to 5 MP. go2rtc ingests the main and sub streams once and Frigate reads them
-# back from the local restream. Credentials stay in the frigate-rtsp-env
-# secret: the sources only name {FRIGATE_RTSP_USER} and {FRIGATE_RTSP_PASSWORD}.
+# A real profile keeps its own deployments/<profile>/frigate.nix next to its
+# deploy.nix (gitignored, like deploy.nix) and lists it in
+# hosts.server.modules.
+#
+# go2rtc ingests each camera stream once and Frigate reads it back from the
+# local restream. Credentials stay in the frigate-rtsp-env secret: sources
+# only name {FRIGATE_RTSP_USER} and {FRIGATE_RTSP_PASSWORD}.
 { config, ... }:
 
 let
-  camera = "c1.${config.lanbat.deployment.rootDomain}";
-  flv =
-    stream:
-    "http://${camera}/flv?port=1935&app=bcs&stream=${stream}&user={FRIGATE_RTSP_USER}&password={FRIGATE_RTSP_PASSWORD}";
+  camera = "front-camera.${config.lanbat.deployment.rootDomain}";
+  rtsp = path: "rtsp://{FRIGATE_RTSP_USER}:{FRIGATE_RTSP_PASSWORD}@${camera}:554/${path}";
 
+  people = [ "person" ];
   vehicles = [
-    "person"
     "car"
-    "motorcycle"
-    "bus"
-    "truck"
     "bicycle"
   ];
-  animals = [
-    "dog"
-    "cat"
-    "bird"
-  ];
-
-  filter = minScore: threshold: { inherit minScore threshold; };
 in
 {
   lanbat.services.frigate.settings = {
-    cameras.c1 = {
+    detector.device = "AUTO";
+
+    retention = {
+      motionDays = 7;
+      detectionDays = 14;
+      alertDays = 14;
+      snapshotDays = 30;
+    };
+
+    cameras.front = {
       inputs = [
-        # Main stream (2560x1920) for detection: the sub stream is too soft
-        # for overhead or distant objects.
+        # Main stream for detection.
         {
-          stream = "c1";
-          source = "ffmpeg:${flv "channel0_main.bcs"}#video=copy#audio=copy#audio=opus";
+          stream = "front";
+          source = rtsp "main";
           roles = [ "detect" ];
         }
-        # Sub stream for recording: far smaller than the 5 MP main, so the
-        # motion-only rolling window stays bounded. Detection, LPR and zones
-        # still run on the main stream.
+        # Sub stream for recording, which keeps the rolling window small.
         {
-          stream = "c1_sub";
-          source = "ffmpeg:${flv "channel0_ext.bcs"}";
+          stream = "front_sub";
+          source = rtsp "sub";
           roles = [ "record" ];
         }
       ];
 
       detect = {
         width = 1280;
-        height = 960;
-        # 5 fps is plenty for driveway and road traffic and costs about 30%
-        # less detector CPU than 7.
+        height = 720;
         fps = 5;
         minInitialized = 2;
       };
 
-      lpr = {
-        enable = true;
-        # Overhead first-storey view: mild enhancement helps OCR without blurring.
-        enhancement = 3;
-        # Lower than the global default; plates are smaller at driveway distance.
-        minArea = 600;
-      };
-
       zones = {
-        driveway = {
-          coordinates = "0,0.928,0,0.298,0.328,0.124,0.586,0.044,0.712,0.014,0.793,0,1,0,1,1,0.435,1,0.438,0.922,0.012,0.92,0.012,0.978,0.441,0.978,0.433,1,0,1";
+        entrance = {
+          coordinates = "0,0.6,0.5,0.6,0.5,1,0,1";
+          friendlyName = "Entrance";
           inertia = 3;
           loiteringTime = 0;
+          objects = people;
         };
-        pavement = {
-          coordinates = "0.003,0.212,0.183,0.092,0.315,0.024,0.37,0,0,0";
+        street = {
+          coordinates = "0,0,1,0,1,0.2,0,0.2";
+          friendlyName = "Street";
           inertia = 3;
-          loiteringTime = 0;
-          friendlyName = "Pavement";
-        };
-        road = {
-          coordinates = "0,0,1,0,1,0.22,0,0.22";
-          inertia = 3;
-          loiteringTime = 0;
-          friendlyName = "Tennison Road";
         };
       };
 
       objects = {
-        track = [
-          "person"
-          "bicycle"
-          "car"
-          "motorcycle"
-          "bus"
-          "truck"
-        ]
-        ++ animals;
+        track = people ++ vehicles;
         filters = {
-          person = filter 0.35 0.45;
-          car = filter 0.35 0.45;
-          truck = filter 0.35 0.45;
-          motorcycle = filter 0.5 0.6;
-          bus = filter 0.5 0.65;
-          bicycle = filter 0.5 0.65;
-          dog = filter 0.45 0.55;
-          cat = filter 0.45 0.55;
-          bird = filter 0.55 0.65;
+          person = {
+            minScore = 0.5;
+            threshold = 0.7;
+          };
+          car.threshold = 0.7;
         };
       };
 
-      # A long cutoff merges nearby detections into one review item, cutting
-      # the per-event snapshot and thumbnail count. Labels are unchanged.
       review = {
         alerts = {
-          cutoffTime = 60;
-          labels = vehicles;
+          labels = people;
+          cutoffTime = 30;
         };
         detections = {
-          cutoffTime = 60;
-          labels = vehicles ++ animals;
+          labels = people ++ vehicles;
+          cutoffTime = 30;
         };
       };
 
-      # Overhead driveway and distant road traffic need sensitive motion to
-      # trigger detection. Do not mask the road.
       motion = {
-        threshold = 10;
-        contourArea = 5;
+        threshold = 25;
+        contourArea = 10;
+      };
+
+      lpr = {
+        enable = true;
+        enhancement = 2;
+        minArea = 1000;
       };
 
       notifications = true;
+
+      # Raw Frigate keys for this camera, merged last.
+      extraConfig.motion.mask = [ "0.8,0,1,0,1,0.1,0.8,0.1" ];
     };
 
-    # Licence plate recognition: YOLOv9 plate detection and PaddleOCR on
-    # detected cars and motorcycles. It needs car/motorcycle in objects.track;
-    # do not add license_plate (Frigate+ only). The format matches UK plates.
+    # Raw Frigate keys, merged last: here licence plate recognition, which the
+    # schema does not model globally. It needs car in objects.track.
     extraConfig.lpr = {
       enabled = true;
-      detection_threshold = 0.55;
-      min_area = 800;
-      recognition_threshold = 0.85;
-      min_plate_length = 7;
-      match_distance = 1;
-      format = "^[A-Z]{2}[0-9]{2} ?[A-Z]{3}$";
-      debug_save_plates = true;
-      replace_rules = [
-        {
-          pattern = "O";
-          replacement = "0";
-        }
-        {
-          pattern = "I";
-          replacement = "1";
-        }
-      ];
+      min_plate_length = 4;
+      # Placeholder: match your region's plate format, or leave it unset.
+      format = "^[A-Z0-9]{4,8}$";
     };
   };
 }

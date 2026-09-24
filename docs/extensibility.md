@@ -75,7 +75,7 @@ service's defaults without `lib.mkForce`:
 ```nix
 # deployments/<profile>/deploy.nix
 hosts.server.modules = [
-  ./frigate.nix   # or an inline module: ({ config, ... }: { ... })
+  ./frigate.nix   # deployments/<profile>/frigate.nix, gitignored like deploy.nix
 ];
 ```
 
@@ -83,7 +83,7 @@ Frigate is the first service with a schema: cameras (go2rtc inputs and their
 roles, detect, zones, object filters, review, motion, LPR), the detector device,
 retention, and `extraConfig` escape hatches for raw Frigate keys, globally and per
 camera. The options are documented in `services/frigate.nix`;
-`deployments/example/frigate.nix` is a complete one-camera configuration. Camera
+`deployments/example/frigate.nix` is a placeholder camera that uses every option. Camera
 sources reference credentials as `{FRIGATE_RTSP_USER}` and `{FRIGATE_RTSP_PASSWORD}`,
 which Frigate substitutes from `secrets/frigate-rtsp-env.age`, so no credential is
 ever written into the profile.

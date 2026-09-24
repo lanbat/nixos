@@ -597,17 +597,30 @@ served chain does not verify against the pinned root.
 
 ### 3f. Configure Frigate cameras
 
-Describe the cameras under `lanbat.services.frigate.settings` in a module listed
-in `hosts.server.modules` of your `deploy.nix` (see
-[extensibility.md](extensibility.md#service-settings)). Start from
-`deployments/example/frigate.nix`: set each camera's go2rtc inputs (one with the
-`detect` role), detect resolution and zones. Put the camera credentials in
+Each profile keeps its camera layout in `deployments/<profile>/frigate.nix`, next to
+its `deploy.nix`. Like `deploy.nix` it is gitignored, so camera names, zones and
+addresses never reach the repository. Start from the placeholder example:
+
+```bash
+cp deployments/example/frigate.nix deployments/<profile>/frigate.nix
+```
+
+and list it in the server's modules in `deployments/<profile>/deploy.nix`:
+
+```nix
+hosts.server.modules = [ ./frigate.nix ];
+```
+
+In it, describe the cameras under `lanbat.services.frigate.settings` (see
+[extensibility.md](extensibility.md#service-settings); every option is documented in
+`services/frigate.nix`): each camera's go2rtc inputs (exactly one with the `detect`
+role), detect resolution and zones. Put the camera credentials in
 `frigate-rtsp-env.age` and reference them from the sources as
-`{FRIGATE_RTSP_USER}` and `{FRIGATE_RTSP_PASSWORD}`. Evaluation warns while no
-camera is configured.
+`{FRIGATE_RTSP_USER}` and `{FRIGATE_RTSP_PASSWORD}`. Evaluation fails while Frigate
+has no camera, unless `settings.allowNoCameras = true`.
 
 To tune zones or masks in Frigate's UI, follow "Temporary UI tuning" at the top of
-`services/frigate.nix`, then copy the values back into the settings.
+`services/frigate.nix`, then copy the values back into your `frigate.nix`.
 
 ### 3g. Set up rclone for Frigate cloud sync
 
