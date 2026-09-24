@@ -190,6 +190,13 @@ let
           }
         ];
       }) == [ "lanbat.services.frigate: camera bad needs exactly one input with the detect role." ];
+    "no cameras fails" = lib.any (lib.hasInfix "lanbat.services.frigate has no cameras") (
+      failedAssertions (evalFrigate { })
+    );
+    "no cameras passes when allowed" =
+      failedAssertions (evalFrigate {
+        allowNoCameras = true;
+      }) == [ ];
     "a stream name used twice fails" =
       lib.any (lib.hasInfix "stream names used more than once: front")
         (

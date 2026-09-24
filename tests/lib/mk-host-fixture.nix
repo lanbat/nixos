@@ -79,6 +79,8 @@ let
           system = "/dev/disk/by-id/test-system-disk";
         };
         plugins = pluginsFor "server";
+        # The fixture has no cameras; Frigate refuses that unless told.
+        modules = [ { lanbat.services.frigate.settings.allowNoCameras = true; } ];
       };
 
       pi-storage = {

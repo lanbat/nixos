@@ -11,8 +11,10 @@
 # does not model go in settings.extraConfig (global) or
 # settings.cameras.<name>.extraConfig (one camera), merged last.
 #
-# A deployment sets them from a module in deploy.nix (hosts.<key>.modules);
-# deployments/example/frigate.nix is a complete one-camera example.
+# A profile sets them in deployments/<profile>/frigate.nix, gitignored like its
+# deploy.nix and listed in hosts.server.modules there;
+# deployments/example/frigate.nix shows every option with placeholder values.
+# Evaluation fails when Frigate has no camera, unless settings.allowNoCameras.
 #
 # Frigate 0.17 constraints the rendering keeps:
 #   - camera inputs live under cameras.<name>.ffmpeg.inputs (Camera.__init__
@@ -291,6 +293,17 @@ let
         description = "Cameras by name. The name must match ${frigateName}.";
       };
 
+      allowNoCameras = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Let Frigate run with no cameras. Evaluation fails otherwise, so a
+          profile that loses its camera module (deployments/<profile>/frigate.nix
+          is gitignored) cannot deploy a Frigate that silently records nothing.
+          Meant for test fixtures.
+        '';
+      };
+
       detector.device = mkOption {
         type = types.str;
         default = "AUTO";
@@ -511,15 +524,19 @@ in
       }) cfg.cameras
       ++ [
         {
+          assertion = cfg.cameras != { } || cfg.allowNoCameras;
+          message = ''
+            lanbat.services.frigate has no cameras. Set lanbat.services.frigate.settings.cameras
+            from a module in the host's modules in deploy.nix, conventionally
+            deployments/<profile>/frigate.nix (see deployments/example/frigate.nix),
+            or set settings.allowNoCameras = true to run Frigate without any.
+          '';
+        }
+        {
           assertion = duplicateStreams == [ ];
           message = "lanbat.services.frigate: go2rtc stream names used more than once: ${lib.concatStringsSep ", " duplicateStreams}.";
         }
       ];
-
-    warnings = lib.optional (cfg.cameras == { }) ''
-      lanbat.services.frigate has no cameras. Set lanbat.services.frigate.settings.cameras
-      from a module in deploy.nix (see deployments/example/frigate.nix).
-    '';
 
     lanbat.services.frigate = {
       subdomain = "nvr";

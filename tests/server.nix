@@ -67,6 +67,10 @@ pkgs.testers.runNixOSTest {
         fileSystems = config.lanbat.layers.controlFileSystems // config.lanbat.layers.workloadFileSystems;
       };
 
+      # The example server runs every service, Frigate included, without the
+      # example's camera module; Frigate refuses that unless told.
+      lanbat.services.frigate.settings.allowNoCameras = true;
+
       lanbat.layers = {
         controlDevice = lib.mkForce "/dev/vdb";
         workloadDevice = lib.mkForce "/dev/vdc";
