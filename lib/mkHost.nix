@@ -96,12 +96,24 @@ let
   ++ pluginSettingsModules
   ++ pluginModules;
 
-  raspberryPiModules = commonModules ++ [
-    ../hosts/pi/hardware.nix
-  ];
+  # The hardware the platform brings: the Raspberry Pi's kernel, firmware and
+  # filesystems, or nothing on a generic machine, whose role carries its own
+  # (the server's is the role module named "hardware"). A deploy entry's
+  # hardware replaces it: a module, a list of them, or [ ] for none.
+  platformHardware = lib.optionals (platform == "raspberry-pi") [ ../hosts/pi/hardware.nix ];
+  hardwareModules =
+    if !(hostCfg ? hardware) then
+      platformHardware
+    else if hostCfg.hardware == null then
+      [ ]
+    else
+      lib.toList hostCfg.hardware;
+
+  raspberryPiModules = commonModules ++ hardwareModules;
 
   genericModules =
     commonModules
+    ++ hardwareModules
     ++ lib.optionals (hostCfg.role == "server") [
       disko.nixosModules.disko
     ];

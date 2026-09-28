@@ -85,7 +85,8 @@ Please don't open public issues for vulnerabilities. See [SECURITY.md](SECURITY.
   share (`common.nix`, `pi-common.nix`).
 - `plugins/`: built-in plugins; enable per host in `deploy.nix`.
 - `deployments/`: one `deploy.nix` per site/profile.
-- `hosts/server/`, `hosts/pi/`: hardware and the server's disk layout (disko).
+- `hosts/server/`, `hosts/pi/`: hardware and the server's disk layout (disko). A
+  deploy entry can replace them (`roleModules.hardware`, `roleModules.disk`, `hardware`).
 
 ## Adding a new service
 

@@ -136,6 +136,21 @@ rejects a service with `onDemand` or `tier = "workload"` on a host without the
 on-demand or workload-gate wiring. To add to a role rather than take from it, use the
 host's `modules` or its `local/` directory (see [Local modules](#local-modules)).
 
+### Replacing a host's hardware module
+
+A host with `platform = "raspberry-pi"` imports `hosts/pi/hardware.nix` (kernel,
+firmware, SD card filesystems) whatever its role. A deploy entry replaces it with
+`hardware`, a module or a list of them, or drops it with `[ ]`:
+
+```nix
+hosts.pi-storage.hardware = [ ./pi-nvme-boot.nix ];   # boots from NVMe, not SD
+```
+
+On a server the hardware comes with the role instead, as its `hardware` module:
+replace that with `roleModules.hardware`, and the disk layout with
+`roleModules.disk`. On any other generic machine there is no platform hardware,
+and `hardware` only adds its modules.
+
 ## Overlay providers
 
 How hosts in a profile reach each other is chosen per profile with
