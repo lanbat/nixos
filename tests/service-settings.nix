@@ -10,6 +10,9 @@
 #   - Wyoming: the defaults keep today's pipeline and server satellite, and a
 #     profile's voice, model and ALSA card reach the servers, the satellite and
 #     Home Assistant's pipeline.
+#   - Home Assistant: the loopback URLs of the services it wires come from
+#     their descriptions, and the Zigbee2MQTT bridge watch follows whether
+#     Zigbee2MQTT runs on the host unless the profile says otherwise.
 {
   lib,
   pkgs,
@@ -128,6 +131,25 @@ let
   wyomingBadVoice = serverWith [ { lanbat.services.wyoming.settings.textToSpeech.voice = "alan"; } ];
 
   postSetup = config: config.systemd.services.home-assistant-post-setup.script;
+
+  # ── Home Assistant ───────────────────────────────────────────────────────
+  haConfig = config: config.services.home-assistant.config;
+  haViews = config: map (v: v.path) config.services.home-assistant.lovelaceConfig.views;
+
+  haMoved = serverWith [
+    {
+      lanbat.services = {
+        home-assistant.port = lib.mkForce 18123;
+        frigate.port = lib.mkForce 15000;
+        music-assistant.port = lib.mkForce 18095;
+        mosquitto.endpoint.port = lib.mkForce 11883;
+      };
+    }
+  ];
+
+  haNoZigbee = serverWith [
+    { lanbat.services.home-assistant.settings.zigbee2mqttBridge = false; }
+  ];
 
   expect = name: ok: if ok then null else name;
 
@@ -261,6 +283,37 @@ let
       !(builtins.tryEval (
         builtins.deepSeq wyomingBadVoice.services.wyoming.piper.servers.main.voice true
       )).success
+    ))
+
+    (expect "home assistant: the defaults keep today's URLs and Zigbee watch" (
+      (haConfig base).homeassistant.internal_url == "http://127.0.0.1:8123"
+      && lib.hasInfix ''export FRIGATE_URL="http://127.0.0.1:5000/"'' (postSetup base)
+      && lib.hasInfix ''export MUSIC_ASSISTANT_URL="http://127.0.0.1:8095"'' (postSetup base)
+      && lib.hasInfix ''export MQTT_PORT="1883"'' (postSetup base)
+      && base.lanbat.voiceSatellite.homeAssistant.url == "http://127.0.0.1:8123"
+      &&
+        map (a: a.id) (haConfig base).automation == [
+          "lanbat_zigbee_bridge_offline"
+          "lanbat_zigbee_bridge_online"
+        ]
+      &&
+        haViews base == [
+          "home"
+          "all"
+        ]
+    ))
+
+    (expect "home assistant: the URLs follow the services' descriptions" (
+      (haConfig haMoved).homeassistant.internal_url == "http://127.0.0.1:18123"
+      && lib.hasInfix ''export INTERNAL_URL="http://127.0.0.1:18123"'' haMoved.systemd.services.home-assistant-bootstrap.script
+      && lib.hasInfix ''export FRIGATE_URL="http://127.0.0.1:15000/"'' (postSetup haMoved)
+      && lib.hasInfix ''export MUSIC_ASSISTANT_URL="http://127.0.0.1:18095"'' (postSetup haMoved)
+      && lib.hasInfix ''export MQTT_PORT="11883"'' (postSetup haMoved)
+      && haMoved.lanbat.voiceSatellite.homeAssistant.url == "http://127.0.0.1:18123"
+    ))
+
+    (expect "home assistant: the Zigbee watch can be turned off" (
+      (haConfig haNoZigbee).automation == [ ] && haViews haNoZigbee == [ "all" ]
     ))
 
     (expect "the example profile's server has no failed assertion" (failedAssertions base == [ ]))
