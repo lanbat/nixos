@@ -100,6 +100,33 @@ Roles bundle infrastructure modules for a host type. They are not optional — e
 
 Add a new role by creating `lib/roles/<name>.nix` and registering it in `lib/roles.nix` and `modules/core/settings.nix`.
 
+### Replacing a role's bundled modules
+
+Each module a role bundles has a name in `lib/roles.nix`. A host replaces or
+drops one from its deploy entry, without editing a tracked file:
+
+```nix
+hosts.server.roleModules = {
+  wiring-caddy = null;                # no Caddy vhost wiring on this server
+  backups = ./backups.nix;            # deployments/<profile>/backups.nix instead
+};
+```
+
+A replacement is a module or a list of modules and takes the place of the one it
+replaces, so the others keep their order; `null` drops it. Naming a module the
+role does not bundle fails evaluation and lists the names it does bundle:
+
+| Role | Bundled modules |
+|---|---|
+| `server` | `role`, `hardware`, `disk`, `control-layer`, `backups`, `wiring-caddy`, `wiring-nfs`, `wiring-on-demand`, `wiring-workload-gate` |
+| `storage-pi` | `role`, `clevis-unlock`, `nfs-exports`, `storage`, `user-quotas`, `snapclient`, `telegraf` |
+| `voice-pi` | `role`, `audio`, `telegraf` |
+
+Dropping wiring a placed service needs is caught: `modules/wiring/checks.nix`
+rejects a service with `onDemand` or `tier = "workload"` on a host without the
+on-demand or workload-gate wiring. To add to a role rather than take from it, use the
+host's `modules` or its `local/` directory (see [Local modules](#local-modules)).
+
 ## Overlay providers
 
 How hosts in a profile reach each other is chosen per profile with

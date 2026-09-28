@@ -127,7 +127,9 @@ A version 1 plugin that sets `settings` fails with an error asking for
 Server plugins should declare services under `lanbat.services.<name>` using the interface in `modules/core/services.nix`. The wiring modules (`modules/wiring/`) generate Caddy vhosts, LUKS gating, NFS dependencies, accounts, and secrets from those declarations.
 
 Some wiring comes with the host's role rather than with the service: on-demand
-activation and workload gating are imported by the server role only. A service
+activation and workload gating are imported by the server role only (and a host
+can drop them with `roleModules`; see
+[extensibility.md](extensibility.md#replacing-a-roles-bundled-modules)). A service
 with `onDemand` or `tier = "workload"` placed on another role's host fails
 evaluation instead of starting at boot or keeping its state on the host root.
 

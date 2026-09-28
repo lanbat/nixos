@@ -79,6 +79,30 @@ let
     };
   };
 
+  withRoleModules =
+    roleModules:
+    baseDeploy
+    // {
+      hosts = baseDeploy.hosts // {
+        server = baseDeploy.hosts.server // {
+          inherit roleModules;
+        };
+      };
+    };
+
+  rolesLib = import ../lib/roles.nix { inherit lib; };
+
+  # Markers stand in for modules: resolveRoleModules never looks inside one.
+  serverWithoutCaddy = rolesLib.resolveRoleModules "server" {
+    wiring-caddy = null;
+    backups = "my-backups";
+    disk = [
+      "disk-a"
+      "disk-b"
+    ];
+  };
+  bundledServer = rolesLib.getRoleModules "server";
+
   failures = lib.filter (x: x != null) [
     (expectPass "example deploy with server in voiceRooms" baseDeploy)
     (expectPass "voiceRooms server role without lanbat-voice" voiceRoomOnServer)
@@ -100,6 +124,44 @@ let
       a = "";
     }))
     (expectThrow "multiple servers without primary override" twoServers)
+    (expectPass "roleModules dropping a bundled module" (withRoleModules {
+      wiring-caddy = null;
+    }))
+    (expectThrow "roleModules naming a module the role does not bundle" (withRoleModules {
+      no-such-module = null;
+    }))
+    (
+      if
+        !(lib.elem ../modules/wiring/caddy.nix serverWithoutCaddy)
+        && lib.elem ../modules/wiring/caddy.nix bundledServer
+      then
+        null
+      else
+        "roleModules: wiring-caddy = null must drop modules/wiring/caddy.nix"
+    )
+    (
+      let
+        # The bundled order with the overrides in place of what they replace.
+        expected = lib.concatMap (
+          m:
+          if m == ../modules/wiring/caddy.nix then
+            [ ]
+          else if m == ../modules/server/backups.nix then
+            [ "my-backups" ]
+          else if m == ../hosts/server/disk.nix then
+            [
+              "disk-a"
+              "disk-b"
+            ]
+          else
+            [ m ]
+        ) bundledServer;
+      in
+      if serverWithoutCaddy == expected then
+        null
+      else
+        "roleModules: a replacement must take the place of the module it replaces"
+    )
   ];
 in
 pkgs.runCommand "validate-deploy-check" { } ''

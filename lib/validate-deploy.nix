@@ -7,6 +7,7 @@
 let
   hostLib = import ./host.nix { inherit lib; };
   pluginLib = import ./plugins.nix { inherit lib; };
+  rolesLib = import ./roles.nix { inherit lib; };
 
   containsChangeMe =
     value:
@@ -85,7 +86,10 @@ let
       builtins.seq (requireField profileName name "system" host) (
         builtins.seq (validateNetworking profileName name host) (
           builtins.seq (validateRoleRequirements profileName name host) (
-            pluginLib.resolvePlugins host.role (host.plugins or [ ]) (host.services or [ ])
+            # A roleModules entry naming a module the role does not bundle.
+            builtins.seq (lib.length (rolesLib.resolveRoleModules host.role (host.roleModules or { }))) (
+              pluginLib.resolvePlugins host.role (host.plugins or [ ]) (host.services or [ ])
+            )
           )
         )
       )
