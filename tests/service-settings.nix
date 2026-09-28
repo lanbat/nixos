@@ -13,7 +13,8 @@
 #   - Home Assistant: the loopback URLs of the services it wires come from
 #     their descriptions, and the Zigbee2MQTT bridge watch follows whether
 #     Zigbee2MQTT runs on the host unless the profile says otherwise.
-#   - Nextcloud's database is the workload instance's "nextcloud" over its
+#   - The Redis index registry keeps today's indexes and rejects a clash, and
+#     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
 {
   lib,
@@ -153,7 +154,11 @@ let
     { lanbat.services.home-assistant.settings.zigbee2mqttBridge = false; }
   ];
 
-  # ── Nextcloud's database ─────────────────────────────────────────────────
+  # ── Redis indexes and Nextcloud's database ───────────────────────────────
+  redisClash = serverWith [ { lanbat.redis.databases.other.index = 1; } ];
+
+  envOf = config: container: config.virtualisation.oci-containers.containers.${container}.environment;
+
   expect = name: ok: if ok then null else name;
 
   cases = [
@@ -317,6 +322,21 @@ let
 
     (expect "home assistant: the Zigbee watch can be turned off" (
       (haConfig haNoZigbee).automation == [ ] && haViews haNoZigbee == [ "all" ]
+    ))
+
+    (expect "redis: the consumers keep today's indexes" (
+      lib.mapAttrs (_: db: db.index) base.lanbat.redis.databases == {
+        authentik = 0;
+        immich = 1;
+        romm = 2;
+      }
+      && (envOf base "authentik-server").AUTHENTIK_REDIS__DB == "0"
+      && (envOf base "immich-server").REDIS_DBINDEX == "1"
+      && (envOf base "romm").REDIS_DB == "2"
+    ))
+
+    (expect "redis: two consumers claiming one index are rejected" (
+      lib.any (lib.hasInfix "index 1 is claimed by immich and other") (failedAssertions redisClash)
     ))
 
     (expect "nextcloud: the workload instance's nextcloud database, over its socket" (
