@@ -205,8 +205,9 @@ in
 
     # The satellites' Home Assistant token: a long-lived access token of a
     # Home Assistant user, copied for the satellite when it starts.
-    lanbat.services.voice-satellite.secrets = lib.mkIf (cfg.room != null) {
-      ha-voice-token.owner = "root";
+    lanbat.services.voice-satellite.secrets.ha-voice-token = {
+      enable = cfg.room != null;
+      owner = "root";
     };
 
     # The satellite listens and Home Assistant connects to it, so the satellite

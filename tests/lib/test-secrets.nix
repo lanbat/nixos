@@ -19,13 +19,9 @@
 }:
 
 let
-  # Every secret the services declare, and the host's overlay key, which no
-  # service declares, when the host is on an overlay.
-  overlayInterface = (config.lanbat.overlay or { }).interface or null;
-  names = lib.unique (
-    lib.concatMap (svc: lib.attrNames svc.secrets) (lib.attrValues config.lanbat.services)
-    ++ lib.optional (overlayInterface != null) "overlay-${config.lanbat.hostKey}"
-  );
+  # Every secret the host is provisioned with: the requirements of its services
+  # and its host secrets (such as its overlay key) that are on.
+  names = lib.attrNames config.lanbat.secrets;
   contents = config.lanbat.testSecrets;
 
   # services/caddy.nix pins the internal CA's root to the committed

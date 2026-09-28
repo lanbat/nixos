@@ -115,12 +115,11 @@ in
     lib.mapAttrsToList (key: host: { ${host.overlay.ip} = [ (nameOf key) ]; }) members
   );
 
-  lanbat.hostSecrets = lib.mkIf joined {
-    ${secretName} = {
-      owner = "root";
-      group = "systemd-network";
-      mode = "0440";
-    };
+  lanbat.hostSecrets.${secretName} = {
+    enable = joined;
+    owner = "root";
+    group = "systemd-network";
+    mode = "0440";
   };
 
   systemd.network = lib.mkIf joined {

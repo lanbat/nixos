@@ -7,6 +7,10 @@
 # lanbat.hostSecrets. Those are requirements: they say who reads the file and
 # with which owner and mode, never where it comes from.
 #
+# A requirement can be conditional: its enable follows the setting that uses
+# the secret (haLlm, voiceRooms, ...), and one that is off is not provisioned,
+# so a profile that leaves a feature off needs no file for it.
+#
 # The profile's provider (deployment.secrets.provider) satisfies them, and the
 # result is lanbat.secrets.<secret>: every reader takes the decrypted file's
 # path from lanbat.secrets.<secret>.path, whichever provider is behind it.
@@ -34,6 +38,11 @@ let
   hostKey = config.lanbat.hostKey or "this host";
 
   requirementOptions = {
+    enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Whether the secret is required; one that is off is not provisioned.";
+    };
     owner = mkOption {
       type = types.str;
       description = "User that can read the decrypted secret.";
@@ -50,20 +59,38 @@ let
     };
   };
 
-  # Every requirement on this host, by secret name, with what declared it.
-  requirements =
+  # Every declaration on this host, by secret name, with what declared it,
+  # including those whose enable is false.
+  declared =
     lib.foldlAttrs (
       acc: svcName: svc:
       acc
       // lib.mapAttrs (_: req: {
-        inherit (req) owner group mode;
+        inherit (req)
+          enable
+          owner
+          group
+          mode
+          ;
         declaredBy = svcName;
       }) svc.secrets
     ) { } config.lanbat.services
     // lib.mapAttrs (name: req: {
-      inherit (req) owner group mode;
+      inherit (req)
+        enable
+        owner
+        group
+        mode
+        ;
       declaredBy = "host secret ${name}";
     }) config.lanbat.hostSecrets;
+
+  # The requirements: the declarations that are on. Only these are provisioned,
+  # so a feature that is off needs no secret, and has no entry in
+  # lanbat.secrets that something could read by mistake.
+  requirements = lib.mapAttrs (_: req: removeAttrs req [ "enable" ]) (
+    lib.filterAttrs (_: req: req.enable) declared
+  );
 
   # Where a secret's encrypted file comes from.
   #
@@ -121,7 +148,7 @@ in
   options.lanbat.secrets = mkOption {
     type = types.attrsOf (
       types.submodule {
-        options = requirementOptions // {
+        options = removeAttrs requirementOptions [ "enable" ] // {
           path = mkOption {
             type = types.str;
             description = "Path of the decrypted file on this host. Readers take the path from here.";
@@ -148,6 +175,19 @@ in
       when the provider does.
     '';
   };
+
+  options.lanbat.secretDeclarations = mkOption {
+    type = types.attrsOf types.anything;
+    internal = true;
+    readOnly = true;
+    description = ''
+      Every secret declared on this host, by name, whether or not its
+      requirement is on: enable, owner, group, mode and declaredBy. For tools
+      such as nix run .#secrets-recipients; readers use lanbat.secrets.
+    '';
+  };
+
+  config.lanbat.secretDeclarations = declared;
 
   config.lanbat.secrets = lib.mapAttrs (
     name: s: s // { inherit (config.age.secrets.${name}) path; }

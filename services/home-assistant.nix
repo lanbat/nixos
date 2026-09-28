@@ -127,18 +127,21 @@ in
       };
       secrets = {
         hass-bootstrap-env.owner = "hass";
-      }
-      // lib.optionalAttrs (llm != null) {
         # The API key of the conversation agent's LLM.
-        ha-llm-api-key.owner = "hass";
-      }
-      // lib.optionalAttrs voiceRooms {
+        ha-llm-api-key = {
+          enable = llm != null;
+          owner = "hass";
+        };
         # The record of the voice satellites' token, for home-assistant-post-setup.
-        ha-voice-refresh-token.owner = "root";
-      }
-      // lib.optionalAttrs xiaomiBle {
+        ha-voice-refresh-token = {
+          enable = voiceRooms;
+          owner = "root";
+        };
         # Xiaomi BLE bind keys, read by home-assistant-post-setup (runs as root).
-        ha-xiaomi-ble.owner = "root";
+        ha-xiaomi-ble = {
+          enable = xiaomiBle;
+          owner = "root";
+        };
       };
       caddy.proxyOptions = ''
         # Long-lived websockets for HA's live updates.

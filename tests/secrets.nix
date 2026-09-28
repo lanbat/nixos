@@ -3,7 +3,8 @@
 # The secrets wiring (modules/wiring/secrets.nix), evaluated without agenix:
 # requirements resolve through the profile's provider, readers get a path from
 # lanbat.secrets, and a requirement the profile cannot satisfy fails with a
-# message that names the secret and what requires it. Pure evaluation.
+# message that names the secret and what requires it. A requirement that is
+# off is not provisioned and needs no file. Pure evaluation.
 { lib, pkgs }:
 
 let
@@ -44,6 +45,22 @@ let
       grafana-env.mode = "0440";
       no-such-secret = { };
     };
+  };
+
+  # A requirement that is off, for a file the profile does not have either.
+  optional = {
+    optional.secrets = {
+      grafana-env = { };
+      feature-key = {
+        enable = false;
+        owner = "root";
+      };
+    };
+  };
+  off = eval {
+    provider = "agenix";
+    services = optional;
+    hostSecrets.overlay-server.enable = false;
   };
 
   none = eval { services = demo; };
@@ -97,6 +114,20 @@ let
     (expect "a host secret is provisioned like a service secret" (
       host.age.secrets.overlay-server.group == "systemd-network"
       && host.lanbat.secrets.overlay-server.path == "/run/agenix/overlay-server"
+    ))
+    (expect "a requirement that is off is not provisioned" (
+      !(off.lanbat.secrets ? feature-key) && !(off.age.secrets ? feature-key)
+    ))
+    (expect "a host secret that is off is not provisioned" (
+      !(off.lanbat.secrets ? overlay-server) && !(off.age.secrets ? overlay-server)
+    ))
+    (expect "a requirement that is off needs no file" (failed off == [ ]))
+    (expect "the requirements that are on are still provisioned" (
+      lib.attrNames off.age.secrets == [ "grafana-env" ]
+    ))
+    (expect "a declaration that is off is still recorded" (
+      off.lanbat.secretDeclarations.feature-key.enable == false
+      && off.lanbat.secretDeclarations.feature-key.declaredBy == "optional"
     ))
   ];
 

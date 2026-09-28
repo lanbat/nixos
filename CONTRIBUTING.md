@@ -256,6 +256,11 @@ instead. Document the reason in the service file if you add another soft depende
 - **A missing provision fails evaluation by name.** Under `agenix`, a requirement with no
   `<secret>.age` in the profile's secrets root stops evaluation with a message naming
   the secret, the service that requires it and the host.
+- **Conditional requirements.** A secret that only a feature uses is required only when
+  that feature is on: set the requirement's `enable` from the setting, e.g.
+  `ha-llm-api-key = { enable = llm != null; owner = "hass"; }`. A requirement that is
+  off is not provisioned, needs no file and has no `lanbat.secrets` entry, so guard
+  its reads with the same condition.
 - **Host secrets:** a secret that belongs to a host rather than a service (the overlay
   key) is declared in `lanbat.hostSecrets.<secret>` and read the same way.
 - Add every new secret to `secrets/secrets.nix.example` and `secrets/README.md`.

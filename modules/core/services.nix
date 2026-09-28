@@ -57,6 +57,17 @@ let
     defaultOwner:
     types.submodule {
       options = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+          example = lib.literalExpression "config.lanbat.deployment.haLlm != null";
+          description = ''
+            Whether the secret is required. Set it from the setting that uses
+            the secret, so that a feature which is off needs no secret: a
+            requirement that is off is not provisioned, and lanbat.secrets
+            has no entry for it.
+          '';
+        };
         owner = mkOption {
           type = types.str;
           default = defaultOwner;
@@ -494,7 +505,8 @@ let
             Secrets this service requires, by name. The profile's secrets
             provider satisfies each one (under agenix, from
             <deployment.secrets.root>/<name>.age), and the service reads the
-            decrypted file as lanbat.secrets.<name>.path.
+            decrypted file as lanbat.secrets.<name>.path. A requirement whose
+            enable is false is not provisioned.
           '';
         };
 
