@@ -29,14 +29,30 @@
 #   with enough accuracy for short commands. Use small-int8 if transcripts
 #   are often wrong.
 #
-# piper (10302) — text-to-speech (British English).
+# piper (10302) — text-to-speech.
 #   Downloads the voice model on first start (~60 MB).
-#   Voice "en_GB-alan-medium" is a natural-sounding British English
-#   male voice.  See https://rhasspy.github.io/piper-samples/ for
+#   The default voice, "en_GB-alan-medium", is a natural-sounding British
+#   English male voice.  See https://rhasspy.github.io/piper-samples/ for
 #   all available voices.
 #
 # satellite (10700) — this server's microphone and speaker
 #   (modules/core/voice-satellite.nix).
+#
+# Settings
+# --------
+# The wake word threshold, the speech-to-text model and language, the piper
+# voice and the server satellite's name, speaker, mixer and microphone are
+# lanbat.services.wyoming.settings (options below). The defaults are the
+# British English pipeline above and the onboard Intel codec (ALSA card PCH);
+# a profile changes them from a module in the host's modules
+# (docs/extensibility.md#service-settings):
+#
+#   lanbat.services.wyoming.settings = {
+#     speechToText.language = "de";
+#     textToSpeech.voice = "de_DE-thorsten-medium";
+#     satellite.speaker = "plughw:CARD=Generic,DEV=0";
+#     satellite.mixer = [ "-c Generic sset Master 80% unmute" ];
+#   };
 #
 # HA setup
 # --------
@@ -53,6 +69,67 @@
 }:
 
 let
+  inherit (lib) mkOption types;
+
+  cfg = config.lanbat.services.wyoming.settings;
+
+  wyomingSettings = {
+    options = {
+      wakeWord.threshold = mkOption {
+        type = types.numbers.between 0 1;
+        default = 0.35;
+        description = "openWakeWord's activation threshold: lower wakes more readily, and falsely more often.";
+      };
+
+      speechToText = {
+        model = mkOption {
+          type = types.str;
+          default = "base-int8";
+          example = "small-int8";
+          description = "faster-whisper model. base-int8 is fast on a CPU; small-int8 transcribes better.";
+        };
+        language = mkOption {
+          type = types.str;
+          default = "en";
+          description = "Language faster-whisper transcribes, and the pipeline's speech-to-text language.";
+        };
+      };
+
+      textToSpeech.voice = mkOption {
+        type = types.strMatching "[a-z]{2,3}_[A-Za-z]+-.+";
+        default = "en_GB-alan-medium";
+        description = ''
+          piper voice (https://rhasspy.github.io/piper-samples/). Its language
+          prefix, before the first "-", is the pipeline's text-to-speech language.
+        '';
+      };
+
+      satellite = {
+        name = mkOption {
+          type = types.str;
+          default = "Server Satellite";
+          description = "Name of the server satellite's device in Home Assistant.";
+        };
+        speaker = mkOption {
+          type = types.str;
+          default = "plughw:CARD=PCH,DEV=0";
+          description = "ALSA device the server satellite plays replies on (aplay -L lists them). The default is the onboard Intel codec's analog output.";
+        };
+        mixer = mkOption {
+          type = types.listOf types.str;
+          default = [ "-c PCH sset Master 80% unmute" ];
+          description = "amixer arguments applied before the satellite starts. The default unmutes the onboard codec, whose Master control starts muted.";
+        };
+        microphoneUsbId = mkOption {
+          type = types.nullOr (types.strMatching "[0-9a-f]{4}:[0-9a-f]{4}");
+          default = null;
+          example = "1415:2000";
+          description = "USB vendor:product ID of the microphone. Null keeps the satellite's default, the PlayStation Eye.";
+        };
+      };
+    };
+  };
+
   hostLib = import ../lib/host.nix { inherit lib; };
   serverKey = config.lanbat.deployment.primaryServer;
   serverSatellite =
@@ -64,6 +141,10 @@ let
   };
 in
 {
+  # The schema is merged into lanbat.services.wyoming.settings; checks.nix
+  # rejects any key it does not declare.
+  lanbat.settingsSchema.wyoming = wyomingSettings;
+
   lanbat.services.wyoming.extraPorts = [
     10300
     10301
@@ -77,7 +158,7 @@ in
   services.wyoming.openwakeword = {
     enable = true;
     uri = "tcp://127.0.0.1:10300";
-    threshold = 0.35;
+    inherit (cfg.wakeWord) threshold;
     # preloadModels was removed in wyoming-openwakeword 2.0 — models load when
     # HA requests them, but only from dirs passed via --custom-model-dir.
     extraArgs = [
@@ -98,31 +179,29 @@ in
   services.wyoming.faster-whisper.servers."main" = {
     enable = true;
     uri = "tcp://127.0.0.1:10301";
-    model = "base-int8"; # faster CPU STT for voice commands
-    language = "en";
+    inherit (cfg.speechToText) model language;
     device = "cpu";
   };
 
   # ---------------------------------------------------------------------------
-  # Text-to-speech  (British English)
+  # Text-to-speech
   # ---------------------------------------------------------------------------
   services.wyoming.piper.servers."main" = {
     enable = true;
     uri = "tcp://127.0.0.1:10302";
-    voice = "en_GB-alan-medium"; # see https://rhasspy.github.io/piper-samples/
+    inherit (cfg.textToSpeech) voice;
   };
 
   # ---------------------------------------------------------------------------
-  # Satellite: the PlayStation Eye's microphones, replies on the internal speaker
+  # Satellite: the server's microphone, replies on its speaker (settings.satellite)
   # ---------------------------------------------------------------------------
   lanbat.voiceSatellite = lib.mkIf serverSatellite {
     enable = true;
-    name = "Server Satellite";
+    inherit (cfg.satellite) name speaker mixer;
+    microphone = lib.mkIf (cfg.satellite.microphoneUsbId != null) {
+      usbId = cfg.satellite.microphoneUsbId;
+    };
     uri = "tcp://127.0.0.1:10700";
-    # The onboard codec's analog output, which drives the internal speaker.
-    speaker = "plughw:CARD=PCH,DEV=0";
-    # The codec's Master control starts muted.
-    mixer = [ "-c PCH sset Master 80% unmute" ];
     room = serverRoom;
     homeAssistant.url = "http://127.0.0.1:8123";
   };

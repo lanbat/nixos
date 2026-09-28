@@ -7,6 +7,9 @@
 #   - Samba: the default share layout renders as before; a profile adds,
 #     changes and drops shares field by field, smbd binds to the NFS mounts of
 #     exactly the drives the shares use, and an unknown key is rejected.
+#   - Wyoming: the defaults keep today's pipeline and server satellite, and a
+#     profile's voice, model and ALSA card reach the servers, the satellite and
+#     Home Assistant's pipeline.
 {
   lib,
   pkgs,
@@ -101,6 +104,30 @@ let
   ];
 
   sambaTypo = serverWith [ { lanbat.services.samba.settings.share = { }; } ];
+
+  # ── Wyoming ──────────────────────────────────────────────────────────────
+  wyomingChanged = serverWith [
+    {
+      lanbat.services.wyoming.settings = {
+        wakeWord.threshold = 0.5;
+        speechToText = {
+          model = "small-int8";
+          language = "de";
+        };
+        textToSpeech.voice = "de_DE-thorsten-medium";
+        satellite = {
+          name = "Office Satellite";
+          speaker = "plughw:CARD=Generic,DEV=0";
+          mixer = [ ];
+          microphoneUsbId = "046d:0825";
+        };
+      };
+    }
+  ];
+
+  wyomingBadVoice = serverWith [ { lanbat.services.wyoming.settings.textToSpeech.voice = "alan"; } ];
+
+  postSetup = config: config.systemd.services.home-assistant-post-setup.script;
 
   expect = name: ok: if ok then null else name;
 
@@ -197,6 +224,43 @@ let
 
     (expect "samba: an unknown settings key is rejected" (
       lib.any (lib.hasInfix "samba has no setting \"share\"") (failedAssertions sambaTypo)
+    ))
+
+    (expect "wyoming: the defaults keep today's pipeline and satellite" (
+      let
+        w = base.services.wyoming;
+        sat = base.lanbat.voiceSatellite;
+      in
+      w.openwakeword.threshold == toString 0.35
+      && w.faster-whisper.servers.main.model == "base-int8"
+      && w.faster-whisper.servers.main.language == "en"
+      && w.piper.servers.main.voice == "en_GB-alan-medium"
+      && sat.name == "Server Satellite"
+      && sat.speaker == "plughw:CARD=PCH,DEV=0"
+      && sat.mixer == [ "-c PCH sset Master 80% unmute" ]
+      && sat.microphone.usbId == "1415:2000"
+    ))
+
+    (expect "wyoming: a profile's settings reach the servers, satellite and pipeline" (
+      let
+        w = wyomingChanged.services.wyoming;
+        sat = wyomingChanged.lanbat.voiceSatellite;
+      in
+      w.openwakeword.threshold == toString 0.5
+      && w.faster-whisper.servers.main.model == "small-int8"
+      && w.piper.servers.main.voice == "de_DE-thorsten-medium"
+      && sat.name == "Office Satellite"
+      && sat.speaker == "plughw:CARD=Generic,DEV=0"
+      && sat.mixer == [ ]
+      && sat.microphone.usbId == "046d:0825"
+      && lib.hasInfix ''PIPELINE_STT_LANGUAGE="de"'' (postSetup wyomingChanged)
+      && lib.hasInfix ''PIPELINE_TTS_LANGUAGE="de_DE"'' (postSetup wyomingChanged)
+    ))
+
+    (expect "wyoming: a voice without a language prefix is rejected" (
+      !(builtins.tryEval (
+        builtins.deepSeq wyomingBadVoice.services.wyoming.piper.servers.main.voice true
+      )).success
     ))
 
     (expect "the example profile's server has no failed assertion" (failedAssertions base == [ ]))
