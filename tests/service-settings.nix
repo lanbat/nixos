@@ -13,6 +13,8 @@
 #   - Home Assistant: the loopback URLs of the services it wires come from
 #     their descriptions, and the Zigbee2MQTT bridge watch follows whether
 #     Zigbee2MQTT runs on the host unless the profile says otherwise.
+#   - Nextcloud's database is the workload instance's "nextcloud" over its
+#     socket, as database.createLocally made it.
 {
   lib,
   pkgs,
@@ -151,6 +153,7 @@ let
     { lanbat.services.home-assistant.settings.zigbee2mqttBridge = false; }
   ];
 
+  # ── Nextcloud's database ─────────────────────────────────────────────────
   expect = name: ok: if ok then null else name;
 
   cases = [
@@ -314,6 +317,23 @@ let
 
     (expect "home assistant: the Zigbee watch can be turned off" (
       (haConfig haNoZigbee).automation == [ ] && haViews haNoZigbee == [ "all" ]
+    ))
+
+    (expect "nextcloud: the workload instance's nextcloud database, over its socket" (
+      let
+        nc = base.services.nextcloud;
+        pg = base.services.postgresql;
+      in
+      !nc.database.createLocally
+      && nc.config.dbhost == "/run/postgresql"
+      && nc.config.dbname == "nextcloud"
+      && nc.config.dbuser == "nextcloud"
+      && nc.config.dbpassFile == null
+      && base.lanbat.postgresql.databases.nextcloud.instance == "workload"
+      && lib.elem "nextcloud" pg.ensureDatabases
+      && lib.any (u: u.name == "nextcloud" && u.ensureDBOwnership) pg.ensureUsers
+      && lib.elem "postgresql.target" base.systemd.services.nextcloud-setup.requires
+      && lib.elem "postgresql.target" base.systemd.services.nextcloud-setup.after
     ))
 
     (expect "the example profile's server has no failed assertion" (failedAssertions base == [ ]))
