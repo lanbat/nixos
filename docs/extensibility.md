@@ -94,6 +94,7 @@ layout, so a profile sets only what differs:
 | Service | Settings | Default |
 |---|---|---|
 | Samba | workgroup, server and NetBIOS names, `homes` (the per-user `[homes]` share), `shares.<name>` (drive, path, access, masks, a directory to create, raw keys) and `extraGlobal` | the media, private and shared shares on drives `a` and `b` |
+| Wyoming | `wakeWord.threshold`, `speechToText.{model,language}`, `textToSpeech.voice`, and the server satellite's `satellite.{name,speaker,mixer,microphoneUsbId}` | British English (`en`, `en_GB-alan-medium`) and the onboard Intel codec (ALSA card `PCH`) |
 
 A default share is defined field by field at `lib.mkDefault`, so a profile changes
 one field of it, drops it with `enable = false`, or adds its own beside it:
