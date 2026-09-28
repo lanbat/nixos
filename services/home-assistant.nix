@@ -115,6 +115,9 @@ in
       # generated a drop with no accept. voiceRooms is static, so both passes
       # see the same answer.
       consumes = lib.optional voiceRooms "voice-satellite";
+      # home-assistant-post-setup configures MQTT with the password that
+      # mosquitto.nix declares for Home Assistant.
+      readsSecrets = lib.optional (config.lanbat.hasService "mosquitto") "mosquitto-ha-pass";
       subdomain = "ha";
       port = 8123;
       auth = "forward-auth";

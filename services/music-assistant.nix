@@ -59,6 +59,8 @@ in
 {
   lanbat.services.music-assistant = {
     subdomain = "music";
+    # music-assistant-setup signs in with Home Assistant's owner account.
+    readsSecrets = lib.optional integrates "hass-bootstrap-env";
     port = 8095;
     extraPorts = [
       8097 # MA stream server (players / imageproxy)

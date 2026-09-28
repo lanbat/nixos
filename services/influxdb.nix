@@ -105,6 +105,8 @@ in
       port = 8086;
     };
     consumes = lib.optional hasTelegraf "telegraf";
+    # Telegraf's write token, provisioned from the secret Telegraf declares.
+    readsSecrets = lib.optional hasTelegraf "telegraf-token";
     extraPorts = [ 8086 ];
     # The upstream unit is influxdb2, not influxdb, so name it here rather than
     # leaving anything that iterates the services to guess.

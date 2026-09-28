@@ -66,6 +66,8 @@ in
 
     lanbat.services.immich = {
       subdomain = "photos";
+      # immich-bootstrap creates the admin from Home Assistant's owner account.
+      readsSecrets = lib.optional bootstraps "hass-bootstrap-env";
       port = 2283;
       extraPorts = [ 3003 ]; # machine learning
       auth = "forward-auth";

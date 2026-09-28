@@ -510,6 +510,24 @@ let
           '';
         };
 
+        readsSecrets = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [ "mosquitto-frigate-pass" ];
+          description = ''
+            Shared secrets: secrets this service reads that another service on
+            the same host declares in its own secrets. The declaring service
+            sets owner, group and mode once; this one reads
+            lanbat.secrets.<name>.path like the declarer, from a unit that the
+            declaration lets read the file (root, the owner or the group), and
+            is listed in lanbat.secrets.<name>.readers.
+
+            Make the entry as conditional as the read. Evaluation fails, naming
+            both sides, when no service on the host declares the secret or its
+            requirement is off.
+          '';
+        };
+
         # ── Dashboard (services/homepage.nix) ─────────────────────────────────
         dashboard = mkOption {
           type = types.nullOr (

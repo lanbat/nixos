@@ -7,6 +7,12 @@
 # lanbat.hostSecrets. Those are requirements: they say who reads the file and
 # with which owner and mode, never where it comes from.
 #
+# A secret that one service declares and others read is shared: the declarer
+# resolves owner, group and mode once, and each reader lists it in
+# lanbat.services.<name>.readsSecrets. Readers share the declarer's host, so a
+# secret's recipients follow from where it is required
+# (nix run .#secrets-recipients).
+#
 # A requirement can be conditional: its enable follows the setting that uses
 # the secret (haLlm, voiceRooms, ...), and one that is off is not provisioned,
 # so a profile that leaves a feature off needs no file for it.
@@ -101,6 +107,40 @@ let
   # Under "agenix" the file is <root>/<name>.age. One that is missing fails here,
   # naming the secret and what requires it, rather than as a bare missing path
   # somewhere inside the activation script.
+  # Who reads each secret besides the service that declares it.
+  readers = lib.zipAttrsWith (_: names: names) (
+    lib.concatLists (
+      lib.mapAttrsToList (
+        svcName: svc: map (secret: { ${secret} = svcName; }) svc.readsSecrets
+      ) config.lanbat.services
+    )
+  );
+
+  readerAssertions = lib.concatLists (
+    lib.mapAttrsToList (
+      svcName: svc:
+      map (
+        secret:
+        let
+          decl = declared.${secret} or null;
+        in
+        {
+          assertion = requirements ? ${secret} && decl.declaredBy != svcName;
+          message =
+            "lanbat: ${svcName} reads secret \"${secret}\" on ${hostKey}, but "
+            + (
+              if decl == null then
+                "no service on ${hostKey} declares it. Place the service that declares it on this host, or make the read conditional on that service."
+              else if decl.declaredBy == svcName then
+                "declares it too. List a secret in readsSecrets only when another service declares it."
+              else
+                "its requirement in ${decl.declaredBy} is off (enable = false). Make the read as conditional as the requirement."
+            );
+        }
+      ) svc.readsSecrets
+    ) config.lanbat.services
+  );
+
   sourceOf = name: root + "/${name}.age";
   unprovided = name: provider != "none" && !builtins.pathExists (sourceOf name);
   missingMessage =
@@ -124,7 +164,14 @@ let
     else
       sourceOf name;
 
-  provisioned = lib.mapAttrs (name: req: req // { file = fileFor name req; }) requirements;
+  provisioned = lib.mapAttrs (
+    name: req:
+    req
+    // {
+      file = fileFor name req;
+      readers = readers.${name} or [ ];
+    }
+  ) requirements;
 in
 {
   options.lanbat.hostSecrets = mkOption {
@@ -160,6 +207,11 @@ in
           declaredBy = mkOption {
             type = types.str;
             description = "Service (or host secret) that declares the requirement.";
+          };
+          readers = mkOption {
+            type = types.listOf types.str;
+            default = [ ];
+            description = "Other services on this host that read the secret (their readsSecrets).";
           };
         };
       }
@@ -198,6 +250,7 @@ in
       assertion = !unprovided name;
       message = missingMessage name req;
     }) requirements
+    ++ readerAssertions
     ++ [
       {
         assertion = provider != "sops";

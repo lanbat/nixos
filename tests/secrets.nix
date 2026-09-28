@@ -4,7 +4,8 @@
 # requirements resolve through the profile's provider, readers get a path from
 # lanbat.secrets, and a requirement the profile cannot satisfy fails with a
 # message that names the secret and what requires it. A requirement that is
-# off is not provisioned and needs no file. Pure evaluation.
+# off is not provisioned and needs no file, and a secret shared with other
+# services lists them as readers. Pure evaluation.
 { lib, pkgs }:
 
 let
@@ -61,6 +62,25 @@ let
     provider = "agenix";
     services = optional;
     hostSecrets.overlay-server.enable = false;
+  };
+
+  # A secret one service declares and others read.
+  shared = eval {
+    services = {
+      broker.secrets.broker-pass = {
+        group = "client";
+        mode = "0440";
+      };
+      client.readsSecrets = [ "broker-pass" ];
+      other.readsSecrets = [ "broker-pass" ];
+    };
+  };
+  orphan = eval { services.client.readsSecrets = [ "broker-pass" ]; };
+  readsOff = eval {
+    services = {
+      broker.secrets.broker-pass.enable = false;
+      client.readsSecrets = [ "broker-pass" ];
+    };
   };
 
   none = eval { services = demo; };
@@ -128,6 +148,37 @@ let
     (expect "a declaration that is off is still recorded" (
       off.lanbat.secretDeclarations.feature-key.enable == false
       && off.lanbat.secretDeclarations.feature-key.declaredBy == "optional"
+    ))
+    (expect "a shared secret is provisioned once, as its declarer says" (
+      let
+        s = shared.age.secrets.broker-pass;
+      in
+      s.owner == "broker" && s.group == "client" && s.mode == "0440"
+    ))
+    (expect "a shared secret lists its readers" (
+      shared.lanbat.secrets.broker-pass.readers == [
+        "client"
+        "other"
+      ]
+      && shared.lanbat.secrets.broker-pass.declaredBy == "broker"
+    ))
+    (expect "reading a shared secret fails no assertion" (failed shared == [ ]))
+    (expect "reading a secret nothing on the host declares names both sides" (
+      failed orphan == [
+        (
+          "lanbat: client reads secret \"broker-pass\" on server, but no service on server"
+          + " declares it. Place the service that declares it on this host, or make the"
+          + " read conditional on that service."
+        )
+      ]
+    ))
+    (expect "reading a secret whose requirement is off names the declarer" (
+      failed readsOff == [
+        (
+          "lanbat: client reads secret \"broker-pass\" on server, but its requirement in"
+          + " broker is off (enable = false). Make the read as conditional as the requirement."
+        )
+      ]
     ))
   ];
 

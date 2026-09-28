@@ -49,6 +49,8 @@ in
 {
   lanbat.services.grafana = {
     consumes = lib.optional hasInflux "influxdb";
+    # The datasource token, which influxdb.nix declares.
+    readsSecrets = lib.optional hasInflux "influxdb-admin-token";
     subdomain = "grafana";
     port = 3030;
     oidc.redirectPaths = [ "/login/generic_oauth" ];

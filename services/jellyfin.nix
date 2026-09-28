@@ -59,6 +59,12 @@ in
     apiClients = true; # TV and mobile apps
     # The SSO Authentication plugin, configured by jellyfin-bootstrap.
     oidc.redirectPaths = [ "/sso/OID/redirect/authentik" ];
+    # jellyfin-bootstrap takes the owner account from Home Assistant's
+    # bootstrap secret and its OIDC client secret from Authentik's.
+    readsSecrets = lib.optionals integrates [
+      "hass-bootstrap-env"
+      "authentik-oidc-secrets"
+    ];
     tier = "workload";
     state = [ "jellyfin" ];
     units = [

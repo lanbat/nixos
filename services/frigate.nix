@@ -533,6 +533,8 @@ in
       subdomain = "nvr";
       port = 5000;
       consumes = lib.optional hasMqtt "mosquitto";
+      # Its broker password, which mosquitto.nix declares.
+      readsSecrets = lib.optional hasMqtt "mosquitto-frigate-pass";
       extraPorts = [ restreamPort ]; # RTSP restream
       auth = "forward-auth";
       # Homepage's Frigate widget calls /api/* without an Authentik session.

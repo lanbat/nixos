@@ -31,7 +31,8 @@
       port = 1883;
     };
     extraPorts = [ 1883 ];
-    # Plaintext passwords, one line each. Frigate reads its password too.
+    # Plaintext passwords, one line each, shared with the service each one
+    # belongs to (its readsSecrets): Home Assistant, Frigate and Zigbee2MQTT.
     secrets = {
       # homeassistant-bootstrap reads this to configure the MQTT integration.
       mosquitto-ha-pass = {

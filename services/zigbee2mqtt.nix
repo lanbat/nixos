@@ -68,6 +68,8 @@ in
     # Zigbee2MQTT exists to bridge Zigbee onto MQTT, so a broker is not an
     # optional extra the way it is for Frigate or Home Assistant.
     consumes = [ "mosquitto" ];
+    # Its broker password, which mosquitto.nix declares.
+    readsSecrets = [ "mosquitto-z2m-pass" ];
     dashboard = {
       group = "Automation";
       name = "Zigbee2MQTT";

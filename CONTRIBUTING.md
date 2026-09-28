@@ -261,6 +261,13 @@ instead. Document the reason in the service file if you add another soft depende
   `ha-llm-api-key = { enable = llm != null; owner = "hass"; }`. A requirement that is
   off is not provisioned, needs no file and has no `lanbat.secrets` entry, so guard
   its reads with the same condition.
+- **Shared secrets.** A secret belongs to the one service that declares it, which sets its
+  owner, group and mode. Another service on the same host that reads it (Frigate and
+  Zigbee2MQTT read their `mosquitto-*-pass`; Jellyfin, Immich and Music Assistant read
+  `hass-bootstrap-env`) lists it in `lanbat.services.<name>.readsSecrets`, as
+  conditionally as it reads it, and reads `config.lanbat.secrets.<secret>.path` from a unit
+  the declaration lets read the file. Evaluation fails, naming both services, when nothing
+  on the host declares it or its requirement is off.
 - **Host secrets:** a secret that belongs to a host rather than a service (the overlay
   key) is declared in `lanbat.hostSecrets.<secret>` and read the same way.
 - Add every new secret to `secrets/secrets.nix.example` and `secrets/README.md`.
