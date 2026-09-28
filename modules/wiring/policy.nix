@@ -3,7 +3,9 @@
 # Firewall policy generated from the service descriptions.
 #
 # A service that publishes an endpoint admits exactly the hosts running a
-# service that declared it in consumes, and drops everything else. The rules are
+# service that declared it in consumes, and drops everything else. A host whose
+# Caddy serves the service's subdomain from elsewhere counts as a consumer too
+# (lib/endpoints.nix proxyHostsOf). The rules are
 # derived rather than written, so adding a host to a profile needs no firewall
 # edit — which is what the hand-written allowlists in lib/roles/storage-pi.nix,
 # lib/roles/voice-pi.nix and services/influxdb.nix each required.
@@ -38,7 +40,13 @@ let
   # Services on this host that publish something reachable.
   provided = lib.filterAttrs (_: svc: svc.endpoint != null) config.lanbat.services;
 
-  # Every host running a service that declared it consumes `name`.
+  endpointLib = import ../../lib/endpoints.nix { inherit lib; };
+
+  # Every host running a service that declared it consumes `name`, and every
+  # host whose Caddy proxies `name`'s subdomain to it from elsewhere. Caddy's
+  # edges are implicit rather than a consumes list on Caddy, because which
+  # services are remote to it is only known from the table, and a description
+  # must not depend on the table.
   consumerHostsOf =
     name:
     lib.unique (
@@ -47,6 +55,10 @@ let
           _: entry: if lib.elem name (entry.consumes or [ ]) then entry.hosts else [ ]
         ) config.lanbat.endpoints
       )
+      ++ endpointLib.proxyHostsOf {
+        inherit name;
+        inherit (config.lanbat) endpoints;
+      }
     );
 
   overlay = config.lanbat.overlay;

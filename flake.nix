@@ -146,6 +146,7 @@
         endpoints-table = import ./tests/endpoints-table.nix { inherit lib pkgs; };
         frigate-settings = import ./tests/frigate-settings.nix { inherit lib pkgs; };
         policy = import ./tests/policy.nix { inherit lib pkgs; };
+        caddy-remote = import ./tests/caddy-remote.nix { inherit lib pkgs; };
         overlay = import ./tests/overlay.nix { inherit lib pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
         settings-guard = import ./tests/settings-guard.nix { inherit lib pkgs; };

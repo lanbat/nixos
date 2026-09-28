@@ -138,7 +138,9 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 The Authentik side of this matrix is generated: every `forward-auth` service gets a
 proxy provider, an application and a place on the embedded outpost, and every service
 with an `oidc` description gets an OAuth2 provider and application
-(`services/authentik/catalogue.nix`).
+(`services/authentik/catalogue.nix`). That includes services with a subdomain that run
+on another host, since their vhosts are served, and their forward auth checked, by the
+Caddy and Authentik on this one.
 
 ## Hostname map
 
@@ -165,6 +167,28 @@ with an `oidc` description gets an OAuth2 provider and application
 DNS assumption: `*.<domain>` resolves to the server's IPv4 address.
 This is configured in your router/DNS and is out of scope for this repo.
 
+### Services on another host
+
+Caddy serves the subdomain of every service in the profile, not only those on
+its own host. A service on the Caddy host is proxied to `localhost:<port>`, as
+always. A service that runs only on another host is proxied to that host at its
+endpoint's port and scheme, through `lanbat.endpointHost`: the overlay name when
+the edge runs on the overlay, the LAN address otherwise. That is the address the
+other host's generated rule admits, because the Caddy host counts as a consumer
+of every remote service whose subdomain it serves (see [Network policy](#network-policy)).
+Forward auth still runs in Caddy on its own host, before the request leaves it.
+
+Evaluation rejects a remote service that Caddy cannot serve:
+
+- one placed on several hosts, none of them Caddy's. A vhost has one upstream,
+  and picking one would be a guess. A copy on the Caddy host wins over the others.
+- one without an endpoint, or whose endpoint scheme is not `http` or `https`.
+- one that is `onDemand`. Its activator runs on its own host and is not part of
+  its endpoint, so place on-demand services on the Caddy host.
+- one whose `caddy.extraConfig` or `caddy.proxyOptions` mentions localhost. Those
+  directives run on the Caddy host, where localhost is not the service.
+- one whose subdomain is also used by a service on the Caddy host.
+
 ## On-demand services
 
 Services with `lanbat.services.<name>.onDemand` start on the first HTTP request via
@@ -181,7 +205,10 @@ The activator is a lightweight Python proxy that:
 A service that publishes an `endpoint` admits exactly the hosts running a
 service that named it in `consumes`, and drops everything else.
 `modules/wiring/policy.nix` generates those rules from the descriptions, so
-adding a host to a profile needs no firewall edit.
+adding a host to a profile needs no firewall edit. A host whose Caddy serves a
+service's subdomain from elsewhere is a consumer too, without naming it in
+`consumes` (`proxyHostsOf` in `lib/endpoints.nix`); the vhosts in
+`modules/wiring/caddy.nix` are generated from the same function.
 
 An inserted `ACCEPT` opens a port on its own, because it lands above the jump to
 `nixos-fw`. A service reached from another host therefore does not need its port

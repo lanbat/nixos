@@ -163,7 +163,9 @@ overlay to lose.
 **Breaks:** cross-host service edges whose endpoint transport is `"overlay"`.
 In the example layout these are the Pi's Telegraf writing to InfluxDB, and Home
 Assistant talking to the storage Pi's voice satellite. Each fails on its own,
-and the services themselves keep running.
+and the services themselves keep running. A service with a subdomain placed on
+another host than Caddy is one of these edges too: its vhost serves the offline
+page until the overlay returns.
 
 **Diagnose:** `networkctl status lanbat0`, and `wg show lanbat0` for the latest
 handshakes. The usual causes are a stale `publicKey` in `deploy.nix`, a missing
