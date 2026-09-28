@@ -160,7 +160,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | RomM | server-local | workload PostgreSQL | Pi/b/media/roms (ROM library), Pi/b/media/roms-browser (arcade zips) |
 | SearXNG | server-local | — | — |
 | Homepage | server-local | — | — |
-| Samba | (via nss) | — | Pi/a + Pi/b |
+| Samba | (via nss) | — | Pi/a + Pi/b (the drives of its shares, `lanbat.services.samba.settings`) |
 | MQTT | server-local | — | — |
 | Vaultwarden | server-local | server-local (SQLite) | — |
 | Grafana | server-local | always-on PostgreSQL | — |

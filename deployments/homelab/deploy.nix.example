@@ -94,6 +94,10 @@
       # (lanbat.services.frigate.settings) live in ./frigate.nix next to this
       # file, gitignored like it: copy deployments/example/frigate.nix there.
       # Evaluation fails while Frigate has no camera.
+      #
+      # Other services' settings have defaults and need a module only where the
+      # site differs (docs/extensibility.md#service-settings), for example
+      # Samba's shares (lanbat.services.samba.settings.shares).
       modules = [ ./frigate.nix ];
     };
 
