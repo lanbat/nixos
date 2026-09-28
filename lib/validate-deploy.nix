@@ -34,37 +34,25 @@ let
     else
       null;
 
+  # The role table (lib/roles.nix) decides both which roles exist for this
+  # host, the built-in ones and any its plugins declare, and what each one
+  # requires of the deploy entry.
   validateRoleRequirements =
     profileName: hostName: host:
     let
       ctx = "profile '${profileName}', host '${hostName}'";
+      roles = pluginLib.roleTable (host.plugins or [ ]);
+      errors = rolesLib.requirementErrors roles host;
     in
-    if host.role == "server" then
-      if !(host ? disks) || !(host.disks ? system) then
-        builtins.throw "${ctx}: server role requires disks.system"
-      else
-        requireNonEmptyString profileName hostName "disks.system" host.disks.system
-    else if host.role == "storage-pi" then
-      let
-        drives = (host.storage or { }).drives or { };
-        # A drive's key names its unlock unit, LUKS mapper, mount point and NFS
-        # mount (storage-<key>-unlock, /mnt/storage-<key>, /srv/storage/<key>).
-        # systemd escapes a "-" in a mount path, so the mount unit would no
-        # longer be srv-storage-<key>.mount; keep keys to letters and digits.
-        badKeys = lib.filter (key: builtins.match "[a-z0-9]+" key == null) (lib.attrNames drives);
-      in
-      if !(lib.isAttrs drives) || drives == { } then
-        builtins.throw "${ctx}: storage-pi role requires at least one entry in storage.drives"
-      else if badKeys != [ ] then
-        builtins.throw "${ctx}: storage.drives keys must be lowercase letters and digits: ${lib.concatStringsSep ", " badKeys}"
-      else
-        lib.foldl' (
-          _: key: requireNonEmptyString profileName hostName "storage.drives.${key}" drives.${key}
-        ) null (lib.attrNames drives)
-    else if host.role == "voice-pi" then
-      null
+    if !(roles ? ${host.role}) then
+      builtins.throw "${ctx}: unknown role '${host.role}'; known roles: ${lib.concatStringsSep ", " (lib.attrNames roles)}"
+    else if errors != [ ] then
+      builtins.throw "${ctx}: ${lib.concatStringsSep "; " errors}"
     else
-      builtins.throw "${ctx}: unknown role '${host.role}'";
+      # A roleModules entry naming a module the role does not bundle.
+      builtins.seq (lib.length (
+        rolesLib.resolveRoleModules roles host.role (host.roleModules or { })
+      )) null;
 
   validateNetworking =
     profileName: name: host:
@@ -86,10 +74,7 @@ let
       builtins.seq (requireField profileName name "system" host) (
         builtins.seq (validateNetworking profileName name host) (
           builtins.seq (validateRoleRequirements profileName name host) (
-            # A roleModules entry naming a module the role does not bundle.
-            builtins.seq (lib.length (rolesLib.resolveRoleModules host.role (host.roleModules or { }))) (
-              pluginLib.resolvePlugins host.role (host.plugins or [ ]) (host.services or [ ])
-            )
+            pluginLib.resolvePlugins host.role (host.plugins or [ ]) (host.services or [ ])
           )
         )
       )

@@ -90,7 +90,7 @@ ever written into the profile.
 
 ## Roles
 
-Roles bundle infrastructure modules for a host type. They are not optional — every host declares `role = "server"` (or `storage-pi`, `voice-pi`).
+Roles bundle infrastructure modules for a host type. They are not optional — every host declares `role = "server"` (or `storage-pi`, `voice-pi`, or a role one of its plugins adds).
 
 | Role | Purpose |
 |---|---|
@@ -98,7 +98,16 @@ Roles bundle infrastructure modules for a host type. They are not optional — e
 | `storage-pi` | Encrypted NVMe, NFS export, optional TV/voice plugins |
 | `voice-pi` | Lightweight Wyoming satellite endpoint |
 
-Add a new role by creating `lib/roles/<name>.nix` and registering it in `lib/roles.nix` and `modules/core/settings.nix`.
+`lib/roles.nix` is the role table: for each role, the modules it bundles and
+what it requires of a host's deploy entry (a server needs `disks.system`, a
+storage Pi at least one entry in `storage.drives`), which
+`lib/validate-deploy.nix` checks. What the built-in roles share (hostname,
+static address, firewall baseline) is in `lib/roles/common.nix`, and what the Pi
+roles share in `lib/roles/pi-common.nix`.
+
+Add a built-in role by creating `lib/roles/<name>.nix` and giving it an entry in
+`lib/roles.nix`. A plugin adds one without editing either, through `hostRoles`
+(see [plugins.md](plugins.md#host-roles)).
 
 ### Replacing a role's bundled modules
 

@@ -12,12 +12,12 @@ let
   hostSubmodule = types.submodule {
     options = {
       role = mkOption {
-        type = types.enum [
-          "server"
-          "storage-pi"
-          "voice-pi"
-        ];
-        description = "Infrastructure role of this host.";
+        # Not an enum: a plugin can add a role (hostRoles), and every host sees
+        # the roles of the others. lib/validate-deploy.nix rejects a role that
+        # neither lib/roles.nix nor the host's plugins declare.
+        type = types.str;
+        example = "storage-pi";
+        description = "Infrastructure role of this host: server, storage-pi, voice-pi or one a plugin declares.";
       };
 
       networking = {

@@ -79,7 +79,10 @@ Please don't open public issues for vulnerabilities. See [SECURITY.md](SECURITY.
   rejects inconsistent descriptions (`checks.nix`). `services/homepage.nix` builds the
   dashboard from them.
 - `modules/core/`: settings and configuration shared by both hosts.
-- `lib/roles/`: host role modules (server, storage-pi, voice-pi).
+- `lib/roles.nix`: the role table, with each role's bundled modules (a host can
+  replace or drop one with `roleModules`) and what it requires of a deploy entry.
+- `lib/roles/`: host role modules (server, storage-pi, voice-pi), and what they
+  share (`common.nix`, `pi-common.nix`).
 - `plugins/`: built-in plugins; enable per host in `deploy.nix`.
 - `deployments/`: one `deploy.nix` per site/profile.
 - `hosts/server/`, `hosts/pi/`: hardware and the server's disk layout (disko).

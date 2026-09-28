@@ -116,6 +116,9 @@
         lanbat-server = ./lib/roles/server.nix;
         lanbat-storage-pi = ./lib/roles/storage-pi.nix;
         lanbat-voice-pi = ./lib/roles/voice-pi.nix;
+        # What every built-in role shares (hostname, static address, firewall
+        # baseline), for a role a plugin adds (docs/plugins.md#host-roles).
+        lanbat-role-common = ./lib/roles/common.nix;
         lanbat-android = ./modules/server/android-devices.nix;
       };
 

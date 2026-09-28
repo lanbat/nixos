@@ -7,6 +7,7 @@
 
 let
   pluginLib = import ../lib/plugins.nix { inherit lib; };
+  rolesLib = import ../lib/roles.nix { inherit lib; };
 
   badPlugin = {
     name = "broken";
@@ -113,6 +114,29 @@ let
 
   resolve = pluginLib.resolvePlugins "server";
 
+  # A plugin that adds a host role. Markers stand in for modules.
+  withRole = extra: {
+    name = "nas";
+    version = 2;
+    roles = [ "nas" ];
+    hostRoles.nas = {
+      modules = [
+        {
+          name = "role";
+          module = "nas-role";
+        }
+        {
+          name = "exports";
+          module = "nas-exports";
+        }
+      ];
+      requirements = host: lib.optional (!(host ? nasDisk)) "nas role requires nasDisk";
+    }
+    // extra;
+  };
+  nasPlugin = withRole { };
+  nasRoles = pluginLib.roleTable [ nasPlugin ];
+
   # lib/local-modules.nix, against a tracked copy of the gitignored layout.
   localModules = (import ../lib/local-modules.nix { inherit lib; }).localModules;
   localRoot = ./fixtures/local-modules;
@@ -131,6 +155,65 @@ let
   sorted = lib.sort (a: b: a < b);
 
   cases = [
+    (expect "a plugin can add a host role alongside the built-in ones" (
+      lib.attrNames nasRoles == [
+        "nas"
+        "server"
+        "storage-pi"
+        "voice-pi"
+      ]
+    ))
+    (expect "a plugin role's modules are imported in order" (
+      rolesLib.resolveRoleModules nasRoles "nas" { } == [
+        "nas-role"
+        "nas-exports"
+      ]
+    ))
+    (expect "a plugin role's modules can be overridden by name" (
+      rolesLib.resolveRoleModules nasRoles "nas" { exports = null; } == [ "nas-role" ]
+    ))
+    (expect "a plugin role's requirements are checked" (
+      rolesLib.requirementErrors nasRoles { role = "nas"; } == [ "nas role requires nasDisk" ]
+    ))
+    (expectThrow "a plugin role not listed in the plugin's roles" (
+      pluginLib.validatePlugin (nasPlugin // { roles = [ "server" ]; })
+    ))
+    (expectThrow "a plugin role with unnamed modules" (
+      pluginLib.validatePlugin (withRole {
+        modules = [ "nas-role" ];
+      })
+    ))
+    (expectThrow "a plugin role with an unknown field" (
+      pluginLib.validatePlugin (withRole {
+        hardware = [ ];
+      })
+    ))
+    (expectThrow "a plugin role redefining a built-in role" (
+      pluginLib.roleTable [
+        (
+          nasPlugin
+          // {
+            roles = [ "server" ];
+            hostRoles.server = nasPlugin.hostRoles.nas;
+          }
+        )
+      ]
+    ))
+    (expectThrow "two plugins declaring the same role" (
+      pluginLib.roleTable [
+        nasPlugin
+        (nasPlugin // { name = "other-nas"; })
+      ]
+    ))
+    (expectThrow "a version 1 plugin declaring a host role" (
+      pluginLib.validatePlugin (
+        nasPlugin
+        // {
+          version = 1;
+          modules = [ "x" ];
+        }
+      )
+    ))
     (expectThrow "empty modules" (pluginLib.validatePlugin badPlugin))
     (expectThrow "incompatible role" (resolve [ wrongRolePlugin ] [ ]))
 

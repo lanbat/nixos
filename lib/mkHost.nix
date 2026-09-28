@@ -21,7 +21,12 @@
 }:
 
 let
-  inherit (import ./plugins.nix { inherit lib; }) resolvePlugins settingsModules legacyPlugins;
+  inherit (import ./plugins.nix { inherit lib; })
+    resolvePlugins
+    settingsModules
+    roleTable
+    legacyPlugins
+    ;
   inherit (import ./roles.nix { inherit lib; }) resolveRoleModules;
 
   platform = hostCfg.platform or "generic";
@@ -85,8 +90,9 @@ let
   ]
   ++ [ overlayModule ]
   # The role's bundled modules, less any the deploy entry drops or replaces
-  # in roleModules (see lib/roles.nix).
-  ++ resolveRoleModules hostCfg.role (hostCfg.roleModules or { })
+  # in roleModules (see lib/roles.nix). The role may be one that a plugin of
+  # this host declares.
+  ++ resolveRoleModules (roleTable (hostCfg.plugins or [ ])) hostCfg.role (hostCfg.roleModules or { })
   ++ pluginSettingsModules
   ++ pluginModules;
 

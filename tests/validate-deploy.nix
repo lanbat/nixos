@@ -93,7 +93,7 @@ let
   rolesLib = import ../lib/roles.nix { inherit lib; };
 
   # Markers stand in for modules: resolveRoleModules never looks inside one.
-  serverWithoutCaddy = rolesLib.resolveRoleModules "server" {
+  serverWithoutCaddy = rolesLib.resolveRoleModules rolesLib.builtinRoles "server" {
     wiring-caddy = null;
     backups = "my-backups";
     disk = [
@@ -102,6 +102,35 @@ let
     ];
   };
   bundledServer = rolesLib.getRoleModules "server";
+
+  # A host that takes a role one of its plugins declares.
+  nasPlugin = {
+    name = "nas";
+    version = 2;
+    roles = [ "nas" ];
+    hostRoles.nas = {
+      modules = [
+        {
+          name = "role";
+          module = { };
+        }
+      ];
+      requirements = host: lib.optional (!(host ? nasDisk)) "nas role requires nasDisk";
+    };
+  };
+  withNas =
+    entry:
+    baseDeploy
+    // {
+      hosts = baseDeploy.hosts // {
+        nas = baseDeploy.hosts.pi-storage // entry;
+      };
+    };
+  nasHost = {
+    role = "nas";
+    plugins = [ nasPlugin ];
+    nasDisk = "example-nas-disk";
+  };
 
   failures = lib.filter (x: x != null) [
     (expectPass "example deploy with server in voiceRooms" baseDeploy)
@@ -124,6 +153,14 @@ let
       a = "";
     }))
     (expectThrow "multiple servers without primary override" twoServers)
+    (expectPass "a role a host's plugin declares" (withNas nasHost))
+    (expectThrow "a plugin role whose requirements are not met" (
+      withNas (builtins.removeAttrs nasHost [ "nasDisk" ])
+    ))
+    (expectThrow "a plugin role without the plugin that declares it" (
+      withNas (nasHost // { plugins = [ ]; })
+    ))
+    (expectThrow "an unknown role" (withNas (nasHost // { role = "no-such-role"; })))
     (expectPass "roleModules dropping a bundled module" (withRoleModules {
       wiring-caddy = null;
     }))
