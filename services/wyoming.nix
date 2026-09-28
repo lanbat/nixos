@@ -203,6 +203,12 @@ in
     };
     uri = "tcp://127.0.0.1:10700";
     room = serverRoom;
-    homeAssistant.url = "http://127.0.0.1:8123";
+    # Home Assistant on this host's loopback, at the port its description
+    # gives; 8123 when it runs elsewhere, as before.
+    homeAssistant.url =
+      if config.lanbat.hasService "home-assistant" then
+        "http://127.0.0.1:${toString config.lanbat.services.home-assistant.port}"
+      else
+        "http://127.0.0.1:8123";
   };
 }
