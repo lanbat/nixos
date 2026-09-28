@@ -178,6 +178,18 @@
             nixos-raspberrypi
             ;
         };
+        no-auto-upgrade = import ./tests/no-auto-upgrade.nix {
+          inherit
+            lib
+            pkgs
+            self
+            agenix
+            disko
+            nixpkgs
+            nixos-raspberrypi
+            ;
+          inputs = inputsWithSelf;
+        };
         storage-drives = import ./tests/storage-drives.nix {
           inherit
             lib

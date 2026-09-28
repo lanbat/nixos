@@ -134,18 +134,6 @@ dependencies. Hard mounts will block forever and prevent services from stopping.
 
 ---
 
-## Unattended upgrade reboot (Pi)
-
-The Pi reboots automatically after an upgrade if a new kernel is activated
-(between 04:00–06:00).  This follows the same path as a normal Pi reboot:
-NFS-dependent services on the server briefly pause and auto-restart.
-
-The server is **never** rebooted automatically.  A "reboot pending" state
-means a new kernel is available but the running kernel is the previous one —
-this is harmless until the next manual maintenance window.
-
----
-
 ## Overlay down
 
 This applies only when the profile runs an overlay
@@ -191,9 +179,9 @@ consumers dial. The per-host `overlay` blocks can stay where they are.
 | Server NIC failure | No (Pi retries) |
 | Tang key rotation | Yes — re-bind Clevis on Pi |
 | Drives fill up | Yes — cleanup or expand |
-| NixOS package upgrades | No — auto-upgrade runs nightly after `git push` |
+| NixOS package upgrades | Yes — `nix flake update`, then deploy each host (hosts never rebuild on their own) |
 | Server new kernel | Yes — manual reboot required, then unlock both layers |
-| Pi new kernel | No — Pi reboots automatically via Clevis/Tang |
+| Pi new kernel | Yes — reboot the Pi when convenient; Clevis/Tang unlocks its drives |
 | Container image updates | Yes — bump the tag and deploy |
 | Overlay down | No for Tang, NFS and boot; overlay edges pause until it returns, or set `overlay.provider = "none"` and redeploy (see [Overlay down](#overlay-down)) |
 | Server root or workload fills up | Yes — grow the volume from LVM free space (`docs/operations.md`) |

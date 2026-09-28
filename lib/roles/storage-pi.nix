@@ -45,17 +45,6 @@ in
 {
   networking.hostName = net.hostname;
 
-  # The Pi reboots cleanly (Clevis/Tang unlocks LUKS), so it may auto-reboot
-  # within the nightly window.
-  system.autoUpgrade = {
-    enable = true;
-    allowReboot = true;
-    rebootWindow = {
-      lower = "04:00";
-      upper = "06:00";
-    };
-  };
-
   networking = {
     useNetworkd = true;
     interfaces.${net.interface} = {

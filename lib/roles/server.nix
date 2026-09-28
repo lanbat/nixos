@@ -17,10 +17,6 @@ in
 {
   networking.hostName = net.hostname;
 
-  # The server cannot auto-reboot (manual LUKS unlock at boot), so allowReboot
-  # stays false: upgrades apply but take effect at the next manual reboot.
-  system.autoUpgrade.enable = true;
-
   boot.loader = {
     systemd-boot.enable = true;
     efi.canTouchEfiVariables = true;

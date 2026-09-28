@@ -12,7 +12,6 @@
     ./overlay.nix
     ./base.nix
     ./gc.nix
-    ./auto-upgrade.nix
     ./ssh.nix
     ./users.nix
     ./human-users.nix

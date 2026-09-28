@@ -36,9 +36,11 @@ ssh admin@server sudo nixos-rebuild switch --rollback
 
 ## Updating
 
-Both hosts run `nixos-upgrade.service` nightly, pulling the latest commit from
-`/etc/nixos` and running `nixos-rebuild switch`. You can also deploy immediately
-from your workstation with deploy-rs.
+Hosts change only when you deploy from your workstation with deploy-rs. No host
+rebuilds itself: there is no `nixos-upgrade` timer and no copy of this repository
+on the hosts. (Earlier versions rebuilt nightly from a clone under `/etc/nixos`,
+which silently reverted any deploy the clone lacked, including changes to the
+gitignored `deploy.nix`; see [Moving off the nightly rebuild](#moving-off-the-nightly-rebuild).)
 
 To update nixpkgs and the other inputs:
 
@@ -46,21 +48,11 @@ To update nixpkgs and the other inputs:
 nix flake update
 nix flake check --no-build path:.
 git commit -m "flake.lock: update" flake.lock
-git push
-# Hosts pick up the change on the next nightly run, or deploy now:
 deploy path:.#homelab-server
 deploy path:.#homelab-pi-storage
 ```
 
-Check the last upgrade:
-
-```bash
-systemctl status nixos-upgrade.service
-journalctl -u nixos-upgrade.service -n 50
-journalctl -u nixos-upgrade-pull.service -n 20
-```
-
-**Server:** upgrades apply immediately but the machine is **not rebooted** — a new
+**Server:** a deploy activates the new system but never reboots the machine; a new
 kernel only takes effect after the next manual reboot. Check whether a reboot is pending:
 
 ```bash
@@ -70,24 +62,47 @@ kernel only takes effect after the next manual reboot. Check whether a reboot is
 
 After a server reboot, unlock both layers (see `docs/runbook.md`).
 
-**Pi:** upgrades apply immediately and the machine **reboots automatically** (between
-04:00–06:00) if a reboot is needed. Clevis/Tang handles LUKS unlock automatically.
-NFS-dependent services on the server briefly pause and auto-restart as usual.
+**Pi:** the same applies. Run the check above on the Pi and reboot it when convenient
+(`ssh admin@pi5 sudo systemctl reboot`); Clevis/Tang unlocks its drives, and
+NFS-dependent services on the server briefly pause and restart as usual.
 
-### Disabling auto-upgrade temporarily
+### Unattended updates
+
+If you want updates without running `deploy` by hand, schedule the deploy itself
+rather than a rebuild on the host, so the scheduled run deploys exactly what you
+would have deployed. For example, a timer or cron job on the workstation that runs
+`nix flake update`, `nix flake check --no-build path:.` and then `deploy` for each
+host, or a CI job with SSH access to the hosts and a copy of your `deploy.nix`. The
+job needs the same checkout, including the gitignored `deploy.nix` and
+`deployments/<profile>/deploy.nix`, that you deploy from by hand. This repository
+does not ship such automation.
+
+### Going back to an earlier configuration
+
+Check out a known-good commit on the workstation and deploy it, or roll back the
+host by hand (see [Rolling back by hand](#rolling-back-by-hand)). Nothing on the host
+will move it forward again until you next deploy.
+
+### Moving off the nightly rebuild
+
+Hosts installed before this change still have the `nixos-upgrade` timer and a
+clone of the repository under `/etc/nixos`. Deploy every host once from a checkout
+that contains the change; activation removes `nixos-upgrade.timer`,
+`nixos-upgrade.service` and `nixos-upgrade-pull.service`. Confirm with:
 
 ```bash
-sudo systemctl stop nixos-upgrade.timer
-sudo systemctl start nixos-upgrade.timer   # re-enable
+systemctl list-timers 'nixos-upgrade*'   # lists nothing
 ```
 
-### Pinning a specific commit
-
-If an upgrade breaks something, pin the repo to a known-good commit:
+The `/etc/nixos` clone is then no longer used. Once you have copied anything you
+still need out of it (uncommitted changes, a `deploy.nix` newer than the workstation's),
+delete it, along with the copies of
+`deploy.nix` and `deployments/<profile>/` inside it and any deploy key or token you
+created for it (for example `/root/.ssh/nixos_deploy`, which should also be removed
+from the git host's deploy keys):
 
 ```bash
-sudo git -C /etc/nixos checkout <good-commit-hash>
-# Auto-upgrade rebuilds from this commit until you move HEAD forward.
+sudo rm -rf /etc/nixos
 ```
 
 ## Disk space (server)
