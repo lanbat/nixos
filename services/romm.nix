@@ -19,7 +19,7 @@
 #                             — zip copies of the arcade sets, which RomM shows
 #                               in place of roms/mame (below)
 #   Workload PostgreSQL        — "romm" database
-#   Shared Redis               — database 2 (Authentik uses 0, Immich 1)
+#   Shared Redis               — database 2 (lanbat.redis.databases)
 #
 # Auth: Caddy forward auth (Authentik), then RomM's own accounts. The first
 # visit runs RomM's setup wizard, which creates the admin account.
@@ -129,6 +129,9 @@ in
     passwordFile = config.age.secrets.romm-db-pass.path;
   };
 
+  # Task queues and cache in the shared Redis (services/redis.nix).
+  lanbat.redis.databases.romm.index = 2;
+
   virtualisation.oci-containers.containers."romm" = {
     image = "docker.io/rommapp/romm:5";
 
@@ -146,7 +149,7 @@ in
       # The shared Redis: RomM's internal Valkey would listen on 6379 too.
       REDIS_HOST = "127.0.0.1";
       REDIS_PORT = "6379";
-      REDIS_DB = "2";
+      REDIS_DB = toString config.lanbat.redis.databases.romm.index;
       HASHEOUS_API_ENABLED = "true";
       LAUNCHBOX_API_ENABLED = "true";
       # Picks up the zips romm-browser-romsets adds or replaces.
