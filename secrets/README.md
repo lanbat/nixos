@@ -56,8 +56,8 @@ Run the generator script — it creates all purely-random secrets automatically:
 bash secrets/generate-secrets.sh
 ```
 
-For secrets that need manual input (MQTT passwords, rclone config, Telegraf
-token), the script prints instructions at the end.
+For secrets that need manual input (MQTT passwords, rclone config), the script
+prints instructions at the end.
 
 Once Authentik is deployed and running, generate the OIDC client secrets with:
 
@@ -146,10 +146,12 @@ agenix -e vaultwarden-env.age
 # redistribute ca.<domain>/lanbat-ca.crt to every client.
 
 # ---- Telegraf ----
-# Leave empty for now — fill in AFTER deploying InfluxDB and creating a
-# write token in its UI (Data → API Tokens → Generate → Write to "metrics").
+# Choose the value now: InfluxDB provisions a write-only token for the
+# "metrics" bucket with exactly this value (services/influxdb.nix), so there is
+# nothing to create in its UI. It must differ from influxdb-admin-token.age,
+# or provisioning rewrites the operator token into the write-only one.
 # One KEY=value line:
-#   TELEGRAF_INFLUXDB_TOKEN=<write token>
+#   TELEGRAF_INFLUXDB_TOKEN=<random value, e.g. from openssl rand -hex 32>
 agenix -e telegraf-token.age
 
 # ---- Overlay (only with deployment.overlay.provider = "wireguard-mesh") ----

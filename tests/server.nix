@@ -20,6 +20,7 @@ let
     (import ../deployments/example/deploy.nix {
       inputs.self.lanbatPlugins = { };
     }).hosts.server;
+  roleModules = (import ../lib/roles.nix { inherit lib; }).getRoleModules exampleServer.role;
   serviceModules = (import ../lib/plugins.nix { inherit lib; }).resolvePlugins exampleServer.role [
     (import ../plugins/services)
   ] (exampleServer.services or [ ]);
@@ -40,18 +41,13 @@ pkgs.testers.runNixOSTest {
         agenix.nixosModules.default
         disko.nixosModules.disko
         ../modules/core
-        ../lib/roles/server.nix
-        ../hosts/server/hardware.nix
-        ../hosts/server/disk.nix
-        ../modules/server/control-layer.nix
-        # The server role's placement-dependent wiring: bitmagnet and romm are
-        # on-demand, and modules/wiring/checks.nix rejects them on a host
-        # without the activators.
-        ../modules/wiring/on-demand.nix
-        ../modules/wiring/workload-gate.nix
         ./lib/example-host-context.nix
         ./lib/test-secrets.nix
       ]
+      # The role's modules as lib/mkHost.nix imports them, so the test boots
+      # the same wiring (Caddy vhosts, NFS, on-demand, workload gating) as
+      # the host.
+      ++ roleModules
       ++ serviceModules;
 
       nixpkgs.config.allowUnfree = true;
@@ -125,7 +121,10 @@ pkgs.testers.runNixOSTest {
           ADMIN_TOKEN=test
           SSO_CLIENT_SECRET=test
         '';
-        telegraf-token = "TELEGRAF_INFLUXDB_TOKEN=test-influx-token-0123456789\n";
+        # A token of its own: InfluxDB provisioning sets the Telegraf auth to
+        # this value, and an auth sharing the operator token's value would
+        # take the operator token over.
+        telegraf-token = "TELEGRAF_INFLUXDB_TOKEN=test-telegraf-token-0123456789\n";
       };
     };
 
