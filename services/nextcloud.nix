@@ -6,7 +6,7 @@
 # -------------
 # Server-local (fast, reliable, always-on):
 #   /var/lib/nextcloud/     — app code, config, skeleton
-#   PostgreSQL              — database (shared instance)
+#   PostgreSQL              — database (workload instance)
 #
 # Pi-backed via NFS (/srv/storage/b):
 #   /srv/storage/b/nextcloud/external/  — bulk user data (External Storage app)
@@ -38,6 +38,7 @@
 
 let
   domain = config.lanbat.deployment.domain;
+  db = config.lanbat.postgresql.instance "workload";
 in
 
 {
@@ -46,6 +47,18 @@ in
   systemd.timers.nextcloud-cron = {
     wantedBy = lib.mkForce [ "workload-online.target" ];
     partOf = [ "workload-online.target" ];
+  };
+
+  # The database and its owner role, both "nextcloud", on the workload instance
+  # (services/postgresql.nix), which puts them in the NixOS module's
+  # ensureDatabases and ensureUsers exactly as database.createLocally did. The
+  # nextcloud system user logs in over the socket without a password (peer).
+  lanbat.postgresql.databases.nextcloud.instance = "workload";
+
+  # createLocally ordered setup after the database; keep that.
+  systemd.services.nextcloud-setup = {
+    after = [ db.unit ];
+    requires = [ db.unit ];
   };
 
   lanbat.services.nextcloud = {
@@ -106,12 +119,13 @@ in
 
     https = true;
 
-    # Use local PostgreSQL via Unix socket (peer auth — no password needed).
-    # The module creates the database and user automatically.
-    database.createLocally = true;
-
     config = {
+      # PostgreSQL over the workload instance's Unix socket (peer auth, no
+      # password), in the database lanbat.postgresql.databases.nextcloud.
       dbtype = "pgsql";
+      dbhost = db.socket;
+      dbname = "nextcloud";
+      dbuser = "nextcloud";
       adminuser = "admin";
       adminpassFile = config.lanbat.secrets.nextcloud-admin-pass.path;
     };
