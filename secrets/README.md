@@ -143,7 +143,8 @@ agenix -e vaultwarden-env.age
 
 # ---- Caddy internal CA ----
 # Created once when pinning the root CA (see services/caddy.nix). The public
-# cert is secrets/caddy-ca-root.crt (committed). Encrypt the private key:
+# cert is caddy-ca-root.crt beside the .age files (committed; override with
+# deployment.secrets.caCertificate). Encrypt the private key:
 #   agenix -e caddy-ca-root-key.age < /path/to/root.key
 # To rotate deliberately: generate a new root, re-encrypt, redeploy, then
 # redistribute ca.<domain>/lanbat-ca.crt to every client.
@@ -262,7 +263,7 @@ Until then, use the union-of-keys pattern above.
 | `ha-voice-token.age` | Home Assistant long-lived access token, from `generate-ha-voice-token.sh` | Voice satellites (server + Pi), to speak replies on the room's speakers (`lanbat.voiceRooms`); only with `voiceRooms` set |
 | `ha-voice-refresh-token.age` | `VOICE_TOKEN_ID=`, `VOICE_TOKEN_JWT_KEY=`, `VOICE_TOKEN_CREATED=`, from `generate-ha-voice-token.sh` | `home-assistant-post-setup`, which adds the token and its "Voice satellites" user to Home Assistant |
 | `ha-xiaomi-ble.age` | `<MAC> <bindkey> [entry title]` lines, one Xiaomi BLE device each | `home-assistant-post-setup`, which adds each device's `xiaomi_ble` config entry so Home Assistant can decrypt its advertisements; only with `haXiaomiBle` set. Get a bindkey locally from [Mi Activation](https://atc1441.github.io/Temp_universal_mi_activate.html) — no Xiaomi cloud account |
-| `caddy-ca-root.crt` | PEM root certificate (public) | Caddy internal CA — committed plaintext |
+| `caddy-ca-root.crt` | PEM root certificate (public) | Caddy internal CA — committed plaintext; `deployment.secrets.caCertificate` defaults to it |
 | `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |
 | `romm-db-pass.age` | `POSTGRES_PASSWORD=<value>` and `DB_PASSWD=<same value>` | RomM database password (PostgreSQL setup and the container) |
 | `romm-env.age` | `ROMM_AUTH_SECRET_KEY=<openssl rand -hex 32>` and metadata provider keys (`IGDB_CLIENT_ID=`, `SCREENSCRAPER_USER=`, …) | RomM container |

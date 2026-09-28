@@ -258,8 +258,6 @@ instead. Document the reason in the service file if you add another soft depende
   the secret, the service that requires it and the host.
 - **Host secrets:** a secret that belongs to a host rather than a service (the overlay
   key) is declared in `lanbat.hostSecrets.<secret>` and read the same way.
-- **Exceptions:** `caddy-ca-root-key` in `services/caddy.nix` still declares
-  `age.secrets` directly.
 - Add every new secret to `secrets/secrets.nix.example` and `secrets/README.md`.
 - Inject secrets at runtime via `environmentFile` or `config.lanbat.secrets.<name>.path` —
   never inline plaintext in Nix expressions.
