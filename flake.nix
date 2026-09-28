@@ -107,6 +107,7 @@
           hostFlakeName
           deployLib
           deployQuery
+          secretsRecipients
           ;
         loadDeployments = loadDeployments.normalize;
       };
@@ -289,6 +290,27 @@
           program = toString (
             pkgs.writeShellScript "validate-deploy" ''
               exec ${pkgs.nix}/bin/nix build .#checks.x86_64-linux.validate-deploy --no-link
+            ''
+          );
+        };
+
+        # The agenix recipients of each secret, derived from where the hosts of
+        # a profile require it: nix run .#secrets-recipients [--json] [profile]
+        secrets-recipients = {
+          type = "app";
+          program = toString (
+            pkgs.writeShellScript "secrets-recipients" ''
+              set -euo pipefail
+              if [ "''${1:-}" = "--json" ]; then JSON=1; shift; else JSON=; fi
+              PROFILE="''${1:-}"
+              if [ -n "$PROFILE" ]; then ARG="\"$PROFILE\""; else ARG=null; fi
+              REF=.#lib.lanbat.secretsRecipients
+              if [ -n "$JSON" ]; then
+                exec ${pkgs.nix}/bin/nix eval --json "$REF" \
+                  --apply "f: { inherit (f $ARG) profile recipients off; }"
+              else
+                exec ${pkgs.nix}/bin/nix eval --raw "$REF" --apply "f: (f $ARG).text + \"\n\""
+              fi
             ''
           );
         };

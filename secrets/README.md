@@ -12,6 +12,27 @@ services read the path as `config.lanbat.secrets.<secret>.path`. A requirement w
 `.age` file is missing fails evaluation with the secret's name and the service that
 requires it.
 
+A requirement can be conditional (`enable`, set from the setting that uses the secret:
+`haLlm`, `haXiaomiBle`, `voiceRooms`, a host's overlay membership). One that is off is not
+provisioned, so a profile that leaves the feature off needs no `.age` file for it. A secret
+that one service declares and others on the same host read (the Mosquitto passwords,
+`hass-bootstrap-env`, `influxdb-admin-token`, `telegraf-token`, `authentik-oidc-secrets`)
+is a shared secret: the declarer sets owner, group and mode, and each reader lists it in
+`lanbat.services.<name>.readsSecrets`.
+
+Which hosts need each file follows from that, so you do not have to work the recipients
+out by hand:
+
+```bash
+nix run .#secrets-recipients              # the default profile, as a secrets.nix body
+nix run .#secrets-recipients -- homelab   # a named profile
+nix run .#secrets-recipients -- --json    # {profile, recipients, off} as JSON
+```
+
+It lists every secret that a host of the profile requires with `admin` plus those hosts'
+keys (named as in deploy.nix `hosts`), and, in a trailing comment, the secrets that are
+declared but off on every host. It never reads or writes a key or an `.age` file.
+
 ## Chicken-and-egg: secrets before first install
 
 agenix encrypts secrets to the host SSH key — but the host doesn't exist yet
@@ -200,7 +221,8 @@ in
 
 Secrets shared across hosts (Telegraf token, voice satellite token) use `allKeys`.
 Server-only secrets stay on `serverKeys`. Drop `pi-bedroom` from `allPis` if you
-have no voice-pi host.
+have no voice-pi host. `nix run .#secrets-recipients` prints the exact host list for
+each secret of your profile, including any Pi that does not need a given secret.
 
 ## Multiple profiles (homelab + cabin)
 
@@ -214,7 +236,8 @@ serverKeys = [ homelab-server cabin-server admin ];
 "grafana-env.age".publicKeys = serverKeys;
 ```
 
-This means the same encrypted file works on every profile that is a recipient.
+Run `nix run .#secrets-recipients -- <profile>` for each profile and take the union
+of the host lists. This means the same encrypted file works on every profile that is a recipient.
 The tradeoff is duplication: a cabin-only secret still sits beside homelab secrets,
 and you must re-run `agenix -r` when any profile's host key changes.
 
@@ -241,24 +264,25 @@ Until then, use the union-of-keys pattern above.
 | File | Format | Used by |
 |------|--------|---------|
 | `authentik-env.age` | `KEY=value` × 2 | Authentik server + worker |
-| `authentik-oidc-secrets.age` | `KEY=value` lines (one per OIDC client) | Authentik blueprints |
+| `authentik-oidc-secrets.age` | `KEY=value` lines (one per OIDC client) | Authentik blueprints; shared with Jellyfin (SSO client secret for `jellyfin-bootstrap`) |
 | `nextcloud-admin-pass.age` | plaintext password | Nextcloud |
 | `nextcloud-oidc-env.age` | `KEY=value` × 2 | Nextcloud OIDC setup |
 | `immich-db-password.age` | `POSTGRES_PASSWORD=<value>` | Immich postgres container |
 | `immich-oidc-env.age` | `KEY=value` × 2 | Immich server container |
-| `mosquitto-ha-pass.age` | plaintext password | Mosquitto (Home Assistant user) |
-| `mosquitto-frigate-pass.age` | plaintext password | Mosquitto (Frigate user) |
-| `mosquitto-z2m-pass.age` | plaintext password | Mosquitto (Zigbee2MQTT user) |
+| `mosquitto-ha-pass.age` | plaintext password | Mosquitto (Home Assistant user); shared with Home Assistant |
+| `mosquitto-frigate-pass.age` | plaintext password | Mosquitto (Frigate user); shared with Frigate |
+| `mosquitto-z2m-pass.age` | plaintext password | Mosquitto (Zigbee2MQTT user); shared with Zigbee2MQTT |
 | `bitmagnet-db-pass.age` | `POSTGRES_PASSWORD=<value>` | Bitmagnet PostgreSQL |
 | `frigate-rtsp-env.age` | `FRIGATE_RTSP_USER=<value>`, `FRIGATE_RTSP_PASSWORD=<value>` | Frigate camera RTSP auth |
 | `rclone-frigate-config.age` | full rclone config file | Frigate rclone sync |
 | `influxdb-admin-password.age` | plaintext password | InfluxDB initial setup |
-| `influxdb-admin-token.age` | plaintext token | InfluxDB + Grafana datasource |
+| `influxdb-admin-token.age` | plaintext token | InfluxDB; shared with Grafana (datasource) |
 | `grafana-env.age` | `KEY=value` × 4 | Grafana |
 | `vaultwarden-env.age` | `ADMIN_TOKEN=<value>` | Vaultwarden |
 | `searxng-secret.age` | plaintext value | SearXNG session and image-proxy signing |
 | `homepage-widgets-env.age` | `KEY=value` lines for widget API keys/tokens | Homepage dashboard widgets |
-| `telegraf-token.age` | `TELEGRAF_INFLUXDB_TOKEN=<value>` | Telegraf (server + Pi) |
+| `telegraf-token.age` | `TELEGRAF_INFLUXDB_TOKEN=<value>` | Telegraf (server + Pi); shared with InfluxDB on the server (write-token provisioning) |
+| `hass-bootstrap-env.age` | `OWNER_USERNAME=<value>`, `OWNER_PASSWORD=<value>` | Home Assistant onboarding; shared with Jellyfin, Immich and Music Assistant, whose setup units sign in with the same owner account |
 | `ha-llm-api-key.age` | plaintext API key | Home Assistant's conversation agent (`lanbat.haLlm`); only with `haLlm` set |
 | `ha-voice-token.age` | Home Assistant long-lived access token, from `generate-ha-voice-token.sh` | Voice satellites (server + Pi), to speak replies on the room's speakers (`lanbat.voiceRooms`); only with `voiceRooms` set |
 | `ha-voice-refresh-token.age` | `VOICE_TOKEN_ID=`, `VOICE_TOKEN_JWT_KEY=`, `VOICE_TOKEN_CREATED=`, from `generate-ha-voice-token.sh` | `home-assistant-post-setup`, which adds the token and its "Voice satellites" user to Home Assistant |

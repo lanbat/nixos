@@ -124,7 +124,8 @@ Follow this checklist every time:
    | `nfs.drives` (and `nfs.units`) | reads or writes Pi storage |
    | `onDemand` | should start on the first request and stop when idle |
    | `account` | runs as a rootless container (`container = true`) or needs a pinned UID |
-   | `secrets.<file> = { }` | reads `secrets/<file>.age` |
+   | `secrets.<file> = { }` | reads `secrets/<file>.age` (`enable` when only a setting needs it) |
+   | `readsSecrets` | reads a secret that another service on the host declares |
    | `dashboard` | should appear on Homepage |
    | `lanbat.settingsSchema.<name>` | has configuration that differs between sites (cameras, shares, devices): declare typed options there, as `services/frigate.nix` does, and set the values from the profile (see [docs/extensibility.md](docs/extensibility.md#service-settings)). Declared keys are type checked and others rejected |
 
@@ -134,7 +135,7 @@ Follow this checklist every time:
    `oidc` gives it an OAuth2 provider and application. For an OIDC client, add its
    `AUTHENTIK_<NAME>_CLIENT_SECRET` line to `authentik-oidc-secrets` (see step 5).
 5. **Secrets**: add new files to `secrets/secrets.nix.example` and the inventory in
-   `secrets/README.md`.
+   `secrets/README.md`. `nix run .#secrets-recipients` prints which hosts need each one.
 6. **Check**: run the commands above. Evaluation rejects clashing ports, subdomains,
    UIDs and secrets, forward auth on services with API clients, workload-tier services
    without state, units that no module defines, and units outside `units` that would
@@ -270,6 +271,9 @@ instead. Document the reason in the service file if you add another soft depende
   on the host declares it or its requirement is off.
 - **Host secrets:** a secret that belongs to a host rather than a service (the overlay
   key) is declared in `lanbat.hostSecrets.<secret>` and read the same way.
+- **Recipients are derived.** `nix run .#secrets-recipients [--json] [profile]` prints,
+  for every secret a host of the profile requires, `admin` and the host keys that need it
+  (from where the requirements are placed), as the body of an agenix `secrets.nix`.
 - Add every new secret to `secrets/secrets.nix.example` and `secrets/README.md`.
 - Inject secrets at runtime via `environmentFile` or `config.lanbat.secrets.<name>.path` —
   never inline plaintext in Nix expressions.

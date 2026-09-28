@@ -204,9 +204,12 @@ secrets:
 
 1. Declare them under `lanbat.services.<name>.secrets` (or `lanbat.hostSecrets`
    for secrets that belong to no service), and read each one as
-   `config.lanbat.secrets.<secret>.path`.
+   `config.lanbat.secrets.<secret>.path`, never `config.age.secrets`. Set a
+   requirement's `enable` from the setting that uses it, and list a secret that
+   another service declares (a Mosquitto password, say) in
+   `lanbat.services.<name>.readsSecrets` rather than declaring it again.
 2. Add entries to `secrets/secrets.nix.example` and the inventory in
-   `secrets/README.md`.
+   `secrets/README.md`. `nix run .#secrets-recipients` shows which hosts need them.
 3. **In your pull request:** document the required secrets in your plugin
    README (format, how to generate values). No `.age` file is needed — the
    `example` profile resolves secrets to placeholders, so evaluation and the

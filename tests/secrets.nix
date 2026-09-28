@@ -83,6 +83,34 @@ let
     };
   };
 
+  # lib/secrets-recipients.nix over two profiles' hosts, as lib/ hands it
+  # the flake's configurations.
+  host' = profile: hostKey: secrets: declarations: {
+    config.lanbat = {
+      inherit profile hostKey secrets;
+      secretDeclarations = declarations;
+    };
+  };
+  recipients = import ../lib/secrets-recipients.nix {
+    inherit lib;
+    defaultProfile = "home";
+    configurations = {
+      server =
+        host' "home" "server"
+          {
+            shared = { };
+            own = { };
+          }
+          {
+            shared.enable = true;
+            own.enable = true;
+            feature.enable = false;
+          };
+      pi = host' "home" "pi" { shared = { }; } { shared.enable = true; };
+      other-server = host' "other" "server" { elsewhere = { }; } { elsewhere.enable = true; };
+    };
+  } null;
+
   none = eval { services = demo; };
   agenix = eval {
     provider = "agenix";
@@ -179,6 +207,23 @@ let
           + " broker is off (enable = false). Make the read as conditional as the requirement."
         )
       ]
+    ))
+    (expect "recipients are the hosts that require each secret, in one profile" (
+      recipients.recipients == {
+        shared = [
+          "pi"
+          "server"
+        ];
+        own = [ "server" ];
+      }
+    ))
+    (expect "a secret that is off on every host needs no recipients" (
+      recipients.off == {
+        feature = [ "server" ];
+      }
+    ))
+    (expect "the recipients render as a secrets.nix body" (
+      lib.hasInfix "\"shared.age\".publicKeys = [ admin pi server ];" recipients.text
     ))
   ];
 
