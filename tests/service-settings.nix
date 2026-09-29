@@ -13,6 +13,8 @@
 #   - Home Assistant: the loopback URLs of the services it wires come from
 #     their descriptions, and the Zigbee2MQTT bridge watch follows whether
 #     Zigbee2MQTT runs on the host unless the profile says otherwise.
+#   - Telegraf: InfluxDB, Redis and the health checks are reached at the ports
+#     the services' descriptions give, and a profile sets the ping targets.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -158,6 +160,22 @@ let
   redisClash = serverWith [ { lanbat.redis.databases.other.index = 1; } ];
 
   envOf = config: container: config.virtualisation.oci-containers.containers.${container}.environment;
+
+  # ── Telegraf ─────────────────────────────────────────────────────────────
+  telegrafConf = config: config.services.telegraf.extraConfig;
+  healthChecks =
+    config: map (c: "${c.name_override} ${lib.head c.urls}") (telegrafConf config).inputs.http_response;
+
+  telegrafChanged = serverWith [
+    {
+      lanbat.services = {
+        influxdb.endpoint.port = lib.mkForce 18086;
+        grafana.port = lib.mkForce 13030;
+        telegraf.settings.pingTargets = [ "192.0.2.1" ];
+      };
+      services.redis.servers.shared.port = lib.mkForce 16379;
+    }
+  ];
 
   expect = name: ok: if ok then null else name;
 
@@ -322,6 +340,38 @@ let
 
     (expect "home assistant: the Zigbee watch can be turned off" (
       (haConfig haNoZigbee).automation == [ ] && haViews haNoZigbee == [ "all" ]
+    ))
+
+    (expect "telegraf: the defaults keep today's outputs and inputs" (
+      let
+        t = telegrafConf base;
+      in
+      (lib.head t.outputs.influxdb_v2).urls == [ "http://localhost:8086" ]
+      &&
+        healthChecks base == [
+          "grafana http://127.0.0.1:3030/api/health"
+          "home-assistant http://127.0.0.1:8123/"
+          "jellyfin http://127.0.0.1:8096/health"
+          "immich http://127.0.0.1:2283/api/server/ping"
+          "vaultwarden http://127.0.0.1:8222/alive"
+        ]
+      &&
+        (lib.head t.inputs.ping).urls == [
+          "192.0.2.11"
+          "192.0.2.1"
+          "1.1.1.1"
+        ]
+      && (lib.head t.inputs.redis).servers == [ "tcp://127.0.0.1:6379" ]
+    ))
+
+    (expect "telegraf: the ports follow the services and the ping targets the profile" (
+      let
+        t = telegrafConf telegrafChanged;
+      in
+      (lib.head t.outputs.influxdb_v2).urls == [ "http://localhost:18086" ]
+      && lib.head (healthChecks telegrafChanged) == "grafana http://127.0.0.1:13030/api/health"
+      && (lib.head t.inputs.ping).urls == [ "192.0.2.1" ]
+      && (lib.head t.inputs.redis).servers == [ "tcp://127.0.0.1:16379" ]
     ))
 
     (expect "redis: the consumers keep today's indexes" (
