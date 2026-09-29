@@ -18,6 +18,8 @@
 #   - RomM: the library and the browser's arcade copies default to drive b's
 #     media/roms and media/roms-browser/mame, a profile moves them, and the
 #     NFS dependency follows the drive.
+#   - Music Assistant: its setup reaches Music Assistant and Home Assistant at
+#     the ports and subdomains of their descriptions.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -189,6 +191,21 @@ let
         drive = "a";
         libraryPath = "games/roms";
         browserArcadePath = "games/arcade";
+      };
+    }
+  ];
+
+  # ── Music Assistant ──────────────────────────────────────────────────────
+  maScript = config: config.systemd.services.music-assistant-setup.script;
+
+  maMoved = serverWith [
+    {
+      lanbat.services = {
+        music-assistant.port = lib.mkForce 18095;
+        home-assistant = {
+          port = lib.mkForce 18123;
+          subdomain = lib.mkForce "hass";
+        };
       };
     }
   ];
@@ -412,6 +429,23 @@ let
         rommMoved.systemd.services.romm-browser-romsets.environment.TARGET_DIR
         == "/srv/storage/a/games/arcade"
       && failedAssertions rommMoved == [ ]
+    ))
+
+    (expect "music-assistant: the setup keeps today's URLs" (
+      lib.all (line: lib.hasInfix line (maScript base)) [
+        ''export MA_URL="http://127.0.0.1:8095"''
+        ''export MA_PUBLIC_URL="https://music.home.example.com"''
+        ''export HA_INTERNAL_URL="http://127.0.0.1:8123"''
+        ''export HA_PUBLIC_URL="https://ha.home.example.com"''
+      ]
+    ))
+
+    (expect "music-assistant: the setup follows the services' ports and subdomains" (
+      lib.all (line: lib.hasInfix line (maScript maMoved)) [
+        ''export MA_URL="http://127.0.0.1:18095"''
+        ''export HA_INTERNAL_URL="http://127.0.0.1:18123"''
+        ''export HA_PUBLIC_URL="https://hass.home.example.com"''
+      ]
     ))
 
     (expect "redis: the consumers keep today's indexes" (
