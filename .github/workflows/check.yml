@@ -29,8 +29,31 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
-      - name: Evaluate the example hosts and checks
-        run: nix flake check --no-build --all-systems
+      # One nix process per check and per host. A single `nix flake check`
+      # holds every evaluation at once, which outgrows the runner's 16 GB; the
+      # runner is then killed and the job reports "The operation was canceled".
+      # Listing them from the flake means a new check or host cannot be left out.
+      - name: Evaluate each check and host
+        shell: bash
+        run: |
+          set -euo pipefail
+          for system in x86_64-linux aarch64-linux; do
+            for check in $(nix eval --json ".#checks.$system" --apply builtins.attrNames | jq -r '.[]'); do
+              echo "::group::checks.$system.$check"
+              nix eval --raw ".#checks.$system.$check.drvPath"
+              echo; echo "::endgroup::"
+            done
+          done
+          for host in $(nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]'); do
+            echo "::group::nixosConfigurations.$host"
+            nix eval --raw ".#nixosConfigurations.$host.config.system.build.toplevel.drvPath"
+            echo; echo "::endgroup::"
+          done
+      - name: Evaluate the formatter, apps and dev shells
+        run: |
+          nix eval --json .#formatter --apply 'fs: builtins.mapAttrs (_: f: f.drvPath) fs'
+          nix eval --json .#apps --apply 'as: builtins.mapAttrs (_: builtins.mapAttrs (_: a: a.program)) as'
+          nix eval --json .#devShells --apply 'ds: builtins.mapAttrs (_: builtins.mapAttrs (_: d: d.drvPath)) ds'
 
   vm-test:
     name: vm-test
@@ -60,7 +83,11 @@ jobs:
           )
           mapfile -t checks <<<"$list"
           printf '%s\n' "${checks[@]}"
-          nix build -L "${checks[@]}"
+          # One nix process per check: building them all in one evaluates them
+          # all at once, which outgrows the runner's memory (see eval).
+          for check in "${checks[@]}"; do
+            nix build -L "$check"
+          done
 
   # GitHub's arm64 runners have no /dev/kvm, so the Pi VM tests cannot boot
   # here. Building each test's driver still builds the hosts' full system
