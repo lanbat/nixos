@@ -155,6 +155,21 @@ def _update(args) -> int:
     return EXIT_OK
 
 
+def _load_snapshot_or_report(snapshot_module, path: str) -> dict | int:
+    """Load a snapshot, or print the error and return the exit code that explains why not."""
+    try:
+        return snapshot_module.load(path)
+    except snapshot_module.SnapshotError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_MANIFEST
+
+
+def _print_diff(diff_module, old: dict, new: dict, ignore: frozenset[str] = frozenset()) -> None:
+    result = diff_module.compare(old, new, ignore)
+    print(diff_module.render(result), end="")
+    print(diff_module.restore_fragment(result), end="")
+
+
 def _capture(args) -> int:
     from . import diff, snapshot
 
@@ -189,14 +204,10 @@ def _capture(args) -> int:
     print(f"snapshot of {manifest.device} written to {path}")
 
     if args.diff:
-        try:
-            old = snapshot.load(args.diff)
-        except snapshot.SnapshotError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return EXIT_MANIFEST
-        result = diff.compare(old, snap)
-        print(diff.render(result), end="")
-        print(diff.restore_fragment(result), end="")
+        old = _load_snapshot_or_report(snapshot, args.diff)
+        if isinstance(old, int):
+            return old
+        _print_diff(diff, old, snap)
 
     return EXIT_OK
 
@@ -204,14 +215,13 @@ def _capture(args) -> int:
 def _diff(args) -> int:
     from . import diff, snapshot
 
-    try:
-        old, new = snapshot.load(args.old), snapshot.load(args.new)
-    except snapshot.SnapshotError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_MANIFEST
-    result = diff.compare(old, new, frozenset(args.ignore))
-    print(diff.render(result), end="")
-    print(diff.restore_fragment(result), end="")
+    old = _load_snapshot_or_report(snapshot, args.old)
+    if isinstance(old, int):
+        return old
+    new = _load_snapshot_or_report(snapshot, args.new)
+    if isinstance(new, int):
+        return new
+    _print_diff(diff, old, new, frozenset(args.ignore))
     return EXIT_OK
 
 
