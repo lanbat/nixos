@@ -15,6 +15,9 @@
 #     Zigbee2MQTT runs on the host unless the profile says otherwise.
 #   - Telegraf: InfluxDB, Redis and the health checks are reached at the ports
 #     the services' descriptions give, and a profile sets the ping targets.
+#   - RomM: the library and the browser's arcade copies default to drive b's
+#     media/roms and media/roms-browser/mame, a profile moves them, and the
+#     NFS dependency follows the drive.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -174,6 +177,19 @@ let
         telegraf.settings.pingTargets = [ "192.0.2.1" ];
       };
       services.redis.servers.shared.port = lib.mkForce 16379;
+    }
+  ];
+
+  # ── RomM ─────────────────────────────────────────────────────────────────
+  rommVolumes = config: config.virtualisation.oci-containers.containers.romm.volumes;
+
+  rommMoved = serverWith [
+    {
+      lanbat.services.romm.settings = {
+        drive = "a";
+        libraryPath = "games/roms";
+        browserArcadePath = "games/arcade";
+      };
     }
   ];
 
@@ -372,6 +388,30 @@ let
       && lib.head (healthChecks telegrafChanged) == "grafana http://127.0.0.1:13030/api/health"
       && (lib.head t.inputs.ping).urls == [ "192.0.2.1" ]
       && (lib.head t.inputs.redis).servers == [ "tcp://127.0.0.1:16379" ]
+    ))
+
+    (expect "romm: the defaults keep today's library on drive b" (
+      lib.drop 3 (rommVolumes base) == [
+        "/srv/storage/b/media/roms:/romm/library/roms"
+        "/srv/storage/b/media/roms-browser/mame:/romm/library/roms/mame"
+      ]
+      && base.lanbat.services.romm.nfs.drives == [ "b" ]
+      &&
+        base.systemd.services.romm-browser-romsets.environment.SOURCE_DIR
+        == "/srv/storage/b/media/roms/mame"
+      && (envOf base "romm").REDIS_PORT == "6379"
+    ))
+
+    (expect "romm: a profile moves the library, and the NFS dependency follows" (
+      lib.drop 3 (rommVolumes rommMoved) == [
+        "/srv/storage/a/games/roms:/romm/library/roms"
+        "/srv/storage/a/games/arcade:/romm/library/roms/mame"
+      ]
+      && rommMoved.lanbat.services.romm.nfs.drives == [ "a" ]
+      &&
+        rommMoved.systemd.services.romm-browser-romsets.environment.TARGET_DIR
+        == "/srv/storage/a/games/arcade"
+      && failedAssertions rommMoved == [ ]
     ))
 
     (expect "redis: the consumers keep today's indexes" (

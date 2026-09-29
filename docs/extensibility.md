@@ -97,6 +97,7 @@ layout, so a profile sets only what differs:
 | Wyoming | `wakeWord.threshold`, `speechToText.{model,language}`, `textToSpeech.voice`, and the server satellite's `satellite.{name,speaker,mixer,microphoneUsbId}` | British English (`en`, `en_GB-alan-medium`) and the onboard Intel codec (ALSA card `PCH`) |
 | Home Assistant | `zigbee2mqttBridge`: the bridge-offline notification and the Overview card | on when Zigbee2MQTT runs on the host |
 | Telegraf | `pingTargets`: the hosts pinged for reachability | the storage Pi, the default gateway and `1.1.1.1` |
+| RomM | `drive`, `libraryPath` and `browserArcadePath`: where the ROM library and the browser's zip copies of the arcade sets live on Pi storage | drive `b`, `media/roms` and `media/roms-browser/mame` |
 
 A default share is defined field by field at `lib.mkDefault`, so a profile changes
 one field of it, drops it with `enable = false`, or adds its own beside it:
