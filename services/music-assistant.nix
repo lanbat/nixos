@@ -22,8 +22,9 @@
 #
 # Local music library
 # -------------------
-# The filesystem_local provider reads /srv/storage/b/media/music over NFS.
-# That path is Pi-backed (automount, not workload-gated).  MA is always-on:
+# The filesystem_local provider reads the music library over NFS; its path is
+# set in Music Assistant's UI (docs/deployment-checklist.md), not here. That
+# path is Pi-backed (automount, not workload-gated).  MA is always-on:
 # we deliberately avoid lanbat.services.*.nfs.drives (which would stop MA when
 # the Pi disappears).  The service starts without the mount; library scans fail
 # gracefully until NFS is available.
@@ -34,7 +35,9 @@
 # Music Assistant has no Authentik header passthrough like Home Assistant, so
 # users sign in via "Login with Home Assistant" (HA OAuth) after Authentik.
 # music-assistant-setup provisions the hass plugin, base URL, self-registration,
-# and the bidirectional long-lived tokens for the HA integration.
+# and the bidirectional long-lived tokens for the HA integration. It reaches
+# both services on the loopback ports, and names them by the subdomains, of
+# their descriptions.
 #
 # Always-on: yes.  State in /var/lib/music-assistant (provider config, playlists).
 {
@@ -45,8 +48,8 @@
 }:
 
 let
-  musicLibrary = "/srv/storage/b/media/music";
   domain = config.lanbat.deployment.domain;
+  inherit (config.lanbat.services) music-assistant home-assistant;
   setup = pkgs.callPackage ../pkgs/music-assistant-setup {
     inherit pkgs;
   };
@@ -163,10 +166,10 @@ in
       set -a
       . ${config.lanbat.secrets.hass-bootstrap-env.path}
       set +a
-      export MA_URL="http://127.0.0.1:8095"
-      export MA_PUBLIC_URL="https://music.${domain}"
-      export HA_INTERNAL_URL="http://127.0.0.1:8123"
-      export HA_PUBLIC_URL="https://ha.${domain}"
+      export MA_URL="http://127.0.0.1:${toString music-assistant.port}"
+      export MA_PUBLIC_URL="https://${music-assistant.subdomain}.${domain}"
+      export HA_INTERNAL_URL="http://127.0.0.1:${toString home-assistant.port}"
+      export HA_PUBLIC_URL="https://${home-assistant.subdomain}.${domain}"
       export HASS_BIN="${config.services.home-assistant.package}/bin/hass"
       export HASS_CONFIG="/var/lib/hass"
       # Music Assistant's Snapcast players come from the snapserver (services/snapcast.nix).

@@ -21,9 +21,18 @@
 #   systemd_units — active/failed state for all systemd services
 #   nfsclient     — NFS mount operation counters and latency
 #   http_response — HTTP health checks for Grafana, Home Assistant, Jellyfin,
-#                   Immich, and Vaultwarden (localhost endpoints)
-#   ping          — reachability of the Pi, default gateway, and 1.1.1.1
-#   redis         — shared Redis instance (127.0.0.1:6379, no auth)
+#                   Immich, and Vaultwarden, those of them that run on this
+#                   host, on the loopback ports their descriptions give
+#   ping          — settings.pingTargets: by default the storage Pi, the
+#                   default gateway and 1.1.1.1
+#   redis         — shared Redis instance (loopback, no auth), when it runs here
+#
+# InfluxDB
+# --------
+# Metrics go to InfluxDB at the port its endpoint publishes: over
+# http://localhost when it runs on this host (see services/influxdb.nix for why
+# not 127.0.0.1), otherwise wherever the profile runs it, as the Pi's Telegraf
+# (modules/pi/telegraf.nix) reaches it.
 #
 # Note: inputs.docker removed — rootless Podman containers each have their own
 # socket under /run/user/<uid>/podman; there is no single shared Docker-compat
@@ -47,17 +56,66 @@
 
 let
   lanbat = config.lanbat;
+  cfg = lanbat.services.telegraf.settings;
+  endpointLib = import ../lib/endpoints.nix { inherit lib; };
 
-  serviceHealthCheck = name: port: path: {
-    urls = [ "http://127.0.0.1:${toString port}${path}" ];
-    response_status_code = 200;
-    interval = "60s";
-    response_timeout = "5s";
-    name_override = name;
+  influxUrl =
+    if lanbat.hasService "influxdb" then
+      let
+        inherit (lanbat.services.influxdb) endpoint;
+      in
+      "${endpoint.scheme}://localhost:${toString endpoint.port}"
+    else
+      let
+        influx = lanbat.endpoints.influxdb;
+        host = endpointLib.soleHost {
+          endpoints = lanbat.endpoints;
+          name = "influxdb";
+          consumer = "telegraf on ${lanbat.hostKey}";
+        };
+      in
+      "${influx.endpoint.scheme}://${lanbat.endpointHost "influxdb" host}:${toString influx.endpoint.port}";
+
+  # A health check of a service on this host, at the port its description
+  # gives; none when the service does not run here.
+  serviceHealthCheck =
+    name: path:
+    lib.optional (lanbat.hasService name) {
+      urls = [ "http://127.0.0.1:${toString lanbat.services.${name}.port}${path}" ];
+      response_status_code = 200;
+      interval = "60s";
+      response_timeout = "5s";
+      name_override = name;
+    };
+
+  telegrafSettings = {
+    options.pingTargets = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = lib.filter (target: target != null) [
+        lanbat.deployment.storageIp
+        lanbat.deployment.gatewayIp
+        "1.1.1.1"
+      ];
+      defaultText = lib.literalExpression ''
+        [ config.lanbat.deployment.storageIp config.lanbat.deployment.gatewayIp "1.1.1.1" ]
+      '';
+      example = [
+        "192.0.2.1"
+        "9.9.9.9"
+      ];
+      description = ''
+        Hosts Telegraf pings for reachability: by default the storage Pi, the
+        default gateway, and 1.1.1.1 as a probe of the internet connection.
+      '';
+    };
   };
 in
 
 {
+  # The schema is merged into lanbat.services.telegraf.settings; checks.nix
+  # rejects any key it does not declare.
+  lanbat.settingsSchema.telegraf = telegrafSettings;
+
   services.telegraf = {
     enable = true;
 
@@ -75,7 +133,7 @@ in
 
       outputs.influxdb_v2 = [
         {
-          urls = [ "http://localhost:8086" ];
+          urls = [ influxUrl ];
           token = "$TELEGRAF_INFLUXDB_TOKEN";
           organization = "homelab";
           bucket = "metrics";
@@ -113,27 +171,22 @@ in
       inputs.systemd_units = [ { } ];
       inputs.nfsclient = [ { fullstat = false; } ];
 
-      inputs.http_response = [
-        (serviceHealthCheck "grafana" lanbat.services.grafana.port "/api/health")
-        (serviceHealthCheck "home-assistant" lanbat.services.home-assistant.port "/")
-        (serviceHealthCheck "jellyfin" lanbat.services.jellyfin.port "/health")
-        (serviceHealthCheck "immich" lanbat.services.immich.port "/api/server/ping")
-        (serviceHealthCheck "vaultwarden" lanbat.services.vaultwarden.port "/alive")
-      ];
+      inputs.http_response =
+        serviceHealthCheck "grafana" "/api/health"
+        ++ serviceHealthCheck "home-assistant" "/"
+        ++ serviceHealthCheck "jellyfin" "/health"
+        ++ serviceHealthCheck "immich" "/api/server/ping"
+        ++ serviceHealthCheck "vaultwarden" "/alive";
 
       inputs.ping = [
         {
-          urls = [
-            lanbat.deployment.storageIp
-            lanbat.deployment.gatewayIp
-            "1.1.1.1"
-          ];
+          urls = cfg.pingTargets;
         }
       ];
 
-      inputs.redis = [
+      inputs.redis = lib.optionals (lanbat.hasService "redis") [
         {
-          servers = [ "tcp://127.0.0.1:6379" ];
+          servers = [ "tcp://127.0.0.1:${toString config.services.redis.servers.shared.port}" ];
         }
       ];
     };

@@ -8,8 +8,12 @@
 #   /var/lib/nextcloud/     — app code, config, skeleton
 #   PostgreSQL              — database (workload instance)
 #
-# Pi-backed via NFS (/srv/storage/b):
-#   /srv/storage/b/nextcloud/external/  — bulk user data (External Storage app)
+# Pi-backed via NFS (/srv/storage/<drive>):
+#   /srv/storage/<drive>/<path>/external/  — bulk user data (External Storage app)
+#   /srv/storage/<drive>/<path>/users/
+#   settings.storage.{drive,path} place them; by default b and nextcloud. The
+#   module only creates the directories: the External Storage mounts that use
+#   them are set up in Nextcloud's admin settings.
 #
 # If the Pi is down, Nextcloud still works — external storage shows errors
 # for those folders only; the app itself is healthy.
@@ -38,10 +42,42 @@
 
 let
   domain = config.lanbat.deployment.domain;
+
+  cfg = config.lanbat.services.nextcloud.settings;
+  # Where the server mounts the Pi storage drive (modules/wiring/nfs.nix).
+  bulkDir = "/srv/storage/${cfg.storage.drive}/${cfg.storage.path}";
+
+  nextcloudSettings = {
+    options.storage = {
+      drive = lib.mkOption {
+        type = lib.types.str;
+        default = "b";
+        description = ''
+          Pi storage drive holding the bulk user data that the External Storage
+          app serves, by its key in the storage host's storage.drives.
+          Nextcloud deliberately does not bind to its NFS mount (see the top of
+          services/nextcloud.nix).
+        '';
+      };
+      path = lib.mkOption {
+        type = lib.types.str;
+        default = "nextcloud";
+        description = ''
+          Directory of the bulk user data, relative to the drive's mount
+          (/srv/storage/<drive>). The module creates it with external/ and
+          users/ inside.
+        '';
+      };
+    };
+  };
   db = config.lanbat.postgresql.instance "workload";
 in
 
 {
+  # The schema is merged into lanbat.services.nextcloud.settings; checks.nix
+  # rejects any key it does not declare.
+  lanbat.settingsSchema.nextcloud = nextcloudSettings;
+
   # The timer would start nextcloud-cron, and with it the workload layer, five
   # minutes after boot. Run it only while the layer is unlocked.
   systemd.timers.nextcloud-cron = {
@@ -218,8 +254,8 @@ in
 
   # External storage paths (created when NFS is mounted).
   systemd.tmpfiles.rules = [
-    "d /srv/storage/b/nextcloud          0750 nextcloud nextcloud -"
-    "d /srv/storage/b/nextcloud/external 0750 nextcloud nextcloud -"
-    "d /srv/storage/b/nextcloud/users    0750 nextcloud nextcloud -"
+    "d ${bulkDir}          0750 nextcloud nextcloud -"
+    "d ${bulkDir}/external 0750 nextcloud nextcloud -"
+    "d ${bulkDir}/users    0750 nextcloud nextcloud -"
   ];
 }

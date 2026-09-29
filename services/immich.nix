@@ -12,14 +12,19 @@
 #   /var/lib/immich/profile/      — user profile pictures
 #   Redis (services.redis.servers.immich)
 #
-# Pi-backed via NFS (/srv/storage/a):
-#   /srv/storage/a/photos/        — originals / uploads (bulk)
+# Pi-backed via NFS (/srv/storage/<drive>):
+#   /srv/storage/<drive>/<uploadPath>/ — originals / uploads (bulk)
+#   settings.drive and settings.uploadPath place them; by default a and
+#   photos.
 #
 # NFS dependency: partial.
 #   - If Pi is down: Immich is still up, new uploads fail, existing
 #     thumbnails (server-local) still load.
-#   - The immich-server container binds /srv/storage/a/photos.
+#   - The immich-server container binds the upload directory.
 #     We declare that dependency so Immich stops if the mount disappears.
+#
+# PostgreSQL, Redis and Immich's own API are reached on the loopback ports of
+# the workload instance, the shared Redis and the service's description.
 #
 # Auth with Authentik
 # -------------------
@@ -48,6 +53,33 @@ let
   # the deployment. Immich itself serves fine without it; it just has no admin
   # account until someone creates one.
   bootstraps = config.lanbat.hasService "home-assistant";
+
+  cfg = config.lanbat.services.immich.settings;
+  workloadDb = config.lanbat.postgresql.instance "workload";
+  # Where the server mounts the Pi storage drive (modules/wiring/nfs.nix).
+  uploadDir = "/srv/storage/${cfg.drive}/${cfg.uploadPath}";
+
+  immichSettings = {
+    options = {
+      drive = lib.mkOption {
+        type = lib.types.str;
+        default = "a";
+        description = ''
+          Pi storage drive holding the originals and uploads, by its key in
+          the storage host's storage.drives. The server container binds to
+          that drive's NFS mount.
+        '';
+      };
+      uploadPath = lib.mkOption {
+        type = lib.types.str;
+        default = "photos";
+        description = ''
+          Directory of the originals and uploads (Immich's UPLOAD_LOCATION),
+          relative to the drive's mount (/srv/storage/<drive>).
+        '';
+      };
+    };
+  };
   # immich-db-password.age exports POSTGRES_PASSWORD for postgres init; Immich v3
   # reads DB_PASSWORD at runtime.
   immichServerEnv = "/run/immich/server.env";
@@ -60,6 +92,10 @@ let
 in
 {
   config = {
+    # The schema is merged into lanbat.services.immich.settings; checks.nix
+    # rejects any key it does not declare.
+    lanbat.settingsSchema.immich = immichSettings;
+
     lanbat.deployment.immich.adminEmail = lib.mkDefault (
       "${lib.elemAt config.lanbat.homeAssistant.ssoUsers 0}@${config.lanbat.deployment.rootDomain}"
     );
@@ -100,7 +136,7 @@ in
           });
       # Only the server container reads the originals on Pi storage.
       nfs = {
-        drives = [ "a" ];
+        drives = [ cfg.drive ];
         units = [ "podman-immich-server" ];
       };
       account = {
@@ -152,11 +188,11 @@ in
       user = "0";
       environment = {
         DB_HOSTNAME = "127.0.0.1";
-        DB_PORT = "5432";
+        DB_PORT = toString workloadDb.port;
         DB_USERNAME = "immich";
         DB_DATABASE_NAME = "immich";
         REDIS_HOSTNAME = "127.0.0.1";
-        REDIS_PORT = "6379";
+        REDIS_PORT = toString config.services.redis.servers.shared.port;
         REDIS_DBINDEX = toString config.lanbat.redis.databases.immich.index;
         UPLOAD_LOCATION = "/usr/src/app/upload";
         THUMBS_PATH = "/usr/src/app/thumbs";
@@ -172,7 +208,7 @@ in
         config.lanbat.secrets.immich-oidc-env.path
       ];
       volumes = [
-        "/srv/storage/a/photos:/usr/src/app/upload"
+        "${uploadDir}:/usr/src/app/upload"
         "/var/lib/immich/thumbs:/usr/src/app/thumbs"
         "/var/lib/immich/encoded-video:/usr/src/app/encoded-video"
         "/var/lib/immich/profile:/usr/src/app/profile"
@@ -221,7 +257,7 @@ in
           --arg issuer "https://auth.${domain}/application/o/immich/" \
           --arg clientId "$IMMICH_OAUTH_CLIENT_ID" \
           --arg clientSecret "$IMMICH_OAUTH_CLIENT_SECRET" \
-          --arg externalDomain "https://photos.${domain}" \
+          --arg externalDomain "https://${config.lanbat.services.immich.subdomain}.${domain}" \
           '{
             oauth: {
               enabled: true,
@@ -263,7 +299,7 @@ in
         set -a
         . ${config.lanbat.secrets.hass-bootstrap-env.path}
         set +a
-        export IMMICH_URL="http://127.0.0.1:2283"
+        export IMMICH_URL="http://127.0.0.1:${toString config.lanbat.services.immich.port}"
         export ADMIN_EMAIL="${config.lanbat.deployment.immich.adminEmail}"
         export ADMIN_NAME="$OWNER_USERNAME"
         export ADMIN_PASSWORD="$OWNER_PASSWORD"
@@ -273,7 +309,7 @@ in
 
     # Ensure the photo path exists when NFS is mounted.
     systemd.tmpfiles.rules = [
-      "d /srv/storage/a/photos 0750 immich immich -"
+      "d ${uploadDir} 0750 immich immich -"
       "d /run/immich 0750 immich immich -"
     ];
   };

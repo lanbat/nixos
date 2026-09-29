@@ -13,6 +13,19 @@
 #   - Home Assistant: the loopback URLs of the services it wires come from
 #     their descriptions, and the Zigbee2MQTT bridge watch follows whether
 #     Zigbee2MQTT runs on the host unless the profile says otherwise.
+#   - Telegraf: InfluxDB, Redis and the health checks are reached at the ports
+#     the services' descriptions give, and a profile sets the ping targets.
+#   - RomM: the library and the browser's arcade copies default to drive b's
+#     media/roms and media/roms-browser/mame, a profile moves them, and the
+#     NFS dependency follows the drive.
+#   - Music Assistant: its setup reaches Music Assistant and Home Assistant at
+#     the ports and subdomains of their descriptions.
+#   - Immich: the originals default to drive a's photos, a profile moves them
+#     and the NFS dependency follows; PostgreSQL, Redis and its own API are
+#     reached at the ports of their descriptions.
+#   - Grafana: its InfluxDB datasource follows InfluxDB's endpoint port.
+#   - Nextcloud: the bulk data directories default to drive b's nextcloud,
+#     and a profile moves them.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -158,6 +171,78 @@ let
   redisClash = serverWith [ { lanbat.redis.databases.other.index = 1; } ];
 
   envOf = config: container: config.virtualisation.oci-containers.containers.${container}.environment;
+
+  # ── Telegraf ─────────────────────────────────────────────────────────────
+  telegrafConf = config: config.services.telegraf.extraConfig;
+  healthChecks =
+    config: map (c: "${c.name_override} ${lib.head c.urls}") (telegrafConf config).inputs.http_response;
+
+  telegrafChanged = serverWith [
+    {
+      lanbat.services = {
+        influxdb.endpoint.port = lib.mkForce 18086;
+        grafana.port = lib.mkForce 13030;
+        telegraf.settings.pingTargets = [ "192.0.2.1" ];
+      };
+      services.redis.servers.shared.port = lib.mkForce 16379;
+    }
+  ];
+
+  # ── RomM ─────────────────────────────────────────────────────────────────
+  rommVolumes = config: config.virtualisation.oci-containers.containers.romm.volumes;
+
+  rommMoved = serverWith [
+    {
+      lanbat.services.romm.settings = {
+        drive = "a";
+        libraryPath = "games/roms";
+        browserArcadePath = "games/arcade";
+      };
+    }
+  ];
+
+  # ── Music Assistant ──────────────────────────────────────────────────────
+  maScript = config: config.systemd.services.music-assistant-setup.script;
+
+  maMoved = serverWith [
+    {
+      lanbat.services = {
+        music-assistant.port = lib.mkForce 18095;
+        home-assistant = {
+          port = lib.mkForce 18123;
+          subdomain = lib.mkForce "hass";
+        };
+      };
+    }
+  ];
+
+  # ── Immich ───────────────────────────────────────────────────────────────
+  immichMoved = serverWith [
+    {
+      lanbat.services.immich = {
+        port = lib.mkForce 12283;
+        settings = {
+          drive = "b";
+          uploadPath = "media/photos";
+        };
+      };
+      services.redis.servers.shared.port = lib.mkForce 16379;
+    }
+  ];
+  immichUpload =
+    config: lib.head config.virtualisation.oci-containers.containers.immich-server.volumes;
+
+  # ── Nextcloud ────────────────────────────────────────────────────────────
+  nextcloudMoved = serverWith [
+    {
+      lanbat.services.nextcloud.settings.storage = {
+        drive = "a";
+        path = "cloud";
+      };
+    }
+  ];
+  nextcloudDirs =
+    config: lib.filter (lib.hasInfix " nextcloud nextcloud ") config.systemd.tmpfiles.rules;
 
   expect = name: ok: if ok then null else name;
 
@@ -322,6 +407,120 @@ let
 
     (expect "home assistant: the Zigbee watch can be turned off" (
       (haConfig haNoZigbee).automation == [ ] && haViews haNoZigbee == [ "all" ]
+    ))
+
+    (expect "telegraf: the defaults keep today's outputs and inputs" (
+      let
+        t = telegrafConf base;
+      in
+      (lib.head t.outputs.influxdb_v2).urls == [ "http://localhost:8086" ]
+      &&
+        healthChecks base == [
+          "grafana http://127.0.0.1:3030/api/health"
+          "home-assistant http://127.0.0.1:8123/"
+          "jellyfin http://127.0.0.1:8096/health"
+          "immich http://127.0.0.1:2283/api/server/ping"
+          "vaultwarden http://127.0.0.1:8222/alive"
+        ]
+      &&
+        (lib.head t.inputs.ping).urls == [
+          "192.0.2.11"
+          "192.0.2.1"
+          "1.1.1.1"
+        ]
+      && (lib.head t.inputs.redis).servers == [ "tcp://127.0.0.1:6379" ]
+    ))
+
+    (expect "telegraf: the ports follow the services and the ping targets the profile" (
+      let
+        t = telegrafConf telegrafChanged;
+      in
+      (lib.head t.outputs.influxdb_v2).urls == [ "http://localhost:18086" ]
+      && lib.head (healthChecks telegrafChanged) == "grafana http://127.0.0.1:13030/api/health"
+      && (lib.head t.inputs.ping).urls == [ "192.0.2.1" ]
+      && (lib.head t.inputs.redis).servers == [ "tcp://127.0.0.1:16379" ]
+    ))
+
+    (expect "romm: the defaults keep today's library on drive b" (
+      lib.drop 3 (rommVolumes base) == [
+        "/srv/storage/b/media/roms:/romm/library/roms"
+        "/srv/storage/b/media/roms-browser/mame:/romm/library/roms/mame"
+      ]
+      && base.lanbat.services.romm.nfs.drives == [ "b" ]
+      &&
+        base.systemd.services.romm-browser-romsets.environment.SOURCE_DIR
+        == "/srv/storage/b/media/roms/mame"
+      && (envOf base "romm").REDIS_PORT == "6379"
+    ))
+
+    (expect "romm: a profile moves the library, and the NFS dependency follows" (
+      lib.drop 3 (rommVolumes rommMoved) == [
+        "/srv/storage/a/games/roms:/romm/library/roms"
+        "/srv/storage/a/games/arcade:/romm/library/roms/mame"
+      ]
+      && rommMoved.lanbat.services.romm.nfs.drives == [ "a" ]
+      &&
+        rommMoved.systemd.services.romm-browser-romsets.environment.TARGET_DIR
+        == "/srv/storage/a/games/arcade"
+      && failedAssertions rommMoved == [ ]
+    ))
+
+    (expect "music-assistant: the setup keeps today's URLs" (
+      lib.all (line: lib.hasInfix line (maScript base)) [
+        ''export MA_URL="http://127.0.0.1:8095"''
+        ''export MA_PUBLIC_URL="https://music.home.example.com"''
+        ''export HA_INTERNAL_URL="http://127.0.0.1:8123"''
+        ''export HA_PUBLIC_URL="https://ha.home.example.com"''
+      ]
+    ))
+
+    (expect "music-assistant: the setup follows the services' ports and subdomains" (
+      lib.all (line: lib.hasInfix line (maScript maMoved)) [
+        ''export MA_URL="http://127.0.0.1:18095"''
+        ''export HA_INTERNAL_URL="http://127.0.0.1:18123"''
+        ''export HA_PUBLIC_URL="https://hass.home.example.com"''
+      ]
+    ))
+
+    (expect "immich: the defaults keep today's upload directory and ports" (
+      immichUpload base == "/srv/storage/a/photos:/usr/src/app/upload"
+      && base.lanbat.services.immich.nfs.drives == [ "a" ]
+      && lib.elem "d /srv/storage/a/photos 0750 immich immich -" base.systemd.tmpfiles.rules
+      && (envOf base "immich-server").DB_PORT == "5432"
+      && (envOf base "immich-server").REDIS_PORT == "6379"
+      && lib.hasInfix ''IMMICH_URL="http://127.0.0.1:2283"'' base.systemd.services.immich-bootstrap.script
+      && lib.hasInfix ''"https://photos.home.example.com"'' base.systemd.services.podman-immich-server.preStart
+    ))
+
+    (expect "immich: a profile moves the uploads, and the ports follow the services" (
+      immichUpload immichMoved == "/srv/storage/b/media/photos:/usr/src/app/upload"
+      && immichMoved.lanbat.services.immich.nfs.drives == [ "b" ]
+      && (envOf immichMoved "immich-server").REDIS_PORT == "16379"
+      && lib.hasInfix ''IMMICH_URL="http://127.0.0.1:12283"'' immichMoved.systemd.services.immich-bootstrap.script
+      && failedAssertions immichMoved == [ ]
+    ))
+
+    (expect "grafana: the InfluxDB datasource follows InfluxDB's endpoint" (
+      let
+        influxUrl =
+          config: (lib.head config.services.grafana.provision.datasources.settings.datasources).url;
+      in
+      influxUrl base == "http://localhost:8086"
+      && influxUrl telegrafChanged == "http://localhost:18086"
+      && base.services.grafana.settings.server.root_url == "https://grafana.home.example.com"
+    ))
+
+    (expect "nextcloud: the bulk data directories keep today's paths, and move" (
+      lib.all (rule: lib.elem rule (nextcloudDirs base)) [
+        "d /srv/storage/b/nextcloud          0750 nextcloud nextcloud -"
+        "d /srv/storage/b/nextcloud/external 0750 nextcloud nextcloud -"
+        "d /srv/storage/b/nextcloud/users    0750 nextcloud nextcloud -"
+      ]
+      && lib.elem "d /srv/storage/a/cloud/users    0750 nextcloud nextcloud -" (
+        nextcloudDirs nextcloudMoved
+      )
+      && !lib.any (lib.hasPrefix "d /srv/storage/b/nextcloud") (nextcloudDirs nextcloudMoved)
+      && nextcloudMoved.lanbat.services.nextcloud.nfs.drives == [ ]
     ))
 
     (expect "redis: the consumers keep today's indexes" (
