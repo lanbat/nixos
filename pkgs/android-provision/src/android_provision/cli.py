@@ -38,7 +38,8 @@ def build_parser() -> argparse.ArgumentParser:
         if name == "provision":
             p.add_argument(
                 "--force", action="store_true",
-                help="re-apply marker-backed resources (CA certs, Obtainium)",
+                help="re-apply marker-backed resources (CA certs, Obtainium) "
+                     "and re-apply the home screen even if it already matches",
             )
 
     u = sub.add_parser("update", help="refresh apks.lock.json from F-Droid and GitHub")

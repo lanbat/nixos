@@ -83,7 +83,8 @@ box you don't want to risk mid-show.
 `nix run .#android-provision` is the raw CLI — useful for testing a hand-written
 manifest or scripting outside the NixOS units. `provision` also accepts `--force`,
 which re-applies the marker-backed resources (CA certs, Obtainium's URL list) even if
-their marker says already done.
+their marker says already done, and re-applies the home screen even if it already
+matches `homeActivity`.
 
 ### Outcomes
 
