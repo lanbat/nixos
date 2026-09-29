@@ -7,11 +7,12 @@
 #   bash secrets/generate-oidc-secrets.sh
 #
 # What this script does:
-#   - Creates/replaces authentik-oidc-secrets.age  (5 client secrets for the
+#   - Creates/replaces authentik-oidc-secrets.age  (6 client secrets for the
 #     blueprint; Authentik reads them via !Env at startup)
 #   - Appends/replaces GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET in grafana-env.age
 #   - Creates/replaces nextcloud-oidc-env.age
 #   - Creates/replaces immich-oidc-env.age
+#   - Creates/replaces romm-oidc-env.age
 #   - Prints client_id/secret for Home Assistant and Jellyfin
 #     (those services need manual UI config — see notes below each)
 #
@@ -91,13 +92,15 @@ NEXTCLOUD_SECRET=$(rand)
 IMMICH_SECRET=$(rand)
 HA_SECRET=$(rand)
 JELLYFIN_SECRET=$(rand)
+ROMM_SECRET=$(rand)
 
 overwrite "authentik-oidc-secrets.age" \
 "AUTHENTIK_GRAFANA_CLIENT_SECRET=$GRAFANA_SECRET
 AUTHENTIK_NEXTCLOUD_CLIENT_SECRET=$NEXTCLOUD_SECRET
 AUTHENTIK_IMMICH_CLIENT_SECRET=$IMMICH_SECRET
 AUTHENTIK_HA_CLIENT_SECRET=$HA_SECRET
-AUTHENTIK_JELLYFIN_CLIENT_SECRET=$JELLYFIN_SECRET"
+AUTHENTIK_JELLYFIN_CLIENT_SECRET=$JELLYFIN_SECRET
+AUTHENTIK_ROMM_CLIENT_SECRET=$ROMM_SECRET"
 
 upsert_line "grafana-env.age" \
   "GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=$GRAFANA_SECRET"
@@ -110,10 +113,13 @@ overwrite "immich-oidc-env.age" \
 "IMMICH_OAUTH_CLIENT_ID=immich
 IMMICH_OAUTH_CLIENT_SECRET=$IMMICH_SECRET"
 
+overwrite "romm-oidc-env.age" \
+"OIDC_CLIENT_SECRET=$ROMM_SECRET"
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 
 echo
-echo "Done. Grafana, Nextcloud, and Immich are fully wired."
+echo "Done. Grafana, Nextcloud, Immich, and RomM are fully wired."
 echo
 echo "Manual UI setup required for the following two services."
 echo "Secrets are also stored in authentik-oidc-secrets.age for later retrieval."

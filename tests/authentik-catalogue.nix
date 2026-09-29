@@ -148,7 +148,6 @@ let
     "frigate"
     "music-assistant"
     "qbittorrent"
-    "romm"
     "snapcast"
     "syncthing"
     "zigbee2mqtt"
@@ -158,7 +157,6 @@ let
     frigate = "Frigate";
     music-assistant = "Music Assistant";
     qbittorrent = "qBittorrent";
-    romm = "RomM";
     snapcast = "Snapcast";
     syncthing = "Syncthing";
     zigbee2mqtt = "Zigbee2MQTT";
@@ -233,6 +231,11 @@ let
             name = "Nextcloud";
             secret = "AUTHENTIK_NEXTCLOUD_CLIENT_SECRET";
           }
+          {
+            n = "romm";
+            name = "RomM";
+            secret = "AUTHENTIK_ROMM_CLIENT_SECRET";
+          }
         ];
     oidcApps =
       map
@@ -247,6 +250,7 @@ let
           "immich"
           "jellyfin"
           "nextcloud"
+          "romm"
         ];
   };
 
@@ -346,6 +350,16 @@ let
       && lib.elem "provider-demo-proxy" (outpostProviders addedWithSso)
       && byId "provider-demo" (oidcProviders addedWithSso) != null
       && (bySlug "demo" (appsIn addedWithSso.oidc)).attrs.meta_launch_url == "blank://blank"
+    ))
+
+    (expect "RomM's OIDC redirect URI is its API OAuth callback" (
+      let
+        p = byId "provider-romm" (oidcProviders base);
+      in
+      p != null
+      && lib.any (
+        u: u.url == "https://romm.${exampleDeploy.deployment.domain}/api/oauth/openid"
+      ) p.attrs.redirect_uris
     ))
 
     (expect "only services placed on the host appear" (

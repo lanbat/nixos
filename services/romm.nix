@@ -26,8 +26,12 @@
 # browserArcadePath place the library on Pi storage; the defaults are drive b,
 # media/roms and media/roms-browser/mame.
 #
-# Auth: Caddy forward auth (Authentik), then RomM's own accounts. The first
-# visit runs RomM's setup wizard, which creates the admin account.
+# Auth: RomM's own accounts. The first visit runs RomM's setup wizard, which
+# creates the admin account; the browser then also logs in through Authentik
+# OIDC, and apps such as Argosy Launcher pair by code (apiClients = true, no
+# forward auth — clients need direct API access). The admin's email must
+# match the Authentik user, so the OIDC login lands on the same account.
+# Password login stays enabled as a fallback.
 #
 # Arcade games in the browser
 # ---------------------------
@@ -46,6 +50,8 @@
 }:
 
 let
+  domain = config.lanbat.deployment.domain;
+  rommUrl = "https://${config.lanbat.services.romm.subdomain}.${domain}";
   port = 8098;
   # gunicorn behind the container's nginx. Its default, 5000, is Frigate's on
   # the host network.
@@ -128,7 +134,9 @@ in
     subdomain = "romm";
     inherit port;
     extraPorts = [ backendPort ];
-    auth = "forward-auth";
+    auth = "app";
+    apiClients = true; # Argosy Launcher and other apps call the API directly
+    oidc.redirectPaths = [ "/api/oauth/openid" ];
     tier = "workload";
     state = [ "romm" ];
     units = [ "podman-romm" ];
@@ -160,6 +168,8 @@ in
       };
       # ROMM_AUTH_SECRET_KEY and the metadata provider keys.
       romm-env = { };
+      # OIDC_CLIENT_SECRET, the same value as AUTHENTIK_ROMM_CLIENT_SECRET.
+      romm-oidc-env = { };
     };
     dashboard = {
       group = "Media";
@@ -183,7 +193,7 @@ in
       ROMM_PORT = toString port;
       # The entrypoint also points nginx's upstream at it.
       DEV_PORT = toString backendPort;
-      ROMM_BASE_URL = "https://${config.lanbat.services.romm.subdomain}.${config.lanbat.deployment.domain}";
+      ROMM_BASE_URL = rommUrl;
       ROMM_SESSION_SECURE_COOKIE = "true";
       ROMM_DB_DRIVER = "postgresql";
       DB_HOST = "127.0.0.1";
@@ -199,10 +209,22 @@ in
       # Picks up the zips romm-browser-romsets adds or replaces.
       ENABLE_RESCAN_ON_FILESYSTEM_CHANGE = "true";
       TZ = config.lanbat.deployment.timezone;
+
+      OIDC_ENABLED = "true";
+      OIDC_PROVIDER = "authentik";
+      OIDC_CLIENT_ID = "romm";
+      OIDC_REDIRECT_URI = "${rommUrl}/api/oauth/openid";
+      OIDC_SERVER_APPLICATION_URL = "https://auth.${domain}/application/o/romm";
+      OIDC_TLS_CACERTFILE = "/etc/ssl/lanbat/ca-root.crt";
+      # Match the Authentik login to the existing admin by email; never create
+      # a second account. Password login stays as the fallback.
+      OIDC_ALLOW_REGISTRATION = "false";
+      DISABLE_USERPASS_LOGIN = "false";
     };
     environmentFiles = [
       config.lanbat.secrets.romm-db-pass.path
       config.lanbat.secrets.romm-env.path
+      config.lanbat.secrets.romm-oidc-env.path
     ];
 
     volumes = [
@@ -212,6 +234,7 @@ in
       "${library}:/romm/library/roms"
       # After the library, so it covers the library's mame folder.
       "${browserArcade}:/romm/library/roms/mame"
+      "/etc/caddy/ca-root.crt:/etc/ssl/lanbat/ca-root.crt:ro"
     ];
 
     extraOptions = [

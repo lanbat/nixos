@@ -291,4 +291,5 @@ Until then, use the union-of-keys pattern above.
 | `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |
 | `romm-db-pass.age` | `POSTGRES_PASSWORD=<value>` and `DB_PASSWD=<same value>` | RomM database password (PostgreSQL setup and the container) |
 | `romm-env.age` | `ROMM_AUTH_SECRET_KEY=<openssl rand -hex 32>` and metadata provider keys (`IGDB_CLIENT_ID=`, `SCREENSCRAPER_USER=`, …) | RomM container |
+| `romm-oidc-env.age` | `OIDC_CLIENT_SECRET=<value>`, the same value as `AUTHENTIK_ROMM_CLIENT_SECRET` | RomM container, Authentik OIDC login |
 | `overlay-<host>.age` | WireGuard private key (`wg genkey`) | systemd-networkd on that host (`root:systemd-network`, 0440); only with `deployment.overlay.provider = "wireguard-mesh"` |
