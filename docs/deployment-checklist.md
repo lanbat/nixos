@@ -519,9 +519,12 @@ is only available via the hidden Samba `private` share (`@private` group).
 alongside Grafana, Nextcloud, and Immich. After deploying:
 
 1. Visit `https://romm.<domain>` once to run RomM's setup wizard and create the
-   admin account. Set that admin's email to match the Authentik user who will
-   log in through OIDC — RomM matches the OIDC login to an existing account by
-   email and never creates a second one.
+   admin account. RomM matches an OIDC login to an existing account by email and
+   never creates a second one, so the admin needs the Authentik user's email:
+   `romm-admin-email` copies it from Authentik's `akadmin` (the RomM setting
+   `authentikAdmin`) at unlock and each time RomM starts, and on the first visit
+   as soon as the wizard has created the admin. `journalctl -u romm-admin-email`
+   says what it did.
 2. Grant users access to the **RomM** application in Authentik. App clients
    such as Argosy Launcher pair with RomM directly by code, bypassing
    Authentik.
@@ -753,8 +756,8 @@ appear in both the Snapcast web UI (`https://audio.<domain>`) and Music Assistan
 RomM starts on the first visit to `https://romm.<domain>` and stops after 30
 minutes idle. See "RomM — OIDC login" above for wiring its Authentik client.
 
-1. On the first visit, RomM's setup wizard creates the admin account; give it
-   the same email as the Authentik user who will log in via OIDC.
+1. On the first visit, RomM's setup wizard creates the admin account;
+   `romm-admin-email` then gives it the Authentik admin's email (see above).
 2. The library is the Pi's `media/roms` folder on drive B, in ES-DE's layout
    (`roms/<system>`, the same folders EmulationStation reads). Scan it from
    Library → Scan.

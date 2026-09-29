@@ -197,6 +197,7 @@ let
         drive = "a";
         libraryPath = "games/roms";
         browserArcadePath = "games/arcade";
+        authentikAdmin = "alice";
       };
     }
   ];
@@ -454,6 +455,9 @@ let
       && (envOf base "romm").OIDC_ALLOW_REGISTRATION == "false"
       && (envOf base "romm").DISABLE_USERPASS_LOGIN == "false"
       && lib.hasSuffix "/api/oauth/openid" (envOf base "romm").OIDC_REDIRECT_URI
+      && lib.hasInfix "-v user=akadmin " base.systemd.services.romm-admin-email.script
+      && lib.elem "romm-admin-email.service" base.systemd.services.podman-romm.wants
+      && lib.elem "romm-admin-email" base.lanbat.services.romm.units
     ))
 
     (expect "romm: a profile moves the library, and the NFS dependency follows" (
@@ -465,6 +469,7 @@ let
       &&
         rommMoved.systemd.services.romm-browser-romsets.environment.TARGET_DIR
         == "/srv/storage/a/games/arcade"
+      && lib.hasInfix "-v user=alice " rommMoved.systemd.services.romm-admin-email.script
       && failedAssertions rommMoved == [ ]
     ))
 
