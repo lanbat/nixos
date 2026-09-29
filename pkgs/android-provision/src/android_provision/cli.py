@@ -52,6 +52,11 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--lockfile", default=None, help="apks.lock.json for the app report")
     c.add_argument("--no-fdroid", action="store_true", help="don't look apps up on F-Droid")
     c.add_argument("--diff", metavar="OLD", help="also compare with an earlier snapshot")
+
+    df = sub.add_parser("diff", help="compare two snapshots; prints a restore fragment")
+    df.add_argument("old")
+    df.add_argument("new")
+    df.add_argument("--ignore", action="append", default=[], metavar="NS/KEY")
     return parser
 
 
@@ -90,6 +95,8 @@ def main(argv: list[str] | None = None) -> int:
         return _update(args)
     if args.command == "capture":
         return _capture(args)
+    if args.command == "diff":
+        return _diff(args)
 
     apply = args.command == "provision"
     force = getattr(args, "force", False)
@@ -149,7 +156,7 @@ def _update(args) -> int:
 
 
 def _capture(args) -> int:
-    from . import snapshot
+    from . import diff, snapshot
 
     try:
         manifest = load(args.manifest)
@@ -180,6 +187,31 @@ def _capture(args) -> int:
         return EXIT_RESOURCE_FAILED
 
     print(f"snapshot of {manifest.device} written to {path}")
+
+    if args.diff:
+        try:
+            old = snapshot.load(args.diff)
+        except snapshot.SnapshotError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_MANIFEST
+        result = diff.compare(old, snap)
+        print(diff.render(result), end="")
+        print(diff.restore_fragment(result), end="")
+
+    return EXIT_OK
+
+
+def _diff(args) -> int:
+    from . import diff, snapshot
+
+    try:
+        old, new = snapshot.load(args.old), snapshot.load(args.new)
+    except snapshot.SnapshotError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_MANIFEST
+    result = diff.compare(old, new, frozenset(args.ignore))
+    print(diff.render(result), end="")
+    print(diff.restore_fragment(result), end="")
     return EXIT_OK
 
 

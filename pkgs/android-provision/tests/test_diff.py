@@ -1,0 +1,65 @@
+from android_provision import diff
+
+
+def snap(settings=None, packages=None, home="com.google.android.tvlauncher/.MainActivity"):
+    base = {"global": {}, "secure": {}, "system": {}}
+    for ns, table in (settings or {}).items():
+        base[ns] = table
+    return {"schema": 1, "settings": base, "packages": packages or {}, "home": home}
+
+
+def test_changed_and_removed_settings_become_restore_values():
+    old = snap({"global": {"screen_off_timeout": "600000", "animator_duration_scale": "0.5"}})
+    new = snap({"global": {"screen_off_timeout": "300000"}})
+    d = diff.compare(old, new)
+    frag = diff.restore_fragment(d)
+    assert '"screen_off_timeout" = "600000";' in frag
+    assert '"animator_duration_scale" = "0.5";' in frag
+
+
+def test_key_only_on_new_box_is_listed_not_restored():
+    d = diff.compare(snap(), snap({"secure": {"new_key": "1"}}))
+    assert [(c.ns, c.key, c.old, c.new) for c in d.settings] == [("secure", "new_key", None, "1")]
+    assert not any(
+        "new_key" in line
+        for line in diff.restore_fragment(d).splitlines()
+        if not line.lstrip().startswith("#")
+    )
+    assert "new_key" in diff.render(d)
+
+
+def test_volatile_and_ignored_keys_are_skipped():
+    old = snap({"global": {"boot_count": "3", "mine": "a"}})
+    new = snap({"global": {"boot_count": "1", "mine": "b"}})
+    assert diff.compare(old, new, ignore=frozenset({"global/mine"})).settings == []
+
+
+def test_apps_and_home_differences():
+    old = snap(packages={"com.nendo.argosy": {"versionCode": 218, "installer": None}},
+               home="com.nendo.argosy/.MainActivity")
+    new = snap(packages={"org.example": {"versionCode": 1, "installer": None}})
+    d = diff.compare(old, new)
+    assert d.apps_missing == ["com.nendo.argosy"]
+    assert d.apps_added == ["org.example"]
+    assert d.home == ("com.nendo.argosy/.MainActivity", "com.google.android.tvlauncher/.MainActivity")
+    assert 'homeActivity = "com.nendo.argosy/.MainActivity";' in diff.restore_fragment(d)
+
+
+def test_same_home_in_short_and_full_form_is_no_difference():
+    d = diff.compare(snap(home="a.b/.Main"), snap(home="a.b/a.b.Main"))
+    assert d.home is None
+
+
+def test_nix_escaping():
+    d = diff.compare(snap({"system": {"name": 'say "hi" \\ ${x}'}}), snap())
+    assert '"name" = "say \\"hi\\" \\\\ \\${x}";' in diff.restore_fragment(d)
+
+
+def test_diff_cli(tmp_path, capsys):
+    import json
+    from android_provision.cli import main
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    a.write_text(json.dumps(snap({"global": {"k": "1"}})))
+    b.write_text(json.dumps(snap({"global": {"k": "2"}})))
+    assert main(["diff", str(a), str(b)]) == 0
+    assert '"k" = "1";' in capsys.readouterr().out
