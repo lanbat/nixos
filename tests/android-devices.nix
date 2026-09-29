@@ -72,6 +72,13 @@ let
     };
   };
 
+  withHome = eval {
+    bedroom = {
+      host = "192.0.2.50";
+      homeActivity = "com.nendo.argosy/.MainActivity";
+    };
+  };
+
   expect = name: cond: if cond then "" else "FAIL: ${name}\n";
 in
 pkgs.runCommand "android-devices-check" { } ''
@@ -101,6 +108,14 @@ pkgs.runCommand "android-devices-check" { } ''
         msgs = map (a: a.message) (failures duplicate);
       in
       lib.any (m: lib.hasInfix "bedroom" m && lib.hasInfix "lounge" m) msgs
+    )
+    + expect "a valid device produces a capture unit" (ok.systemd.services ? "android-capture-bedroom")
+    + expect "the capture unit writes into the device's snapshot directory" (
+      lib.hasInfix "/var/lib/android-provision/bedroom/snapshots"
+        ok.systemd.services."android-capture-bedroom".script
+    )
+    + expect "a device with homeActivity evaluates cleanly" (
+      failures withHome == [ ] && withHome.systemd.services ? "android-provision-bedroom"
     )
   }"
   if [ -n "$errors" ]; then
