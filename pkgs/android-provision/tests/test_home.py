@@ -43,6 +43,17 @@ def test_refused_home_change_is_failed(device):
     assert "tvlauncher" in outcomes[0].reason
 
 
+def test_refused_home_change_exiting_1_is_failed(device):
+    # Android 10+ likely refuses this way: set-home-activity prints its error
+    # to stderr and exits nonzero, rather than exiting 0 with the box
+    # unchanged (the home_locked case above).
+    device.state["home_set_fails"] = True
+    device.commit()
+    outcomes = run(device, "com.nendo.argosy/.MainActivity")
+    assert outcomes[0].status == "failed"
+    assert "Error: Failed to set default home." in outcomes[0].reason
+
+
 def test_plan_mode_changes_nothing(device):
     outcomes = run(device, "com.nendo.argosy/.MainActivity", apply=False)
     assert outcomes[0].status == "changed"

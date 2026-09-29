@@ -148,6 +148,11 @@ def shell(state, args):
             # Worst case modelled: the box refuses but still exits 0.
             print("Error: Failed to set default home.")
             return 0
+        if state.get("home_set_fails"):
+            # Android 10+ likely models the refusal this way instead: the
+            # error goes to stderr and the process exits nonzero.
+            print("Error: Failed to set default home.", file=sys.stderr)
+            return 1
         state["home"] = args[3]
         save(state)
         print("Success")

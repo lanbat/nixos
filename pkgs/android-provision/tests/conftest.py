@@ -27,6 +27,7 @@ BASE_STATE = {
     "am_start_fails": False,
     "home": "com.google.android.tvlauncher/.MainActivity",
     "home_locked": False,
+    "home_set_fails": False,
     "drops_after_connect": False,
 }
 
