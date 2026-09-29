@@ -90,7 +90,7 @@ ever written into the profile.
 
 ## Roles
 
-Roles bundle infrastructure modules for a host type. They are not optional — every host declares `role = "server"` (or `storage-pi`, `voice-pi`).
+Roles bundle infrastructure modules for a host type. They are not optional — every host declares `role = "server"` (or `storage-pi`, `voice-pi`, or a role one of its plugins adds).
 
 | Role | Purpose |
 |---|---|
@@ -98,7 +98,58 @@ Roles bundle infrastructure modules for a host type. They are not optional — e
 | `storage-pi` | Encrypted NVMe, NFS export, optional TV/voice plugins |
 | `voice-pi` | Lightweight Wyoming satellite endpoint |
 
-Add a new role by creating `lib/roles/<name>.nix` and registering it in `lib/roles.nix` and `modules/core/settings.nix`.
+`lib/roles.nix` is the role table: for each role, the modules it bundles and
+what it requires of a host's deploy entry (a server needs `disks.system`, a
+storage Pi at least one entry in `storage.drives`), which
+`lib/validate-deploy.nix` checks. What the built-in roles share (hostname,
+static address, firewall baseline) is in `lib/roles/common.nix`, and what the Pi
+roles share in `lib/roles/pi-common.nix`.
+
+Add a built-in role by creating `lib/roles/<name>.nix` and giving it an entry in
+`lib/roles.nix`. A plugin adds one without editing either, through `hostRoles`
+(see [plugins.md](plugins.md#host-roles)).
+
+### Replacing a role's bundled modules
+
+Each module a role bundles has a name in `lib/roles.nix`. A host replaces or
+drops one from its deploy entry, without editing a tracked file:
+
+```nix
+hosts.server.roleModules = {
+  wiring-caddy = null;                # no Caddy vhost wiring on this server
+  backups = ./backups.nix;            # deployments/<profile>/backups.nix instead
+};
+```
+
+A replacement is a module or a list of modules and takes the place of the one it
+replaces, so the others keep their order; `null` drops it. Naming a module the
+role does not bundle fails evaluation and lists the names it does bundle:
+
+| Role | Bundled modules |
+|---|---|
+| `server` | `role`, `hardware`, `disk`, `control-layer`, `backups`, `wiring-caddy`, `wiring-nfs`, `wiring-on-demand`, `wiring-workload-gate` |
+| `storage-pi` | `role`, `clevis-unlock`, `nfs-exports`, `storage`, `user-quotas`, `snapclient`, `telegraf` |
+| `voice-pi` | `role`, `audio`, `telegraf` |
+
+Dropping wiring a placed service needs is caught: `modules/wiring/checks.nix`
+rejects a service with `onDemand` or `tier = "workload"` on a host without the
+on-demand or workload-gate wiring. To add to a role rather than take from it, use the
+host's `modules` or its `local/` directory (see [Local modules](#local-modules)).
+
+### Replacing a host's hardware module
+
+A host with `platform = "raspberry-pi"` imports `hosts/pi/hardware.nix` (kernel,
+firmware, SD card filesystems) whatever its role. A deploy entry replaces it with
+`hardware`, a module or a list of them, or drops it with `[ ]`:
+
+```nix
+hosts.pi-storage.hardware = [ ./pi-nvme-boot.nix ];   # boots from NVMe, not SD
+```
+
+On a server the hardware comes with the role instead, as its `hardware` module:
+replace that with `roleModules.hardware`, and the disk layout with
+`roleModules.disk`. On any other generic machine there is no platform hardware,
+and `hardware` only adds its modules.
 
 ## Overlay providers
 

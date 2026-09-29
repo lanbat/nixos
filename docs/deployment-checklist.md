@@ -414,46 +414,6 @@ From now on, deploy with `deploy path:.#homelab-pi-storage`.
   appear on HDMI (if a screen is attached). Holding a controller's Guide button
   for 2 seconds switches to EmulationStation and back.
 
-### 2h. Clone the config repo on each machine
-
-Unattended upgrades rebuild from a local copy of this repo at `/etc/nixos`.
-Clone it on both machines now:
-
-```bash
-# On the server
-ssh admin@server
-sudo git clone <your-repo-url> /etc/nixos
-sudo cp /path/to/deploy.nix /etc/nixos/deploy.nix
-sudo cp -r /path/to/deployments/homelab /etc/nixos/deployments/homelab
-
-# On the Pi
-ssh admin@pi5
-sudo git clone <your-repo-url> /etc/nixos
-sudo cp /path/to/deploy.nix /etc/nixos/deploy.nix
-sudo cp -r /path/to/deployments/homelab /etc/nixos/deployments/homelab
-```
-
-Set the upstream branch on each clone (use your default branch name):
-
-```bash
-sudo git -C /etc/nixos branch --set-upstream-to=origin/master
-```
-
-If your repo is **private**, configure git credentials before auto-upgrade
-will be able to pull:
-
-```bash
-# Option A — HTTPS token (simpler)
-sudo git -C /etc/nixos remote set-url origin https://<token>@github.com/user/repo.git
-
-# Option B — SSH deploy key (more secure)
-sudo ssh-keygen -t ed25519 -f /root/.ssh/nixos_deploy -N ""
-# Add /root/.ssh/nixos_deploy.pub as a read-only deploy key in your git host
-sudo git -C /etc/nixos remote set-url origin git@github.com:user/repo.git
-```
-
-If your repo is **public**, no credentials are needed — HTTPS clone works as-is.
-
 ---
 
 ## Phase 3 — Post-install configuration
@@ -810,8 +770,13 @@ device, which you can get locally from
 ## Phase 4 — Ongoing
 
 - Deploy changes immediately: `deploy path:.#homelab-server` / `deploy path:.#homelab-pi-storage`.
-- Update inputs: `nix flake update`, commit `flake.lock`, `git push`
-  (`docs/operations.md` § Updating). Hosts auto-upgrade nightly from `/etc/nixos`.
+- Update inputs: `nix flake update`, commit `flake.lock`, then deploy each host
+  (`docs/operations.md` § Updating). Hosts never rebuild on their own: deploy-rs from
+  the workstation is the only way a host changes. For unattended updates, schedule
+  the deploy itself (`docs/operations.md` § Unattended updates).
+- **Hosts installed before the nightly rebuild was removed:** deploy each host once
+  with this version to remove the `nixos-upgrade` timer, then delete the `/etc/nixos`
+  clone, which is no longer needed (`docs/operations.md` § Moving off the nightly rebuild).
 - Back up the Tang key directory: `docs/runbook.md` § Backing up Tang keys.
 - Test Pi unlock after a server reboot to verify Clevis/Tang works.
 - Pin container image versions when stability matters.

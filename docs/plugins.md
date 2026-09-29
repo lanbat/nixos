@@ -32,16 +32,18 @@ A copy-pasteable template lives in
 | `modules` | one of `modules`, `services` | NixOS modules imported on every host that enables the plugin |
 | `services` | one of `modules`, `services` | Service name → module. These enter the placement registry that `hosts.<key>.services` selects from |
 | `settings` | no | Deployment namespace → `lib: lib.mkOption { ... }`, declared as `lanbat.deployment.<namespace>` |
+| `hostRoles` | no | Role name → `{ modules; requirements; }`: a host role the plugin adds (see [Host roles](#host-roles)) |
 
 Validation happens at evaluation time in `lib/plugins.nix`, and each error names
 the plugin:
 
 - A plugin whose `roles` do not include the host's role fails evaluation.
-- A plugin with neither modules nor services fails evaluation.
+- A plugin with no modules, services or host roles fails evaluation.
 - An unknown field (a typo such as `module`) fails evaluation.
 - A version other than 1 or 2 fails evaluation.
-- Two plugins offering the same service, or declaring the same settings
-  namespace, fail evaluation. A namespace core already declares fails with the
+- Two plugins offering the same service, declaring the same settings
+  namespace or the same host role, fail evaluation, as does a host role that
+  redefines a built-in one or is missing from the plugin's `roles`. A namespace core already declares fails with the
   module system's "already declared" error, which names the plugin.
 
 ### Services and placement
@@ -86,6 +88,49 @@ any host enables the plugin; a host without the plugin accepts the value and
 ignores it. Give the option a default (`null` or `{ }`) so a profile that
 enables the plugin without configuring it still evaluates.
 
+### Host roles
+
+A plugin can add a host role next to `server`, `storage-pi` and `voice-pi`. It
+declares the role in `hostRoles`, in the shape `lib/roles.nix` uses for the
+built-in ones, and lists it in `roles` too:
+
+```nix
+lanbatPlugin = {
+  name = "lanbat-nas";
+  version = 2;
+  roles = [ "nas" ];
+  hostRoles.nas = {
+    # In import order. Each has a name, so a host can replace or drop it with
+    # hosts.<key>.roleModules.
+    modules = [
+      { name = "role"; module = ./role.nix; }
+      { name = "exports"; module = ./exports.nix; }
+    ];
+    # The deploy entry → what is wrong with it, as messages. Optional.
+    requirements = host:
+      lib.optional (!(host ? nas.disk)) "nas role requires nas.disk";
+  };
+};
+```
+
+A host takes the role by enabling the plugin that declares it:
+
+```nix
+hosts.nas = {
+  role = "nas";
+  plugins = [ inputs.lanbat-nas.lanbatPlugin ];
+  nas.disk = "…";
+  # system, networking, platform as for any host
+};
+```
+
+`lib/validate-deploy.nix` runs the role's `requirements` along with the built-in
+roles' own, and a role no plugin of the host declares fails validation. The
+role module can start from what every built-in role shares, the hostname,
+static address and firewall baseline, by importing
+`inputs.lanbat.nixosModules.lanbat-role-common`. The Raspberry Pi hardware comes
+with `platform = "raspberry-pi"`, whatever the role.
+
 ### Service settings
 
 A service's own configuration lives in `lanbat.services.<name>.settings`. To
@@ -127,7 +172,9 @@ A version 1 plugin that sets `settings` fails with an error asking for
 Server plugins should declare services under `lanbat.services.<name>` using the interface in `modules/core/services.nix`. The wiring modules (`modules/wiring/`) generate Caddy vhosts, LUKS gating, NFS dependencies, accounts, and secrets from those declarations.
 
 Some wiring comes with the host's role rather than with the service: on-demand
-activation and workload gating are imported by the server role only. A service
+activation and workload gating are imported by the server role only (and a host
+can drop them with `roleModules`; see
+[extensibility.md](extensibility.md#replacing-a-roles-bundled-modules)). A service
 with `onDemand` or `tier = "workload"` placed on another role's host fails
 evaluation instead of starting at boot or keeping its state on the host root.
 
@@ -180,4 +227,5 @@ imports = [
 ];
 ```
 
-Available modules: `lanbat`, `lanbat-server`, `lanbat-storage-pi`, `lanbat-voice-pi`.
+Available modules: `lanbat`, `lanbat-server`, `lanbat-storage-pi`, `lanbat-voice-pi`,
+`lanbat-role-common` (what every built-in role shares) and `lanbat-android`.

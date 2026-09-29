@@ -13,6 +13,12 @@
 #     settings = {                                 # deployment namespaces (optional)
 #       media = lib: lib.mkOption { ... };         # → lanbat.deployment.media
 #     };
+#     hostRoles = {                                # roles it adds (optional)
+#       nas = {                                    # also listed in roles
+#         modules = [ { name = "role"; module = ./nas.nix; } ];
+#         requirements = host: [ ];                # optional, see lib/roles.nix
+#       };
+#     };
 #   }
 #
 # Version 1 plugins, which predate services and settings being part of the
@@ -23,11 +29,10 @@
 { lib }:
 
 let
-  knownRoles = [
-    "server"
-    "storage-pi"
-    "voice-pi"
-  ];
+  rolesLib = import ./roles.nix { inherit lib; };
+
+  # The built-in roles. A plugin can add more through hostRoles.
+  knownRoles = lib.attrNames rolesLib.builtinRoles;
 
   supportedVersions = [
     1
@@ -41,15 +46,58 @@ let
     "modules"
     "services"
     "settings"
+    "hostRoles"
   ];
+
+  roleFields = [
+    "modules"
+    "requirements"
+  ];
+
+  # Why a hostRoles entry is malformed, as messages; [ ] when it is fine.
+  hostRoleProblems =
+    plugin: role: def:
+    let
+      at = "hostRoles.${role}";
+      modules = def.modules or null;
+      isBundle =
+        m:
+        lib.isAttrs m
+        &&
+          lib.attrNames m == [
+            "module"
+            "name"
+          ]
+        && lib.isString m.name;
+      names = map (m: m.name) (lib.filter isBundle (if lib.isList modules then modules else [ ]));
+      duplicates = lib.unique (lib.filter (n: lib.count (x: x == n) names > 1) names);
+    in
+    if !(lib.isAttrs def) then
+      [ "${at} must be an attribute set" ]
+    else
+      lib.optional (!(lib.elem role plugin.roles)) "${at} is not listed in roles"
+      ++ map (f: "${at} has unknown field ${f}; a role knows: ${lib.concatStringsSep ", " roleFields}") (
+        lib.filter (f: !(lib.elem f roleFields)) (lib.attrNames def)
+      )
+      ++ lib.optional (
+        !(lib.isList modules) || modules == [ ] || !(lib.all isBundle modules)
+      ) "${at}.modules must be a non-empty list of { name = \"...\"; module = ...; }"
+      ++ lib.optional (
+        duplicates != [ ]
+      ) "${at}.modules names ${lib.concatStringsSep ", " duplicates} more than once"
+      ++ lib.optional (
+        def ? requirements && !(lib.isFunction def.requirements)
+      ) "${at}.requirements must be a function from the deploy entry to a list of messages";
 
   describe = plugin: "lanbat plugin '${plugin.name or "unknown"}'";
 
   validateV1 =
     plugin:
-    if plugin ? settings then
+    if plugin ? settings || plugin ? hostRoles then
       builtins.throw (
-        "${describe plugin} declares settings, which contract version 1 does not have."
+        "${describe plugin} declares ${
+          if plugin ? settings then "settings" else "hostRoles"
+        }, which contract version 1 does not have."
         + " Set version = 2 (see docs/plugins.md)."
       )
     else if plugin.modules == [ ] then
@@ -64,6 +112,9 @@ let
       badSettings = lib.filter (ns: !(lib.isFunction plugin.settings.${ns})) (
         lib.attrNames (plugin.settings or { })
       );
+      roleProblems = lib.concatLists (
+        lib.mapAttrsToList (hostRoleProblems plugin) (plugin.hostRoles or { })
+      );
     in
     if unknown != [ ] then
       builtins.throw (
@@ -73,14 +124,20 @@ let
         + lib.concatStringsSep ", " v2Fields
         + "."
       )
-    else if (plugin.modules or [ ]) == [ ] && (plugin.services or { }) == { } then
-      builtins.throw "${describe plugin} must declare at least one module or service"
+    else if
+      (plugin.modules or [ ]) == [ ]
+      && (plugin.services or { }) == { }
+      && (plugin.hostRoles or { }) == { }
+    then
+      builtins.throw "${describe plugin} must declare at least one module, service or host role"
     else if badSettings != [ ] then
       builtins.throw (
         "${describe plugin}: settings."
         + lib.concatStringsSep ", settings." badSettings
         + " must be a function from lib to an option (lib: lib.mkOption { ... })"
       )
+    else if roleProblems != [ ] then
+      builtins.throw ("${describe plugin}: " + lib.concatStringsSep "; " roleProblems)
     else
       plugin;
 
@@ -219,6 +276,10 @@ let
         }
       ) claims;
 
+  # The roles a host with these plugins may take: the built-in ones and those
+  # its plugins declare under hostRoles (lib/roles.nix).
+  roleTable = plugins: rolesLib.withPluginRoles (map validatePlugin plugins);
+
   # Names of the version 1 plugins among these, for the deprecation warning.
   legacyPlugins = plugins: map (p: p.name) (lib.filter (p: (p.version or null) == 1) plugins);
 
@@ -231,6 +292,7 @@ in
     resolvePlugins
     offeredServices
     settingsModules
+    roleTable
     legacyPlugins
     ;
 }
