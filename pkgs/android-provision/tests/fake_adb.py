@@ -124,6 +124,23 @@ def shell(state, args):
         state.setdefault("files", []).append(args[1])
         save(state)
         return 0
+    if args[0] == "cmd" and args[1] == "package" and args[2] == "resolve-activity":
+        home = state.get("home")
+        if not home:
+            print("No activity found")
+            return 0
+        print("priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true")
+        print(home)
+        return 0
+    if args[0] == "cmd" and args[1] == "package" and args[2] == "set-home-activity":
+        if state.get("home_locked"):
+            # Worst case modelled: the box refuses but still exits 0.
+            print("Error: Failed to set default home.")
+            return 0
+        state["home"] = args[3]
+        save(state)
+        print("Success")
+        return 0
     print(f"unknown shell command {args}", file=sys.stderr)
     return 2
 

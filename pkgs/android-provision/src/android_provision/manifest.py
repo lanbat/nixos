@@ -52,6 +52,7 @@ class Manifest:
     settings: dict[str, dict[str, str]]
     obtainium: Obtainium | None
     deviceOwner: DeviceOwner
+    homeActivity: str | None = None
 
 
 def load(path: str) -> Manifest:
@@ -91,6 +92,7 @@ def load(path: str) -> Manifest:
             settings=settings,
             obtainium=obtainium,
             deviceOwner=owner,
+            homeActivity=raw.get("homeActivity"),
         )
     except ManifestError:
         raise

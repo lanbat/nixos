@@ -12,7 +12,7 @@ import sys
 from .adb import Adb, AdbError, DeviceOffline, DeviceUnauthorized
 from .manifest import ManifestError, load
 from .outcome import FAILED, Outcome
-from .resources import apks, cacerts, device_owner, obtainium, settings
+from .resources import apks, cacerts, device_owner, home, obtainium, settings
 
 EXIT_OK = 0
 EXIT_RESOURCE_FAILED = 1
@@ -20,8 +20,9 @@ EXIT_UNREACHABLE = 2
 EXIT_UNAUTHORIZED = 3
 EXIT_MANIFEST = 4
 
+# home after apks: the launcher must be installed before it can be the default.
 # Device Owner last: the DPC package must be installed before dpm can name it.
-RESOURCES = (apks, settings, cacerts, obtainium, device_owner)
+RESOURCES = (apks, home, settings, cacerts, obtainium, device_owner)
 
 
 def build_parser() -> argparse.ArgumentParser:

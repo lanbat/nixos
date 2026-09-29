@@ -24,6 +24,8 @@ BASE_STATE = {
     "apk_meta": {},
     "intents": [],
     "am_start_fails": False,
+    "home": "com.google.android.tvlauncher/.MainActivity",
+    "home_locked": False,
 }
 
 
