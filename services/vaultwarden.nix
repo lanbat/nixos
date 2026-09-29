@@ -92,6 +92,6 @@
     # Inject the admin token from an agenix-managed secret file.
     # The file must contain exactly one line:
     #   ADMIN_TOKEN=<token>
-    environmentFile = config.age.secrets.vaultwarden-env.path;
+    environmentFile = config.lanbat.secrets.vaultwarden-env.path;
   };
 }

@@ -66,6 +66,8 @@ in
 
     lanbat.services.immich = {
       subdomain = "photos";
+      # immich-bootstrap creates the admin from Home Assistant's owner account.
+      readsSecrets = lib.optional bootstraps "hass-bootstrap-env";
       port = 2283;
       extraPorts = [ 3003 ]; # machine learning
       auth = "forward-auth";
@@ -129,7 +131,7 @@ in
 
     lanbat.postgresql.databases.immich = {
       instance = "workload";
-      passwordFile = config.age.secrets.immich-db-password.path;
+      passwordFile = config.lanbat.secrets.immich-db-password.path;
       extraSql = ''
         CREATE EXTENSION IF NOT EXISTS vchord CASCADE;
         CREATE EXTENSION IF NOT EXISTS cube;
@@ -164,7 +166,7 @@ in
       };
       environmentFiles = [
         immichServerEnv
-        config.age.secrets.immich-oidc-env.path
+        config.lanbat.secrets.immich-oidc-env.path
       ];
       volumes = [
         "/srv/storage/a/photos:/usr/src/app/upload"
@@ -205,12 +207,12 @@ in
         set -euo pipefail
         install -d -m 0750 -o immich -g immich /run/immich
         umask 0177
-        . ${config.age.secrets.immich-db-password.path}
+        . ${config.lanbat.secrets.immich-db-password.path}
         printf 'DB_PASSWORD=%s\n' "$POSTGRES_PASSWORD" > ${immichServerEnv}
         chown immich:immich ${immichServerEnv}
 
         set -a
-        . ${config.age.secrets.immich-oidc-env.path}
+        . ${config.lanbat.secrets.immich-oidc-env.path}
         set +a
         ${pkgs.jq}/bin/jq -n \
           --arg issuer "https://auth.${domain}/application/o/immich/" \
@@ -256,7 +258,7 @@ in
 
       script = ''
         set -a
-        . ${config.age.secrets.hass-bootstrap-env.path}
+        . ${config.lanbat.secrets.hass-bootstrap-env.path}
         set +a
         export IMMICH_URL="http://127.0.0.1:2283"
         export ADMIN_EMAIL="${config.lanbat.deployment.immich.adminEmail}"

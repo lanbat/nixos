@@ -21,9 +21,9 @@
 # overlay order after lanbat.overlay.unit instead.
 #
 # Each host's private key is secrets/overlay-<hostkey>.age. It belongs to the
-# host rather than to any one service, so it is declared with age.secrets
-# directly (the documented exception), resolved through the profile's secrets
-# provider by lanbat.secretFile. networkd reads PrivateKeyFile as the
+# host rather than to any one service, so it is a host secret
+# (lanbat.hostSecrets), provisioned by the profile's secrets provider like
+# every service secret. networkd reads PrivateKeyFile as the
 # systemd-network user, hence the group and 0440.
 {
   config,
@@ -115,13 +115,11 @@ in
     lib.mapAttrsToList (key: host: { ${host.overlay.ip} = [ (nameOf key) ]; }) members
   );
 
-  age.secrets = lib.mkIf joined {
-    ${secretName} = {
-      file = config.lanbat.secretFile secretName;
-      owner = "root";
-      group = "systemd-network";
-      mode = "0440";
-    };
+  lanbat.hostSecrets.${secretName} = {
+    enable = joined;
+    owner = "root";
+    group = "systemd-network";
+    mode = "0440";
   };
 
   systemd.network = lib.mkIf joined {
@@ -131,7 +129,7 @@ in
         Name = iface;
       };
       wireguardConfig = {
-        PrivateKeyFile = config.age.secrets.${secretName}.path;
+        PrivateKeyFile = config.lanbat.secrets.${secretName}.path;
         ListenPort = listenPort;
       };
       wireguardPeers = map peerSection peers;

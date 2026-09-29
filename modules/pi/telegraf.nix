@@ -135,7 +135,7 @@ in
     AmbientCapabilities = "CAP_NET_RAW";
     SupplementaryGroups = [ "disk" ];
     EnvironmentFile = [
-      config.age.secrets.telegraf-token.path
+      config.lanbat.secrets.telegraf-token.path
     ];
   };
 

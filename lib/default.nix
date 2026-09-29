@@ -193,4 +193,8 @@ in
   profileResults = profileResults;
   deployLib = deployLib;
   deployQuery = deployQueryLib.query;
+  secretsRecipients = import ./secrets-recipients.nix {
+    inherit lib configurations;
+    inherit (deployQueryLib) defaultProfile;
+  };
 }

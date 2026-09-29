@@ -3,7 +3,7 @@
 # The service interface. Every service file describes itself once under
 # lanbat.services.<name>, and the wiring modules (modules/wiring/) turn those
 # descriptions into Caddy vhosts, workload gating, NFS dependencies,
-# on-demand activators, container accounts, agenix secrets and Homepage
+# on-demand activators, container accounts, secrets and Homepage
 # entries. modules/wiring/checks.nix rejects inconsistent descriptions at
 # evaluation time.
 #
@@ -57,6 +57,17 @@ let
     defaultOwner:
     types.submodule {
       options = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+          example = lib.literalExpression "config.lanbat.deployment.haLlm != null";
+          description = ''
+            Whether the secret is required. Set it from the setting that uses
+            the secret, so that a feature which is off needs no secret: a
+            requirement that is off is not provisioned, and lanbat.secrets
+            has no entry for it.
+          '';
+        };
         owner = mkOption {
           type = types.str;
           default = defaultOwner;
@@ -65,12 +76,12 @@ let
         group = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Group of the decrypted secret (agenix default when null).";
+          description = "Group of the decrypted secret (the provider's default when null).";
         };
         mode = mkOption {
           type = types.nullOr types.str;
           default = null;
-          description = "Mode of the decrypted secret (agenix default 0400 when null).";
+          description = "Mode of the decrypted secret (the provider's default, 0400, when null).";
         };
       };
     };
@@ -490,7 +501,31 @@ let
           example = {
             vaultwarden-env = { };
           };
-          description = "agenix secrets read from secrets/<name>.age.";
+          description = ''
+            Secrets this service requires, by name. The profile's secrets
+            provider satisfies each one (under agenix, from
+            <deployment.secrets.root>/<name>.age), and the service reads the
+            decrypted file as lanbat.secrets.<name>.path. A requirement whose
+            enable is false is not provisioned.
+          '';
+        };
+
+        readsSecrets = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [ "mosquitto-frigate-pass" ];
+          description = ''
+            Shared secrets: secrets this service reads that another service on
+            the same host declares in its own secrets. The declaring service
+            sets owner, group and mode once; this one reads
+            lanbat.secrets.<name>.path like the declarer, from a unit that the
+            declaration lets read the file (root, the owner or the group), and
+            is listed in lanbat.secrets.<name>.readers.
+
+            Make the entry as conditional as the read. Evaluation fails, naming
+            both sides, when no service on the host declares the secret or its
+            requirement is off.
+          '';
         };
 
         # ── Dashboard (services/homepage.nix) ─────────────────────────────────

@@ -114,7 +114,7 @@ in
                 # travels with the closure, so a value committed here would be
                 # shared by everyone who deploys this repository.
                 ${pkgs.gnused}/bin/sed -i \
-                  "s|@SEARXNG_SECRET@|$(cat ${config.age.secrets.searxng-secret.path})|" \
+                  "s|@SEARXNG_SECRET@|$(cat ${config.lanbat.secrets.searxng-secret.path})|" \
                   /var/lib/searxng/settings.yml
                 chown -R searxng:searxng /var/lib/searxng
                 # 0755: uwsgi workers run as the container's searxng user, not root.

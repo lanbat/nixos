@@ -230,32 +230,46 @@ in
       };
 
       secrets = mkOption {
-        type = types.submodule {
-          options = {
-            provider = mkOption {
-              type = types.enum [
-                "agenix"
-                "sops"
-                "none"
-              ];
-              example = "agenix";
-              description = ''
-                Backend that decrypts this profile's secrets. none resolves
-                every requirement to a throwaway file, so evaluation and the
-                flake checks need no encrypted files at all.
-              '';
+        type = types.submodule (
+          { config, ... }:
+          {
+            options = {
+              provider = mkOption {
+                type = types.enum [
+                  "agenix"
+                  "sops"
+                  "none"
+                ];
+                example = "agenix";
+                description = ''
+                  Backend that decrypts this profile's secrets. none resolves
+                  every requirement to a throwaway file, so evaluation and the
+                  flake checks need no encrypted files at all.
+                '';
+              };
+              root = mkOption {
+                type = types.path;
+                example = lib.literalExpression "./secrets";
+                description = ''
+                  Directory holding this profile's encrypted secrets, resolved
+                  relative to the profile rather than to lanbat itself, so a fork
+                  keeps its own secrets outside this repository.
+                '';
+              };
+              caCertificate = mkOption {
+                type = types.path;
+                default = config.root + "/caddy-ca-root.crt";
+                defaultText = lib.literalExpression ''root + "/caddy-ca-root.crt"'';
+                description = ''
+                  Public root certificate of the internal CA that Caddy issues
+                  from. Its private key is the caddy-ca-root-key secret, so the
+                  pair comes from the same profile. Hosts and clients that trust
+                  the internal CA take it from here.
+                '';
+              };
             };
-            root = mkOption {
-              type = types.path;
-              example = lib.literalExpression "./secrets";
-              description = ''
-                Directory holding this profile's encrypted secrets, resolved
-                relative to the profile rather than to lanbat itself, so a fork
-                keeps its own secrets outside this repository.
-              '';
-            };
-          };
-        };
+          }
+        );
         description = "Where this profile's secrets come from and how they are decrypted.";
       };
 

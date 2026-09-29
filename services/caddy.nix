@@ -15,9 +15,10 @@
 #
 # Root CA persistence
 # -------------------
-# The root certificate (public) lives in secrets/caddy-ca-root.crt (committed).
-# The root private key is secrets/caddy-ca-root-key.age (agenix), decrypted to
-# /run/agenix/caddy-ca-root-key for the caddy user. Caddy is configured via
+# The root certificate (public) is deployment.secrets.caCertificate, by default
+# caddy-ca-root.crt in the profile's secrets root (committed). The root private
+# key is the caddy-ca-root-key secret, provisioned by the profile's secrets
+# provider for the caddy user like any service secret. Caddy is configured via
 # pki.ca.local.root { cert key } so a host-root reinstall does not mint a new
 # root. Intermediates and leaf certs remain in /var/lib/caddy/ and rotate on
 # Caddy's default schedule (7d / 12h).
@@ -34,14 +35,19 @@ let
   # "home.example.com" → "home\.example\.com" for the regex below.
   domainRe = builtins.replaceStrings [ "." ] [ "\\." ] domain;
 
-  caRootCert = ../secrets/caddy-ca-root.crt;
+  caRootCert = config.lanbat.deployment.secrets.caCertificate;
   caRootCertPath = "/etc/caddy/ca-root.crt";
-  caRootKeyPath = config.age.secrets.caddy-ca-root-key.path;
+  caRootKeyPath = config.lanbat.secrets.caddy-ca-root-key.path;
 in
 {
   lanbat.services.caddy = {
     subdomain = "ca";
     auth = "none";
+    # The internal CA's root private key, which Caddy signs intermediates with.
+    secrets.caddy-ca-root-key = {
+      owner = config.services.caddy.user;
+      mode = "0400";
+    };
     extraPorts = [
       80
       443
@@ -62,12 +68,6 @@ in
         file_server
       }
     '';
-  };
-
-  age.secrets.caddy-ca-root-key = {
-    file = ../secrets/caddy-ca-root-key.age;
-    owner = config.services.caddy.user;
-    mode = "0400";
   };
 
   environment.etc."caddy/ca-root.crt" = {
@@ -154,7 +154,7 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "install-ca-landing" ''
-        cp -r ${pkgs.callPackage ../pkgs/ca-landing-page { }}/. /var/lib/ca-landing/
+        cp -r ${pkgs.callPackage ../pkgs/ca-landing-page { inherit caRootCert; }}/. /var/lib/ca-landing/
         chmod -R 644 /var/lib/ca-landing/*
         chmod 755    /var/lib/ca-landing
       '';

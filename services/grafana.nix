@@ -49,6 +49,8 @@ in
 {
   lanbat.services.grafana = {
     consumes = lib.optional hasInflux "influxdb";
+    # The datasource token, which influxdb.nix declares.
+    readsSecrets = lib.optional hasInflux "influxdb-admin-token";
     subdomain = "grafana";
     port = 3030;
     oidc.redirectPaths = [ "/login/generic_oauth" ];
@@ -89,7 +91,7 @@ in
     };
     script = ''
       umask 077
-      echo "INFLUXDB_TOKEN=$(cat ${config.age.secrets.influxdb-admin-token.path})" \
+      echo "INFLUXDB_TOKEN=$(cat ${config.lanbat.secrets.influxdb-admin-token.path})" \
         > /run/grafana-datasource/influxdb-token.env
       test -s /run/grafana-datasource/influxdb-token.env
     '';
@@ -111,7 +113,7 @@ in
         "SSL_CERT_FILE=/var/lib/caddy-local-ca/ca-certificates.crt"
       ];
       EnvironmentFile = [
-        config.age.secrets.grafana-env.path
+        config.lanbat.secrets.grafana-env.path
       ]
       ++ lib.optional hasInflux "/run/grafana-datasource/influxdb-token.env";
     };

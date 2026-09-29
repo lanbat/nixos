@@ -205,8 +205,9 @@ in
 
     # The satellites' Home Assistant token: a long-lived access token of a
     # Home Assistant user, copied for the satellite when it starts.
-    lanbat.services.voice-satellite.secrets = lib.mkIf (cfg.room != null) {
-      ha-voice-token.owner = "root";
+    lanbat.services.voice-satellite.secrets.ha-voice-token = {
+      enable = cfg.room != null;
+      owner = "root";
     };
 
     # The satellite listens and Home Assistant connects to it, so the satellite
@@ -262,7 +263,7 @@ in
         map (args: "-+${alsa}/bin/amixer -q ${lib.replaceStrings [ "%" ] [ "%%" ] args}") cfg.mixer
         ++
           lib.optional (cfg.room != null)
-            "-+${coreutils}/bin/install -m 0400 -o wyoming-satellite -g wyoming-satellite ${config.age.secrets.ha-voice-token.path} ${runtimeDir}/ha-token";
+            "-+${coreutils}/bin/install -m 0400 -o wyoming-satellite -g wyoming-satellite ${config.lanbat.secrets.ha-voice-token.path} ${runtimeDir}/ha-token";
       RuntimeDirectory = "voice-satellite";
       RuntimeDirectoryMode = "0700";
     };

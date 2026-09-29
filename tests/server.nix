@@ -24,6 +24,18 @@ let
   serviceModules = (import ../lib/plugins.nix { inherit lib; }).resolvePlugins exampleServer.role [
     (import ../plugins/services)
   ] (exampleServer.services or [ ]);
+
+  # A throwaway internal CA, so Caddy signs with a root key that matches the
+  # certificate it serves, as on a real host.
+  testCa = pkgs.runCommand "lanbat-test-ca" { nativeBuildInputs = [ pkgs.openssl ]; } ''
+    mkdir $out
+    openssl ecparam -name prime256v1 -genkey -noout -out $out/root.key
+    openssl req -x509 -new -key $out/root.key -sha256 -days 3650 \
+      -subj "/CN=Lanbat Test Root CA" \
+      -addext "basicConstraints=critical,CA:TRUE" \
+      -addext "keyUsage=critical,keyCertSign,cRLSign" \
+      -out $out/root.crt
+  '';
 in
 pkgs.testers.runNixOSTest {
   name = "server";
@@ -75,6 +87,14 @@ pkgs.testers.runNixOSTest {
       systemd.services = lib.mapAttrs' (
         name: _: lib.nameValuePair "podman-${name}" { wantedBy = lib.mkForce [ ]; }
       ) config.virtualisation.oci-containers.containers;
+
+      # The whole set: example-host-context.nix sets deployment at mkDefault.
+      lanbat.deployment.secrets = {
+        provider = "none";
+        root = ../secrets;
+        caCertificate = "${testCa}/root.crt";
+      };
+      lanbat.testSecretFiles.caddy-ca-root-key = "${testCa}/root.key";
 
       lanbat.testSecrets = {
         authentik-env = ''

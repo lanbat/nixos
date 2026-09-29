@@ -59,6 +59,8 @@ in
 {
   lanbat.services.music-assistant = {
     subdomain = "music";
+    # music-assistant-setup signs in with Home Assistant's owner account.
+    readsSecrets = lib.optional integrates "hass-bootstrap-env";
     port = 8095;
     extraPorts = [
       8097 # MA stream server (players / imageproxy)
@@ -159,7 +161,7 @@ in
 
     script = ''
       set -a
-      . ${config.age.secrets.hass-bootstrap-env.path}
+      . ${config.lanbat.secrets.hass-bootstrap-env.path}
       set +a
       export MA_URL="http://127.0.0.1:8095"
       export MA_PUBLIC_URL="https://music.${domain}"

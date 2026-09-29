@@ -71,7 +71,7 @@ let
   # File format (two lines):
   #   AUTHENTIK_POSTGRESQL__PASSWORD=<value>
   #   AUTHENTIK_SECRET_KEY=<value>
-  authentikEnvFile = config.age.secrets.authentik-env.path;
+  authentikEnvFile = config.lanbat.secrets.authentik-env.path;
 in
 {
   imports = [ ./blueprints.nix ];

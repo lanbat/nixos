@@ -365,7 +365,9 @@ lanbat.services.jellyfin.nfs = {
 };
 ```
 
-Match agenix recipients in `secrets/secrets.nix` to those host keys:
+Match agenix recipients in `secrets/secrets.nix` to those host keys.
+`nix run .#secrets-recipients -- homelab` prints the host list of each secret for the
+profile; the hand-written equivalent is:
 
 ```nix
 let
@@ -405,6 +407,7 @@ Flake apps help validate deployment files and query values from scripts:
 | `nix run .#validate-deploy` | Run deploy/profile validation checks (same as the CI check) |
 | `nix run .#hosts` | List flake host names and IPs across active profiles |
 | `nix run .#deploy-query -- server-ip` | Print the primary server IP (optional second arg: profile name) |
+| `nix run .#secrets-recipients` | Print which host keys each secret must be encrypted to (optional `--json`, profile name) |
 
 Other `deploy-query` keys: `domain`, `profile`, `flake-server`, `immich-admin-email`,
 `host-ips`, `deploy-file`. Example:

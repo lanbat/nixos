@@ -53,9 +53,9 @@ in
         bucket = "metrics";
         username = "admin";
         # Plaintext password file (one line).
-        passwordFile = config.age.secrets.influxdb-admin-password.path;
+        passwordFile = config.lanbat.secrets.influxdb-admin-password.path;
         # Operator token — used by Grafana as the datasource credential.
-        tokenFile = config.age.secrets.influxdb-admin-token.path;
+        tokenFile = config.lanbat.secrets.influxdb-admin-token.path;
         # Infinite retention — prune old data manually or per-bucket as needed.
         retention = 0;
       };
@@ -93,7 +93,7 @@ in
       UMask = "0027";
     };
     script = ''
-      sed -n 's/^TELEGRAF_INFLUXDB_TOKEN=//p' ${config.age.secrets.telegraf-token.path} \
+      sed -n 's/^TELEGRAF_INFLUXDB_TOKEN=//p' ${config.lanbat.secrets.telegraf-token.path} \
         > /run/influxdb2-telegraf-token/token
       test -s /run/influxdb2-telegraf-token/token
     '';
@@ -105,6 +105,8 @@ in
       port = 8086;
     };
     consumes = lib.optional hasTelegraf "telegraf";
+    # Telegraf's write token, provisioned from the secret Telegraf declares.
+    readsSecrets = lib.optional hasTelegraf "telegraf-token";
     extraPorts = [ 8086 ];
     # The upstream unit is influxdb2, not influxdb, so name it here rather than
     # leaving anything that iterates the services to guess.

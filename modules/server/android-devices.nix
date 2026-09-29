@@ -206,7 +206,12 @@ let
 
       caCerts = mkOption {
         type = types.listOf types.path;
-        default = [ ../../secrets/caddy-ca-root.crt ];
+        # The profile's CA when the module runs inside lanbat; this repository's
+        # own certificate when it is imported on its own.
+        default = [
+          (config.lanbat.deployment.secrets.caCertificate or ../../secrets/caddy-ca-root.crt)
+        ];
+        defaultText = lib.literalExpression "[ config.lanbat.deployment.secrets.caCertificate ]";
         description = ''
           CA certificates to install into the user trust store.  Defaults to the
           internal root Caddy issues from.  Setting this replaces the default

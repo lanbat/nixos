@@ -27,7 +27,7 @@
           alwaysPlayLocally = true;
           homeAssistant = {
             url = "https://ha.${domain}";
-            caFile = ../../secrets/caddy-ca-root.crt;
+            caFile = config.lanbat.deployment.secrets.caCertificate;
           };
         };
       }
