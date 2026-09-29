@@ -73,3 +73,16 @@ def test_load_rejects_port_non_numeric(tmp_path):
     data = dict(MINIMAL, port="abc")
     with pytest.raises(ManifestError):
         load(write(tmp_path, data))
+
+
+def test_home_activity_is_loaded(tmp_path):
+    import json
+    from android_provision.manifest import load
+    p = tmp_path / "m.json"
+    p.write_text(json.dumps({"device": "bedroom", "host": "192.0.2.50", "port": 5555,
+                             "abi": "arm64-v8a", "homeActivity": "com.nendo.argosy/.MainActivity"}))
+    assert load(str(p)).homeActivity == "com.nendo.argosy/.MainActivity"
+    q = tmp_path / "n.json"
+    q.write_text(json.dumps({"device": "bedroom", "host": "192.0.2.50", "port": 5555,
+                             "abi": "arm64-v8a"}))
+    assert load(str(q)).homeActivity is None

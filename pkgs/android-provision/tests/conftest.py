@@ -16,6 +16,7 @@ BASE_STATE = {
         "ro.product.model": "SEI804HM",
     },
     "packages": {},
+    "installers": {},
     "settings": {"global": {}, "secure": {}, "system": {}},
     "files": [],
     "device_owner": None,
@@ -24,6 +25,10 @@ BASE_STATE = {
     "apk_meta": {},
     "intents": [],
     "am_start_fails": False,
+    "home": "com.google.android.tvlauncher/.MainActivity",
+    "home_locked": False,
+    "home_set_fails": False,
+    "drops_after_connect": False,
 }
 
 

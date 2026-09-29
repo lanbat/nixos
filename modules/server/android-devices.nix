@@ -11,6 +11,12 @@
 # Nothing runs on a timer: a box is provisioned when asked, never while
 # someone is watching it.
 #
+# Capture
+# -------
+# Each device also gets an android-capture-<name> oneshot unit that takes a
+# read-only snapshot (apps, settings, home screen) into its state directory,
+# for comparing a box before and after a reset. It never changes the device.
+#
 # ADB identity
 # ------------
 # adb reads its client key from $HOME/.android/adbkey, so the units run with
@@ -88,6 +94,7 @@ let
           abi
           allowDowngrade
           ;
+        homeActivity = device.homeActivity;
         apks = apkEntries device;
         caCerts = map (cert: {
           name = baseNameOf (toString cert);
@@ -128,6 +135,27 @@ let
       };
       script = ''
         exec ${lib.getExe provisioner} ${verb} --manifest ${manifestFor name device}
+      '';
+    };
+
+  # Read-only snapshot of the box (apps, settings, home screen), for comparing
+  # before and after a reset. Snapshots hold device identifiers, so they stay
+  # in the state directory and never enter the repository.
+  captureUnitFor =
+    name: device:
+    lib.nameValuePair "android-capture-${name}" {
+      description = "Snapshot Android device ${name}";
+      serviceConfig = {
+        Type = "oneshot";
+        User = "root";
+        StateDirectory = "android-provision";
+        StateDirectoryMode = "0700";
+        Environment = "HOME=/var/lib/android-provision";
+        UMask = "0077";
+      };
+      script = ''
+        exec ${lib.getExe provisioner} capture --manifest ${manifestFor name device} \
+          --out-dir /var/lib/android-provision/${name}/snapshots
       '';
     };
 
@@ -237,6 +265,17 @@ let
         description = "Replace an installed app that is newer than the lockfile.";
       };
 
+      homeActivity = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "com.nendo.argosy/.MainActivity";
+        description = ''
+          Activity to make the default home screen, as package/activity.
+          Set after the apps are installed; a box that refuses is reported
+          as failed.
+        '';
+      };
+
       deviceOwner = {
         enable = mkOption {
           type = types.bool;
@@ -290,6 +329,16 @@ in
         assertion = !d.deviceOwner.enable || d.deviceOwner.component != null;
         message = "androidDevices.${name}: deviceOwner.enable needs deviceOwner.component.";
       }) devices
+      ++ lib.mapAttrsToList (
+        name: d:
+        let
+          parts = if d.homeActivity == null then [ ] else lib.splitString "/" d.homeActivity;
+        in
+        {
+          assertion = d.homeActivity == null || (lib.length parts == 2 && lib.all (p: p != "") parts);
+          message = "androidDevices.${name}: homeActivity \"${toString d.homeActivity}\" must have the form package/activity.";
+        }
+      ) devices
       ++ lib.concatLists (
         lib.mapAttrsToList (
           name: d:
@@ -348,6 +397,7 @@ in
         lib.mapAttrsToList (name: d: [
           (unitFor name d false)
           (unitFor name d true)
+          (captureUnitFor name d)
         ]) devices
       )
     );

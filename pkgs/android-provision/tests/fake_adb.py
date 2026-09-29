@@ -72,8 +72,19 @@ def shell(state, args):
     if args[0] == "settings":
         return settings(state, args[1:])
     if args[0] == "pm" and args[1] == "list" and args[2] == "packages":
+        if state.get("drops_after_connect"):
+            # A box that drops Wi-Fi (or otherwise stops answering) partway
+            # through a run that already passed adb.connect().
+            print("error: closed", file=sys.stderr)
+            return 1
+        flags = args[3:]
         for pkg in sorted(state["packages"]):
-            print(f"package:{pkg}")
+            line = f"package:{pkg}"
+            if "--show-versioncode" in flags:
+                line += f" versionCode:{state['packages'][pkg]}"
+            if "-i" in flags:
+                line += f"  installer={state.get('installers', {}).get(pkg, 'null')}"
+            print(line)
         return 0
     if args[0] == "dumpsys" and args[1] == "package":
         code = state["packages"].get(args[2])
@@ -124,13 +135,40 @@ def shell(state, args):
         state.setdefault("files", []).append(args[1])
         save(state)
         return 0
+    if args[0] == "cmd" and args[1] == "package" and args[2] == "resolve-activity":
+        home = state.get("home")
+        if not home:
+            print("No activity found")
+            return 0
+        print("priority=0 preferredOrder=0 match=0x108000 specificIndex=-1 isDefault=true")
+        print(home)
+        return 0
+    if args[0] == "cmd" and args[1] == "package" and args[2] == "set-home-activity":
+        if state.get("home_locked"):
+            # Worst case modelled: the box refuses but still exits 0.
+            print("Error: Failed to set default home.")
+            return 0
+        if state.get("home_set_fails"):
+            # Android 10+ likely models the refusal this way instead: the
+            # error goes to stderr and the process exits nonzero.
+            print("Error: Failed to set default home.", file=sys.stderr)
+            return 1
+        state["home"] = args[3]
+        save(state)
+        print("Success")
+        return 0
     print(f"unknown shell command {args}", file=sys.stderr)
     return 2
 
 
 def settings(state, args):
-    verb, ns, key = args[0], args[1], args[2]
+    verb, ns = args[0], args[1]
     table = state.setdefault("settings", {}).setdefault(ns, {})
+    if verb == "list":
+        for key in sorted(table):
+            print(f"{key}={table[key]}")
+        return 0
+    key = args[2]
     if verb == "get":
         print(table.get(key, "null"))
         return 0

@@ -36,6 +36,12 @@
     #     host = "10.0.0.x";
     #     packages = [ "de.badaix.snapcast" ];
     #     settings.global.screen_off_timeout = 600000;
+    #     # Argosy Launcher (RomM client), as the box's default home screen.
+    #     # See docs/android-devices.md#romm-through-argosy.
+    #     # github = [
+    #     #   { repo = "rommapp/argosy-launcher"; asset = "argosy-v*-arm64.apk"; }
+    #     # ];
+    #     # homeActivity = "com.nendo.argosy/.MainActivity";
     #   };
     # };
 
