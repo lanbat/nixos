@@ -1,11 +1,14 @@
 import json
 import stat
+from pathlib import Path
 
 import pytest
 
 from android_provision import snapshot
 from android_provision.adb import Adb
 from android_provision.cli import main
+
+LOCKFILE = str(Path(__file__).parents[1] / "apks.lock.json")
 
 
 def take(device):
@@ -66,8 +69,26 @@ def test_capture_cli_writes_a_snapshot(device, tmp_path):
     }))
     out = tmp_path / "snaps"
     assert main(["capture", "--manifest", str(manifest), "--out-dir", str(out),
-                 "--no-fdroid"]) == 0
+                 "--lockfile", LOCKFILE, "--no-fdroid"]) == 0
     assert len(list(out.glob("*.json"))) == 1
+
+
+def test_capture_cli_missing_lockfile_warns_but_still_succeeds(device, tmp_path, capsys):
+    # The snapshot is already saved by the time the lockfile is read, so a
+    # missing or unreadable lockfile (e.g. running from source without
+    # --lockfile) must not fail the capture -- just skip the app report.
+    manifest = tmp_path / "m.json"
+    manifest.write_text(json.dumps({
+        "device": "bedroom", "host": "192.0.2.50", "port": 5555, "abi": "arm64-v8a",
+    }))
+    out = tmp_path / "snaps"
+    code = main(["capture", "--manifest", str(manifest), "--out-dir", str(out),
+                 "--lockfile", str(tmp_path / "missing.lock.json"), "--no-fdroid"])
+    assert code == 0
+    assert len(list(out.glob("*.json"))) == 1
+    err = capsys.readouterr().err
+    assert "warning:" in err
+    assert "Traceback" not in err
 
 
 def test_capture_cli_unauthorized_exits_3(device, tmp_path):
@@ -78,7 +99,7 @@ def test_capture_cli_unauthorized_exits_3(device, tmp_path):
         "device": "bedroom", "host": "192.0.2.50", "port": 5555, "abi": "arm64-v8a",
     }))
     assert main(["capture", "--manifest", str(manifest), "--out-dir", str(tmp_path),
-                 "--no-fdroid"]) == 3
+                 "--lockfile", LOCKFILE, "--no-fdroid"]) == 3
 
 
 def test_capture_cli_device_drops_mid_capture_exits_2_without_traceback(device, tmp_path, capsys):
@@ -92,7 +113,7 @@ def test_capture_cli_device_drops_mid_capture_exits_2_without_traceback(device, 
         "device": "bedroom", "host": "192.0.2.50", "port": 5555, "abi": "arm64-v8a",
     }))
     code = main(["capture", "--manifest", str(manifest), "--out-dir", str(tmp_path),
-                 "--no-fdroid"])
+                 "--lockfile", LOCKFILE, "--no-fdroid"])
     assert code == 2
     err = capsys.readouterr().err
     assert "Traceback" not in err

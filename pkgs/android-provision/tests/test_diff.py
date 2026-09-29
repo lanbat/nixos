@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from android_provision import diff
+
+LOCKFILE = str(Path(__file__).parents[1] / "apks.lock.json")
 
 
 def snap(settings=None, packages=None, home="com.google.android.tvlauncher/.MainActivity"):
@@ -78,7 +82,7 @@ def test_capture_cli_diff_prints_restore_fragment(device, tmp_path, capsys):
     }))
     out = tmp_path / "snaps"
     code = main(["capture", "--manifest", str(manifest), "--out-dir", str(out),
-                 "--no-fdroid", "--diff", str(old)])
+                 "--lockfile", LOCKFILE, "--no-fdroid", "--diff", str(old)])
     assert code == 0
     assert '"screen_off_timeout" = "600000";' in capsys.readouterr().out
 
@@ -92,6 +96,6 @@ def test_capture_cli_diff_missing_old_snapshot_exits_manifest_but_keeps_new_snap
     }))
     out = tmp_path / "snaps"
     code = main(["capture", "--manifest", str(manifest), "--out-dir", str(out),
-                 "--no-fdroid", "--diff", str(tmp_path / "missing.json")])
+                 "--lockfile", LOCKFILE, "--no-fdroid", "--diff", str(tmp_path / "missing.json")])
     assert code == EXIT_MANIFEST
     assert len(list(out.glob("*.json"))) == 1

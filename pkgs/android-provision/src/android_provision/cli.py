@@ -203,6 +203,26 @@ def _capture(args) -> int:
 
     print(f"snapshot of {manifest.device} written to {path}")
 
+    from . import sources, update
+
+    try:
+        lock = sources.load_lock(args.lockfile or sources.default_lockfile())
+    except (OSError, ValueError) as exc:
+        # The snapshot is already saved; a missing or unreadable lockfile
+        # (e.g. running from source without --lockfile) must not fail the
+        # capture -- just skip the app-source report.
+        print(f"warning: cannot read lockfile ({exc}); skipping app source report",
+              file=sys.stderr)
+    else:
+        index = None
+        if not args.no_fdroid:
+            try:
+                index = update.fetch_json(update.FDROID_INDEX)
+            except (OSError, ValueError) as exc:
+                print(f"warning: F-Droid index unavailable ({exc}); unlocked apps show as unknown",
+                      file=sys.stderr)
+        print(sources.fragment(sources.propose(snap["packages"], lock, index)), end="")
+
     if args.diff:
         old = _load_snapshot_or_report(snapshot, args.diff)
         if isinstance(old, int):
