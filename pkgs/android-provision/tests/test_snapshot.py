@@ -62,6 +62,18 @@ def test_load_rejects_other_schema(tmp_path):
         snapshot.load(str(p))
 
 
+def test_load_rejects_a_non_dict_top_level(tmp_path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps(["not", "a", "dict"]))
+    with pytest.raises(snapshot.SnapshotError):
+        snapshot.load(str(p))
+
+
+def test_load_rejects_a_missing_file(tmp_path):
+    with pytest.raises(snapshot.SnapshotError):
+        snapshot.load(str(tmp_path / "does-not-exist.json"))
+
+
 def test_capture_cli_writes_a_snapshot(device, tmp_path):
     manifest = tmp_path / "m.json"
     manifest.write_text(json.dumps({

@@ -83,6 +83,8 @@ def load(path: str) -> dict:
             snap = json.load(fh)
     except (OSError, json.JSONDecodeError) as exc:
         raise SnapshotError(f"cannot read snapshot {path}: {exc}") from exc
+    if not isinstance(snap, dict):
+        raise SnapshotError(f"{path} is not a snapshot (top level is {type(snap).__name__}, not an object)")
     if snap.get("schema") != SCHEMA:
         raise SnapshotError(f"{path} is snapshot schema {snap.get('schema')!r}, expected {SCHEMA}")
     return snap
