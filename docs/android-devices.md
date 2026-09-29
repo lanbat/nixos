@@ -255,9 +255,16 @@ androidDevices.bedroom = {
 
 The pinned asset glob (`argosy-v*-arm64.apk`) matches Argosy's `arm64-v8a` release only
 — this module pins one APK per device `abi`, not a set of variants for every ABI a
-release publishes. A box with `abi = "armeabi-v7a"` (or any non-arm64 device) needs its
-own `github` entry with a glob matching that release's arm32 asset instead (Argosy's
-release publishes `argosy-v*-arm32.apk` alongside the arm64 one).
+release publishes. One repo pins exactly one lockfile entry: `update.resolve_github`
+keys its result by repo, `write_lockfile` builds `{ key: entry }`, and the module looks
+up `lock.${g.repo}` — a second `github` entry for the same repo would just replace this
+one, not add an arm32 variant alongside it. A box with a different ABI, or a deployment
+mixing arm64 and arm32 boxes, should pin the release's universal asset instead: Argosy
+ships `argosy-v<version>.apk` (no ABI suffix) alongside the per-ABI ones, and the glob
+`argosy-v*.[0-9].apk` matches only that universal asset, not `argosy-v2.18.0-arm32.apk`
+or `argosy-v2.18.0-arm64.apk`. `apk_metadata` then reads every ABI the universal APK
+actually contains, so the resulting lockfile entry works for any device `abi`. Keep the
+`arm64-v8a`-only pin above when every box is arm64 — it's a smaller download.
 
 Setting `homeActivity` to Argosy's launch activity makes it the box's default home
 screen, so the box boots straight into the game library. `caCerts` at its default
