@@ -31,10 +31,8 @@ let
 
   hosts = {
     inherit (self.nixosConfigurations) example-server example-pi-storage;
-    fixture-server = fixture.mkHostFor "server" fixture.deploy.hosts.server;
-    fixture-pi-storage = fixture.piStorageSystem;
-    fixture-voice-pi = fixture.voicePiSystem;
-  };
+  }
+  // lib.mapAttrs' (name: lib.nameValuePair "fixture-${name}") fixture.default.systems;
 
   failures = lib.attrNames (lib.filterAttrs (_: host: host.config.system.autoUpgrade.enable) hosts);
 in

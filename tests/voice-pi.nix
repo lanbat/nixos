@@ -31,7 +31,7 @@ pkgs.testers.runNixOSTest {
     { lib, ... }:
     {
       imports = [
-        fixture.voicePiConfig
+        fixture.default.nodes.voice-pi
         (
           { ... }:
           {

@@ -31,7 +31,7 @@ pkgs.testers.runNixOSTest {
     { ... }:
     {
       imports = [
-        fixture.piStorageConfig
+        fixture.default.nodes.pi-storage
       ];
     };
 
