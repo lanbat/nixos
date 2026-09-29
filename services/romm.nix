@@ -30,8 +30,9 @@
 # creates the admin account; the browser then also logs in through Authentik
 # OIDC, and apps such as Argosy Launcher pair by code (apiClients = true, no
 # forward auth — clients need direct API access). The admin's email must
-# match the Authentik user, so the OIDC login lands on the same account.
-# Password login stays enabled as a fallback.
+# match the Authentik user, so the OIDC login lands on the same account:
+# romm-admin-email copies it from Authentik (settings.authentikAdmin, default
+# akadmin) each time RomM starts. Password login stays enabled as a fallback.
 #
 # Arcade games in the browser
 # ---------------------------
@@ -84,6 +85,14 @@ let
           drive's mount (/srv/storage/<drive>).
         '';
       };
+      authentikAdmin = lib.mkOption {
+        type = lib.types.str;
+        default = "akadmin";
+        description = ''
+          Authentik user whose email romm-admin-email copies to RomM's admin
+          account, so that user's OIDC login lands on the admin.
+        '';
+      };
       browserArcadePath = lib.mkOption {
         type = lib.types.str;
         default = "media/roms-browser/mame";
@@ -96,6 +105,12 @@ let
     };
   };
   browserRomsets = pkgs.callPackage ../pkgs/romm-browser-romsets { };
+
+  # romm-admin-email reads Authentik's database, so it only exists alongside
+  # Authentik on the same host.
+  syncsAdminEmail = config.lanbat.hasService "authentik";
+  alwaysOnDb = config.lanbat.postgresql.instance "always-on";
+  psql = "${config.services.postgresql.finalPackage}/bin/psql -X -v ON_ERROR_STOP=1 -tA";
 
   # ES-DE's folder names are RomM's platform names, except atari800. bios is
   # RetroArch's BIOS folder (modules/pi/tv.nix), not a platform.
@@ -139,7 +154,7 @@ in
     oidc.redirectPaths = [ "/api/oauth/openid" ];
     tier = "workload";
     state = [ "romm" ];
-    units = [ "podman-romm" ];
+    units = [ "podman-romm" ] ++ lib.optional syncsAdminEmail "romm-admin-email";
     workloadDirs = lib.genAttrs [ "romm" "romm/config" "romm/resources" "romm/assets" ] (_: {
       user = "romm";
     });
@@ -264,6 +279,82 @@ in
       Restart = lib.mkForce "on-failure";
       RestartSec = "10s";
     };
+  };
+
+  # Copies the Authentik admin's email to RomM's admin account (see the top)
+  # at unlock and each time RomM starts. RomM creates its tables on its first
+  # start, so while RomM is starting this waits for them. It changes nothing
+  # while Authentik has no email for the user, RomM has no tables yet, or RomM
+  # has no single admin yet (before its setup wizard).
+  systemd.services.podman-romm.wants = lib.mkIf syncsAdminEmail [ "romm-admin-email.service" ];
+  systemd.services.romm-admin-email = lib.mkIf syncsAdminEmail {
+    description = "Give RomM's admin the Authentik admin's email";
+    after = [
+      "podman-romm.service"
+      alwaysOnDb.unit
+      workloadDb.unit
+    ];
+    requires = [
+      alwaysOnDb.unit
+      workloadDb.unit
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      # The superuser logs in over both instances' sockets (peer).
+      User = "postgres";
+    };
+    script = ''
+      set -euo pipefail
+      authentik() { ${psql} -h ${alwaysOnDb.socket} -p ${toString alwaysOnDb.port} -d authentik "$@"; }
+      romm() { ${psql} -h ${workloadDb.socket} -p ${toString workloadDb.port} -d romm "$@"; }
+
+      email=$(authentik -v user=${lib.escapeShellArg cfg.authentikAdmin} <<'SQL'
+      SELECT email FROM authentik_core_user WHERE username = :'user';
+      SQL
+      )
+      if [ -z "$email" ]; then
+        echo "Authentik user ${cfg.authentikAdmin} has no email; nothing to copy"
+        exit 0
+      fi
+
+      hasUsers() { [ "$(romm -c "SELECT to_regclass('public.users') IS NOT NULL")" = t ]; }
+      for _ in $(seq 60); do
+        if hasUsers || ! systemctl is-active --quiet podman-romm.service; then break; fi
+        sleep 5
+      done
+      if ! hasUsers; then
+        echo "RomM hasn't created its tables yet; nothing to change"
+        exit 0
+      fi
+
+      admins=$(romm -c "SELECT count(*) FROM users WHERE lower(role::text) = 'admin'")
+      if [ "$admins" != 1 ]; then
+        echo "RomM has $admins admin accounts, not one; changing none (run its setup wizard first)"
+        exit 0
+      fi
+      taken=$(romm -v email="$email" <<'SQL'
+      SELECT count(*) FROM users WHERE email = :'email' AND lower(role::text) <> 'admin';
+      SQL
+      )
+      if [ "$taken" != 0 ]; then
+        echo "Another RomM account already has the Authentik admin's email; not changing the admin" >&2
+        exit 1
+      fi
+      changed=$(romm -v email="$email" <<'SQL'
+      WITH updated AS (
+        UPDATE users SET email = :'email'
+        WHERE lower(role::text) = 'admin' AND email IS DISTINCT FROM :'email'
+        RETURNING 1
+      )
+      SELECT count(*) FROM updated;
+      SQL
+      )
+      if [ "$changed" = 1 ]; then
+        echo "RomM's admin now has the Authentik admin's email"
+      else
+        echo "RomM's admin already has the Authentik admin's email"
+      fi
+    '';
   };
 
   # Zip copies of the arcade sets for the browser player (see the top).
