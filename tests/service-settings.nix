@@ -23,6 +23,7 @@
 #   - Immich: the originals default to drive a's photos, a profile moves them
 #     and the NFS dependency follows; PostgreSQL, Redis and its own API are
 #     reached at the ports of their descriptions.
+#   - Grafana: its InfluxDB datasource follows InfluxDB's endpoint port.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -483,6 +484,16 @@ let
       && (envOf immichMoved "immich-server").REDIS_PORT == "16379"
       && lib.hasInfix ''IMMICH_URL="http://127.0.0.1:12283"'' immichMoved.systemd.services.immich-bootstrap.script
       && failedAssertions immichMoved == [ ]
+    ))
+
+    (expect "grafana: the InfluxDB datasource follows InfluxDB's endpoint" (
+      let
+        influxUrl =
+          config: (lib.head config.services.grafana.provision.datasources.settings.datasources).url;
+      in
+      influxUrl base == "http://localhost:8086"
+      && influxUrl telegrafChanged == "http://localhost:18086"
+      && base.services.grafana.settings.server.root_url == "https://grafana.home.example.com"
     ))
 
     (expect "redis: the consumers keep today's indexes" (
