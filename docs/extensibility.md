@@ -99,6 +99,7 @@ layout, so a profile sets only what differs:
 | Telegraf | `pingTargets`: the hosts pinged for reachability | the storage Pi, the default gateway and `1.1.1.1` |
 | RomM | `drive`, `libraryPath` and `browserArcadePath`: where the ROM library and the browser's zip copies of the arcade sets live on Pi storage | drive `b`, `media/roms` and `media/roms-browser/mame` |
 | Immich | `drive` and `uploadPath`: where the originals and uploads live on Pi storage | drive `a`, `photos` |
+| Nextcloud | `storage.{drive,path}`: the directory created for the External Storage app's bulk user data | drive `b`, `nextcloud` |
 
 A default share is defined field by field at `lib.mkDefault`, so a profile changes
 one field of it, drops it with `enable = false`, or adds its own beside it:

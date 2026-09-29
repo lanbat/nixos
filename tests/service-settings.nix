@@ -24,6 +24,8 @@
 #     and the NFS dependency follows; PostgreSQL, Redis and its own API are
 #     reached at the ports of their descriptions.
 #   - Grafana: its InfluxDB datasource follows InfluxDB's endpoint port.
+#   - Nextcloud: the bulk data directories default to drive b's nextcloud,
+#     and a profile moves them.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -229,6 +231,18 @@ let
   ];
   immichUpload =
     config: lib.head config.virtualisation.oci-containers.containers.immich-server.volumes;
+
+  # ── Nextcloud ────────────────────────────────────────────────────────────
+  nextcloudMoved = serverWith [
+    {
+      lanbat.services.nextcloud.settings.storage = {
+        drive = "a";
+        path = "cloud";
+      };
+    }
+  ];
+  nextcloudDirs =
+    config: lib.filter (lib.hasInfix " nextcloud nextcloud ") config.systemd.tmpfiles.rules;
 
   expect = name: ok: if ok then null else name;
 
@@ -494,6 +508,19 @@ let
       influxUrl base == "http://localhost:8086"
       && influxUrl telegrafChanged == "http://localhost:18086"
       && base.services.grafana.settings.server.root_url == "https://grafana.home.example.com"
+    ))
+
+    (expect "nextcloud: the bulk data directories keep today's paths, and move" (
+      lib.all (rule: lib.elem rule (nextcloudDirs base)) [
+        "d /srv/storage/b/nextcloud          0750 nextcloud nextcloud -"
+        "d /srv/storage/b/nextcloud/external 0750 nextcloud nextcloud -"
+        "d /srv/storage/b/nextcloud/users    0750 nextcloud nextcloud -"
+      ]
+      && lib.elem "d /srv/storage/a/cloud/users    0750 nextcloud nextcloud -" (
+        nextcloudDirs nextcloudMoved
+      )
+      && !lib.any (lib.hasPrefix "d /srv/storage/b/nextcloud") (nextcloudDirs nextcloudMoved)
+      && nextcloudMoved.lanbat.services.nextcloud.nfs.drives == [ ]
     ))
 
     (expect "redis: the consumers keep today's indexes" (
