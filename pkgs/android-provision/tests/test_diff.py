@@ -38,6 +38,17 @@ def test_volatile_and_ignored_keys_are_skipped():
     assert diff.compare(old, new, ignore=frozenset({"global/mine"})).settings == []
 
 
+def test_old_value_of_literal_null_is_not_restored_as_a_value():
+    # `settings put ns key null` stores the literal string "null", not an
+    # absence of the key -- restoring it as a value would be wrong.
+    old = snap({"global": {"screen_off_timeout": "null"}})
+    new = snap({"global": {"screen_off_timeout": "300000"}})
+    d = diff.compare(old, new)
+    frag = diff.restore_fragment(d)
+    assert '"screen_off_timeout" = "null";' not in frag
+    assert "# global/screen_off_timeout was null before; nothing to restore" in frag
+
+
 def test_apps_and_home_differences():
     old = snap(packages={"com.nendo.argosy": {"versionCode": 218, "installer": None}},
                home="com.nendo.argosy/.MainActivity")

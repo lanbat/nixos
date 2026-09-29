@@ -198,9 +198,12 @@ homeActivity = "...";
 ```
 
 fragment holding the *old* value of every setting that differs (the values to restore).
-`capture --diff OLD` runs the same comparison between `OLD` and the snapshot the
-capture just took, so a single command can both snapshot a freshly reset box and show
-what the reset changed.
+A setting whose old value is the literal string `"null"` is listed as changed but never
+put in the restore fragment as a value — `settings put ... null` would store that literal
+string, not leave the key unset — so it appears there as a one-line comment instead.
+`capture --diff OLD [--ignore NS/KEY]` runs the same comparison, with the same
+`--ignore`, between `OLD` and the snapshot the capture just took, so a single command
+can both snapshot a freshly reset box and show what the reset changed.
 
 A handful of keys change by themselves or identify one installation — boot counters,
 setup-wizard flags, the Bluetooth address, `secure/android_id` — and restoring them is

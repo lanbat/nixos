@@ -66,7 +66,11 @@ def _nix(value: str) -> str:
 
 def restore_fragment(d: Diff) -> str:
     lines = ["# For androidDevices.<box>; review before pasting."]
-    restorable = [c for c in d.settings if c.old is not None]
+    # A literal "null" is what `settings put` stores from the string "null" --
+    # it is a real value, but restoring it as `key = "null";` would write that
+    # same literal back rather than leave the setting unset, so it goes out as
+    # a comment instead of a restore value.
+    restorable = [c for c in d.settings if c.old is not None and c.old != "null"]
     if restorable:
         lines.append("settings = {")
         for ns in NAMESPACES:
@@ -78,6 +82,9 @@ def restore_fragment(d: Diff) -> str:
         lines.append("};")
     if d.home and d.home[0]:
         lines.append(f"homeActivity = {_nix(d.home[0])};")
+    was_null = [c for c in d.settings if c.old == "null"]
+    for c in was_null:
+        lines.append(f"# {c.ns}/{c.key} was null before; nothing to restore")
     new_only = [c for c in d.settings if c.old is None]
     for c in new_only:
         lines.append(f"# {c.ns}/{c.key} exists only on the new box ({c.new!r}); settings put can't remove it")
