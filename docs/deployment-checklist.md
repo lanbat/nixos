@@ -522,9 +522,9 @@ alongside Grafana, Nextcloud, and Immich. After deploying:
    admin account. RomM matches an OIDC login to an existing account by email and
    never creates a second one, so the admin needs the Authentik user's email:
    `romm-admin-email` copies it from Authentik's `akadmin` (the RomM setting
-   `authentikAdmin`) at unlock and each time RomM starts. To apply it right after
-   the wizard, run `systemctl start romm-admin-email`; `journalctl -u
-   romm-admin-email` says what it did.
+   `authentikAdmin`) at unlock and each time RomM starts, and on the first visit
+   as soon as the wizard has created the admin. `journalctl -u romm-admin-email`
+   says what it did.
 2. Grant users access to the **RomM** application in Authentik. App clients
    such as Argosy Launcher pair with RomM directly by code, bypassing
    Authentik.

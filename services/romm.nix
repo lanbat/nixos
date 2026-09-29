@@ -282,10 +282,10 @@ in
   };
 
   # Copies the Authentik admin's email to RomM's admin account (see the top)
-  # at unlock and each time RomM starts. RomM creates its tables on its first
-  # start, so while RomM is starting this waits for them. It changes nothing
-  # while Authentik has no email for the user, RomM has no tables yet, or RomM
-  # has no single admin yet (before its setup wizard).
+  # at unlock and each time RomM starts. While RomM runs without an admin (the
+  # first visit, before its setup wizard finishes), it waits and applies the
+  # email once the wizard creates one. It changes nothing while Authentik has
+  # no email for the user, or when RomM stops before it has an admin.
   systemd.services.podman-romm.wants = lib.mkIf syncsAdminEmail [ "romm-admin-email.service" ];
   systemd.services.romm-admin-email = lib.mkIf syncsAdminEmail {
     description = "Give RomM's admin the Authentik admin's email";
@@ -317,19 +317,23 @@ in
         exit 0
       fi
 
+      rommRunning() { systemctl is-active --quiet podman-romm.service; }
       hasUsers() { [ "$(romm -c "SELECT to_regclass('public.users') IS NOT NULL")" = t ]; }
-      for _ in $(seq 60); do
-        if hasUsers || ! systemctl is-active --quiet podman-romm.service; then break; fi
-        sleep 5
+      admins() { romm -c "SELECT count(*) FROM users WHERE lower(role::text) = 'admin'"; }
+
+      # While RomM runs, wait for its tables and for its setup wizard to
+      # create the admin, so the first visit needs nothing else.
+      while rommRunning && ! { hasUsers && [ "$(admins)" != 0 ]; }; do
+        sleep 10
       done
       if ! hasUsers; then
         echo "RomM hasn't created its tables yet; nothing to change"
         exit 0
       fi
 
-      admins=$(romm -c "SELECT count(*) FROM users WHERE lower(role::text) = 'admin'")
+      admins=$(admins)
       if [ "$admins" != 1 ]; then
-        echo "RomM has $admins admin accounts, not one; changing none (run its setup wizard first)"
+        echo "RomM has $admins admin accounts, not one; changing none"
         exit 0
       fi
       taken=$(romm -v email="$email" <<'SQL'
