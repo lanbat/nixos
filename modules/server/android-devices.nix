@@ -324,6 +324,16 @@ in
         assertion = !d.deviceOwner.enable || d.deviceOwner.component != null;
         message = "androidDevices.${name}: deviceOwner.enable needs deviceOwner.component.";
       }) devices
+      ++ lib.mapAttrsToList (
+        name: d:
+        let
+          parts = if d.homeActivity == null then [ ] else lib.splitString "/" d.homeActivity;
+        in
+        {
+          assertion = d.homeActivity == null || (lib.length parts == 2 && lib.all (p: p != "") parts);
+          message = "androidDevices.${name}: homeActivity \"${toString d.homeActivity}\" must have the form package/activity.";
+        }
+      ) devices
       ++ lib.concatLists (
         lib.mapAttrsToList (
           name: d:

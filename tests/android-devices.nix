@@ -79,6 +79,14 @@ let
     };
   };
 
+  badHomeActivity = eval {
+    bedroom = {
+      host = "192.0.2.50";
+      # missing the "/activity" part
+      homeActivity = "com.nendo.argosy";
+    };
+  };
+
   withArgosy = eval {
     bedroom = {
       host = "192.0.2.50";
@@ -129,6 +137,9 @@ pkgs.runCommand "android-devices-check" { } ''
     )
     + expect "a device with homeActivity evaluates cleanly" (
       failures withHome == [ ] && withHome.systemd.services ? "android-provision-bedroom"
+    )
+    + expect "a homeActivity without package/activity form is rejected" (
+      lib.length (failures badHomeActivity) == 1
     )
     + expect "argosy resolves from the lockfile" (failures withArgosy == [ ])
   }"

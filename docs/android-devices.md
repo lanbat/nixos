@@ -292,9 +292,9 @@ Every field of `androidDevices.<name>`, with its default:
 | `deviceOwner.component` | `null` | DPC admin receiver component, e.g. `"com.example.dpc/.AdminReceiver"`. Required when `deviceOwner.enable` is set. |
 
 Evaluation rejects two devices sharing a `host:port`, `deviceOwner.enable` without a
-`deviceOwner.component`, and any `packages`/`github` entry missing from
-`apks.lock.json` (with a pointer to `nix run .#android-update`) or lacking an APK
-variant for the device's `abi`.
+`deviceOwner.component`, a `homeActivity` that isn't of the form `package/activity`, and
+any `packages`/`github` entry missing from `apks.lock.json` (with a pointer to
+`nix run .#android-update`) or lacking an APK variant for the device's `abi`.
 
 ## Snapcast needs no configuration
 
