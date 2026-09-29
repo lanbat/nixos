@@ -442,7 +442,7 @@ let
     ))
 
     (expect "romm: the defaults keep today's library on drive b" (
-      lib.drop 3 (rommVolumes base) == [
+      lib.sublist 3 2 (rommVolumes base) == [
         "/srv/storage/b/media/roms:/romm/library/roms"
         "/srv/storage/b/media/roms-browser/mame:/romm/library/roms/mame"
       ]
@@ -451,10 +451,13 @@ let
         base.systemd.services.romm-browser-romsets.environment.SOURCE_DIR
         == "/srv/storage/b/media/roms/mame"
       && (envOf base "romm").REDIS_PORT == "6379"
+      && (envOf base "romm").OIDC_ALLOW_REGISTRATION == "false"
+      && (envOf base "romm").DISABLE_USERPASS_LOGIN == "false"
+      && lib.hasSuffix "/api/oauth/openid" (envOf base "romm").OIDC_REDIRECT_URI
     ))
 
     (expect "romm: a profile moves the library, and the NFS dependency follows" (
-      lib.drop 3 (rommVolumes rommMoved) == [
+      lib.sublist 3 2 (rommVolumes rommMoved) == [
         "/srv/storage/a/games/roms:/romm/library/roms"
         "/srv/storage/a/games/arcade:/romm/library/roms/mame"
       ]

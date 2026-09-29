@@ -28,6 +28,7 @@
 #   AUTHENTIK_IMMICH_CLIENT_SECRET=<40+ random chars>
 #   AUTHENTIK_HA_CLIENT_SECRET=<40+ random chars>
 #   AUTHENTIK_JELLYFIN_CLIENT_SECRET=<40+ random chars>
+#   AUTHENTIK_ROMM_CLIENT_SECRET=<40+ random chars>
 #
 # Each secret must also appear in the corresponding service env file so the
 # service side knows the shared secret:
@@ -36,6 +37,7 @@
 #                            NEXTCLOUD_OIDC_CLIENT_SECRET=<nextcloud-value>
 #   immich-oidc-env.age   → IMMICH_OAUTH_CLIENT_ID=immich
 #                            IMMICH_OAUTH_CLIENT_SECRET=<immich-value>
+#   romm-oidc-env.age     → OIDC_CLIENT_SECRET=<romm-value>
 #
 # Home Assistant requires manual UI setup on its side:
 #   Settings → Devices & Services → Add Integration → search "Authentik"

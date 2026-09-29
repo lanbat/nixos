@@ -74,6 +74,7 @@ automatically — those that depend on external setup:
 |---|---|
 | `nextcloud-oidc-env.age` | After creating Authentik OIDC app (step 3b) |
 | `immich-oidc-env.age` | After creating Authentik OIDC app (step 3b) |
+| `romm-oidc-env.age` | After creating Authentik OIDC app (step 3b) |
 | `grafana-env.age` | Update OAuth secret + InfluxDB token after steps 3b/3h |
 | `mosquitto-ha-pass.age` | Choose a password for the HA MQTT user |
 | `mosquitto-frigate-pass.age` | Choose a password for the Frigate MQTT user |
@@ -99,6 +100,8 @@ NEXTCLOUD_OIDC_CLIENT_SECRET=CHANGE_ME" | agenix -e nextcloud-oidc-env.age
 
 echo "IMMICH_OAUTH_CLIENT_ID=CHANGE_ME
 IMMICH_OAUTH_CLIENT_SECRET=CHANGE_ME" | agenix -e immich-oidc-env.age
+
+echo "OIDC_CLIENT_SECRET=CHANGE_ME" | agenix -e romm-oidc-env.age
 
 # Telegraf — a random value; InfluxDB provisions a write-only token with it.
 # It must differ from influxdb-admin-token.age.
@@ -449,9 +452,9 @@ bash secrets/generate-oidc-secrets.sh
 ```
 
 This creates `authentik-oidc-secrets.age` and updates `grafana-env.age`,
-`nextcloud-oidc-env.age`, and `immich-oidc-env.age` with matching values.
-The script prints the client credentials needed for Home Assistant and Jellyfin
-(see manual steps below).
+`nextcloud-oidc-env.age`, `immich-oidc-env.age`, and `romm-oidc-env.age` with
+matching values. The script prints the client credentials needed for Home
+Assistant and Jellyfin (see manual steps below).
 
 Deploy to apply the new secrets:
 
@@ -460,8 +463,8 @@ deploy path:.#homelab-server
 ```
 
 After the deploy, Authentik restarts and the blueprints run automatically.
-Grafana and Immich OIDC come up fully automatically.  Nextcloud needs one
-extra step (see below).
+Grafana, Immich, and RomM OIDC come up fully automatically.  Nextcloud needs
+one extra step (see below).
 
 #### Nextcloud — install the OIDC app
 
@@ -509,6 +512,23 @@ automatically and registers the Authentik provider.  No further steps needed.
 
 Grant users access to the **Jellyfin** application in Authentik.  Adult content
 is only available via the hidden Samba `private` share (`@private` group).
+
+#### RomM — OIDC login
+
+`generate-oidc-secrets.sh` (see above) wires RomM's client secret automatically,
+alongside Grafana, Nextcloud, and Immich. After deploying:
+
+1. Visit `https://romm.<domain>` once to run RomM's setup wizard and create the
+   admin account. Set that admin's email to match the Authentik user who will
+   log in through OIDC — RomM matches the OIDC login to an existing account by
+   email and never creates a second one.
+2. Grant users access to the **RomM** application in Authentik. App clients
+   such as Argosy Launcher pair with RomM directly by code, bypassing
+   Authentik.
+
+RomM used to sit behind Caddy forward-auth; Authentik keeps the now-unused
+`romm` proxy provider and application from that setup until deleted by hand
+(Applications → Providers / Applications).
 
 ### 3c. Samba user setup
 
@@ -730,10 +750,11 @@ appear in both the Snapcast web UI (`https://audio.<domain>`) and Music Assistan
 
 ### 3o. RomM
 
-RomM starts on the first visit to `https://romm.<domain>` (after the Authentik login)
-and stops after 30 minutes idle.
+RomM starts on the first visit to `https://romm.<domain>` and stops after 30
+minutes idle. See "RomM — OIDC login" above for wiring its Authentik client.
 
-1. On the first visit, RomM's setup wizard creates the admin account.
+1. On the first visit, RomM's setup wizard creates the admin account; give it
+   the same email as the Authentik user who will log in via OIDC.
 2. The library is the Pi's `media/roms` folder on drive B, in ES-DE's layout
    (`roms/<system>`, the same folders EmulationStation reads). Scan it from
    Library → Scan.
