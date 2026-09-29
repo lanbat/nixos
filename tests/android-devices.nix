@@ -79,6 +79,19 @@ let
     };
   };
 
+  withArgosy = eval {
+    bedroom = {
+      host = "192.0.2.50";
+      github = [
+        {
+          repo = "rommapp/argosy-launcher";
+          asset = "argosy-v*-arm64.apk";
+        }
+      ];
+      homeActivity = "com.nendo.argosy/.MainActivity";
+    };
+  };
+
   expect = name: cond: if cond then "" else "FAIL: ${name}\n";
 in
 pkgs.runCommand "android-devices-check" { } ''
@@ -117,6 +130,7 @@ pkgs.runCommand "android-devices-check" { } ''
     + expect "a device with homeActivity evaluates cleanly" (
       failures withHome == [ ] && withHome.systemd.services ? "android-provision-bedroom"
     )
+    + expect "argosy resolves from the lockfile" (failures withArgosy == [ ])
   }"
   if [ -n "$errors" ]; then
     printf '%s' "$errors" >&2

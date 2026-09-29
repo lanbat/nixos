@@ -100,6 +100,26 @@ reports one of four outcomes, printed as `<status> <resource>/<target> -- <reaso
 One resource failing never aborts the run: every independent resource still converges,
 and the process exit code reports the failure at the end (see Exit codes below).
 
+## Default home screen
+
+Setting `homeActivity` makes an installed app the box's default launcher — useful for a
+box dedicated to a single app such as Argosy (see "RomM through Argosy" below):
+
+```nix
+androidDevices.bedroom.homeActivity = "com.nendo.argosy/.MainActivity";
+```
+
+The value is `package/activity`; a leading `.` on the activity (as Android manifests
+commonly write it) resolves against the package. The `home` resource runs after `apks`
+— the launcher has to be installed before it can be made the default — and does three
+things: reads the box's current home activity (`cmd package resolve-activity --brief -a
+android.intent.action.MAIN -c android.intent.category.HOME`), calls `cmd package
+set-home-activity <component>` only if that differs from what's wanted, then **reads it
+back** to confirm the change stuck. A box that refuses (some vendor skins ignore
+`set-home-activity` outright, or only accept the change from the on-screen launcher
+picker) reports `failed` with `adb`'s reply — never a silent no-op, and never `ok` for a
+change that didn't actually take.
+
 ## Updating apps
 
 APK sources are pinned in `pkgs/android-provision/apks.lock.json`, resolved once by a
@@ -129,6 +149,125 @@ and no relation to anything you changed. The symptom is an opaque `fetchurl` 404
 that moved. The fix is the same either way: `nix run .#android-update` to re-resolve the
 pinned URLs, then commit the regenerated lockfile.
 
+## Snapshots and restoring after a reset
+
+Every device also gets an `android-capture-<name>` oneshot unit — not started
+automatically, only ever on request:
+
+```bash
+systemctl start android-capture-bedroom
+```
+
+It takes a **read-only** snapshot: every user-installed package with its version and
+installer (`pm list packages -3 -i --show-versioncode`), every `settings list
+global|secure|system` key and value, the current home activity, and the device facts
+(model, SDK, ABI) `adb` already reports on connect. The snapshot is written to
+`/var/lib/android-provision/<name>/snapshots/<UTC timestamp>.json`, mode `0600` in a
+mode `0700` directory, and it **never enters the repository**: settings values include
+things like the device's Bluetooth address and Wi-Fi network name, which have no
+business in a public git history. Keep snapshots on the server's disk (or copy them
+somewhere private) — don't `git add` them.
+
+### The app report
+
+Right after a capture, it prints a proposed source for every installed app, as a
+ready-to-paste fragment for `androidDevices.<box>`:
+
+- already pinned in the lockfile (as a `packages` or `github` entry) — reused as-is;
+- found in F-Droid's index but not yet pinned — added under `packages` with a comment
+  that it still needs `nix run .#android-update`;
+- installed by the Play Store (`com.android.vending`) — printed as a comment, for
+  reinstalling by hand and signing in;
+- anything else — printed as "no known source", meaning it needs a GitHub repo or an
+  Obtainium URL added by hand.
+
+`capture --no-fdroid` skips the F-Droid index lookup (the report then treats an unlocked
+app as unknown rather than checking F-Droid); `capture --lockfile PATH` reports against
+a lockfile other than the one built into the package.
+
+### Comparing two snapshots
+
+`android-provision diff OLD NEW [--ignore NS/KEY]` compares two snapshot files and
+prints, per settings namespace, every key that changed (`old -> new`), apps that
+appeared or disappeared, an app whose version changed, any home-activity change, and —
+last — a ready-to-paste
+
+```nix
+settings = { ... };
+homeActivity = "...";
+```
+
+fragment holding the *old* value of every setting that differs (the values to restore).
+`capture --diff OLD` runs the same comparison between `OLD` and the snapshot the
+capture just took, so a single command can both snapshot a freshly reset box and show
+what the reset changed.
+
+A handful of keys change by themselves or identify one installation — boot counters,
+setup-wizard flags, the Bluetooth address, `secure/android_id` — and restoring them is
+meaningless. `diff.VOLATILE` lists them with a one-line reason each; `--ignore NS/KEY`
+(repeatable) adds more without touching the code, for anything volatile a real device
+turns up that the built-in list doesn't cover yet.
+
+### The reset runbook
+
+To learn exactly what a factory reset costs a given box, and turn that into
+`androidDevices.<box>` configuration:
+
+1. Before touching the box, take a baseline: `systemctl start android-capture-<box>`.
+2. Factory-reset the box. Re-enable network ADB and accept the "Allow USB debugging?"
+   dialog again — this manual step is irreducible; nothing on the server side can do it
+   for you.
+3. Snapshot the fresh box and diff it against the baseline:
+   `android-provision capture --manifest ... --out-dir ... --diff <baseline>` (or
+   `capture` then `diff <baseline> <fresh>` as two steps). Copy the settings, apps and
+   home activity the diff prints into `androidDevices.<box>`, and extend the ignore list
+   with anything that turns out to be volatile.
+4. Deploy and provision the box, then diff the live box against the baseline again
+   (`diff <baseline> <live-snapshot>`, or `capture --diff <baseline>` once more). What's
+   left in that diff is what a reset really costs on top of provisioning — record it in
+   this document.
+
+Beyond that runbook, the manual steps a reset can never avoid are: enable network ADB
+and accept the ADB prompt, pair Argosy with one code (see below), and sign in to Play
+Store apps. Everything else — apps, changed settings, the home screen, the internal CA
+— comes back from one run of the box's provisioning unit.
+
+## RomM through Argosy
+
+[Argosy Launcher](https://github.com/rommapp/argosy-launcher) is a RomM client for
+Android TV: it lists the RomM library, downloads a game on demand, launches it, and
+syncs its save back to RomM. Getting it onto a box is ordinary `androidDevices`
+configuration, not a special case:
+
+```nix
+androidDevices.bedroom = {
+  github = [
+    { repo = "rommapp/argosy-launcher"; asset = "argosy-v*-arm64.apk"; }
+  ];
+  homeActivity = "com.nendo.argosy/.MainActivity";
+  # caCerts left at its default: the internal CA, so Argosy trusts RomM's TLS.
+};
+```
+
+The pinned asset glob (`argosy-v*-arm64.apk`) matches Argosy's `arm64-v8a` release only
+— this module pins one APK per device `abi`, not a set of variants for every ABI a
+release publishes. A box with `abi = "armeabi-v7a"` (or any non-arm64 device) needs its
+own `github` entry with a glob matching that release's arm32 asset instead (Argosy's
+release publishes `argosy-v*-arm32.apk` alongside the arm64 one).
+
+Setting `homeActivity` to Argosy's launch activity makes it the box's default home
+screen, so the box boots straight into the game library. `caCerts` at its default
+installs the internal CA Caddy issues from into the user trust store — Argosy is one of
+the apps that opts into trusting user CAs, so it can reach `romm.<domain>` over the
+deployment's own TLS without a browser-only workaround.
+
+Pairing is the one step this module can't do for you: on the box, open Argosy and
+generate (or scan) a pairing code; enter that code in RomM to link the two. RomM's move
+to its own login plus Authentik OIDC (so a browser sign-in gates the web UI) is tracked
+separately and isn't part of what this branch changes — from the box's point of view,
+Argosy talks to RomM's API with its own paired session regardless of how a browser signs
+into RomM.
+
 ## Option reference
 
 Every field of `androidDevices.<name>`, with its default:
@@ -145,6 +284,7 @@ Every field of `androidDevices.<name>`, with its default:
 | `caCerts` | `[ ../../secrets/caddy-ca-root.crt ]` | CA certificates to install into the user trust store. Setting this **replaces** the default rather than adding to it. |
 | `settings` | `{ }` | `settings put` values by namespace (`global`, `secure`, `system`), e.g. `{ global.screen_off_timeout = 600000; }`. |
 | `allowDowngrade` | `false` | Replace an installed app that is newer than the lockfile's pinned version. |
+| `homeActivity` | `null` | Activity to make the default home screen, as `package/activity`. Set after the apps are installed; a box that refuses is reported `failed`. |
 | `deviceOwner.enable` | `false` | Set a Device Owner via `dpm set-device-owner`. Only succeeds on a box with no configured accounts. |
 | `deviceOwner.component` | `null` | DPC admin receiver component, e.g. `"com.example.dpc/.AdminReceiver"`. Required when `deviceOwner.enable` is set. |
 

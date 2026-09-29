@@ -28,5 +28,21 @@
     },
     "versionCode": 2902,
     "versionName": "0.29.0.2"
+  },
+  "rommapp/argosy-launcher": {
+    "key": "rommapp/argosy-launcher",
+    "minSdk": 26,
+    "packageId": "com.nendo.argosy",
+    "source": "github",
+    "tag": "v2.18.0",
+    "variants": {
+      "arm64-v8a": {
+        "sha256": "sha256-igGz9nSI2STHjsqtIzFEXFir0SH4ZoIydmrcwIH5r70=",
+        "size": 25067300,
+        "url": "https://github.com/rommapp/argosy-launcher/releases/download/v2.18.0/argosy-v2.18.0-arm64.apk"
+      }
+    },
+    "versionCode": 2000343,
+    "versionName": "2.18.0"
   }
 }
