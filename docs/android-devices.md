@@ -64,6 +64,11 @@ Before the server can reach a box, do this once per box:
 dialog on the TV every single time. Losing that key file (state directory deleted,
 reinstall) means re-accepting the dialog on every box once.
 
+A box's `provision`, `plan` and `capture` units all share the one `adb` client server
+under `HOME=/var/lib/android-provision`, so running two of them against the same box at
+once can make one drop mid-run (`EXIT_UNREACHABLE`, exit 2). Run a box's units one at a
+time.
+
 ## Running it
 
 Three ways to run a device's manifest, all equivalent up to whether they touch the box
@@ -130,15 +135,16 @@ run never depends on F-Droid or GitHub being reachable. Never hand-edit the lock
 ```bash
 nix run .#android-update -- "" \
   --fdroid de.badaix.snapcast \
-  --github theothernt/AerialViews=*.apk
+  --github 'rommapp/argosy-launcher=argosy-v*-arm64.apk'
 ```
 
 Review the diff (`git diff pkgs/android-provision/apks.lock.json`) before committing —
 `android-update` **replaces the entire lockfile** with only the packages and GitHub
-repos you pass it that run. Omit an app you meant to keep and the diff will show it
-disappearing; that's your signal to add it back to the command, not evidence of a bug.
-The empty first argument selects the default lockfile path; pass a path there instead
-to update a different file.
+repos you pass it that run. The command above must list every entry that should still
+be in the lockfile afterwards, not just the one you meant to refresh: omit an app you
+meant to keep and the diff will show it disappearing; that's your signal to add it back
+to the command, not evidence of a bug. The empty first argument selects the default
+lockfile path; pass a path there instead to update a different file.
 
 `GITHUB_TOKEN` in the environment raises the GitHub API rate limit for `--github`
 lookups; it isn't required for public repos at low volume.
@@ -221,15 +227,22 @@ To learn exactly what a factory reset costs a given box, and turn that into
 2. Factory-reset the box. Re-enable network ADB and accept the "Allow USB debugging?"
    dialog again — this manual step is irreducible; nothing on the server side can do it
    for you.
-3. Snapshot the fresh box and diff it against the baseline:
-   `android-provision capture --manifest ... --out-dir ... --diff <baseline>` (or
-   `capture` then `diff <baseline> <fresh>` as two steps). Copy the settings, apps and
-   home activity the diff prints into `androidDevices.<box>`, and extend the ignore list
-   with anything that turns out to be volatile.
-4. Deploy and provision the box, then diff the live box against the baseline again
-   (`diff <baseline> <live-snapshot>`, or `capture --diff <baseline>` once more). What's
-   left in that diff is what a reset really costs on top of provisioning — record it in
-   this document.
+3. Snapshot the fresh box: `systemctl start android-capture-<box>`. Find the two
+   snapshots with `ls -t /var/lib/android-provision/<box>/snapshots` (newest first) and
+   compare them: `android-provision diff <baseline> <newest>`. Copy the settings, apps
+   and home activity the diff prints into `androidDevices.<box>`, and extend the ignore
+   list with anything that turns out to be volatile.
+4. Deploy and provision the box, snapshot it again the same way, and diff the new
+   snapshot against the baseline once more. What's left in that diff is what a reset
+   really costs on top of provisioning — record it in this document.
+
+Prefer the unit over a manual `android-provision capture` in a root shell: a root shell
+has its own `$HOME` (typically `/root`), so `adb` creates and uses a *different* client
+key there than the unit's, which re-triggers the "Allow USB debugging?" dialog on the
+box and can leave a stray `adb` server running that a later unit run then attaches to.
+If a manual capture is unavoidable, prefix it with `HOME=/var/lib/android-provision` to
+reuse the unit's key, and find the manifest path the unit passes with `systemctl cat
+android-capture-<box>`.
 
 Beyond that runbook, the manual steps a reset can never avoid are: enable network ADB
 and accept the ADB prompt, pair Argosy with one code (see below), and sign in to Play
@@ -325,8 +338,8 @@ check multicast reachability on its network segment before anything else.
 
 | Code | Constant | Meaning |
 |---|---|---|
-| 0 | `EXIT_OK` | Every resource is `ok` or `changed`. |
-| 1 | `EXIT_RESOURCE_FAILED` | At least one resource reported `failed`. |
-| 2 | `EXIT_UNREACHABLE` | The device didn't answer (`adb connect` failed) — check it's powered on and reachable at `host:port`. |
+| 0 | `EXIT_OK` | `provision`/`plan`: every resource is `ok` or `changed`. `capture`/`diff`: the snapshot (or comparison) was written/printed; this is unaffected by the advisory app report, which only ever warns (see "The app report"). |
+| 1 | `EXIT_RESOURCE_FAILED` | `provision`/`plan`: at least one resource reported `failed`. `capture`: the snapshot was taken but couldn't be written to `--out-dir`. |
+| 2 | `EXIT_UNREACHABLE` | The device didn't answer (`adb connect` failed), or, for `capture`, stopped answering partway through the capture — check it's powered on and reachable at `host:port`. |
 | 3 | `EXIT_UNAUTHORIZED` | The device answered but hasn't authorized this key — accept the on-screen dialog (see One-time ADB authorization). |
-| 4 | `EXIT_MANIFEST` | The manifest couldn't be read or parsed, or (for `android-update`) an app identifier couldn't be resolved. |
+| 4 | `EXIT_MANIFEST` | The manifest couldn't be read or parsed, or (for `android-update`) an app identifier couldn't be resolved. `capture --diff`/`diff`: a snapshot file was unreadable or from another schema. |
