@@ -20,6 +20,9 @@
 #     NFS dependency follows the drive.
 #   - Music Assistant: its setup reaches Music Assistant and Home Assistant at
 #     the ports and subdomains of their descriptions.
+#   - Immich: the originals default to drive a's photos, a profile moves them
+#     and the NFS dependency follows; PostgreSQL, Redis and its own API are
+#     reached at the ports of their descriptions.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -209,6 +212,22 @@ let
       };
     }
   ];
+
+  # ── Immich ───────────────────────────────────────────────────────────────
+  immichMoved = serverWith [
+    {
+      lanbat.services.immich = {
+        port = lib.mkForce 12283;
+        settings = {
+          drive = "b";
+          uploadPath = "media/photos";
+        };
+      };
+      services.redis.servers.shared.port = lib.mkForce 16379;
+    }
+  ];
+  immichUpload =
+    config: lib.head config.virtualisation.oci-containers.containers.immich-server.volumes;
 
   expect = name: ok: if ok then null else name;
 
@@ -446,6 +465,24 @@ let
         ''export HA_INTERNAL_URL="http://127.0.0.1:18123"''
         ''export HA_PUBLIC_URL="https://hass.home.example.com"''
       ]
+    ))
+
+    (expect "immich: the defaults keep today's upload directory and ports" (
+      immichUpload base == "/srv/storage/a/photos:/usr/src/app/upload"
+      && base.lanbat.services.immich.nfs.drives == [ "a" ]
+      && lib.elem "d /srv/storage/a/photos 0750 immich immich -" base.systemd.tmpfiles.rules
+      && (envOf base "immich-server").DB_PORT == "5432"
+      && (envOf base "immich-server").REDIS_PORT == "6379"
+      && lib.hasInfix ''IMMICH_URL="http://127.0.0.1:2283"'' base.systemd.services.immich-bootstrap.script
+      && lib.hasInfix ''"https://photos.home.example.com"'' base.systemd.services.podman-immich-server.preStart
+    ))
+
+    (expect "immich: a profile moves the uploads, and the ports follow the services" (
+      immichUpload immichMoved == "/srv/storage/b/media/photos:/usr/src/app/upload"
+      && immichMoved.lanbat.services.immich.nfs.drives == [ "b" ]
+      && (envOf immichMoved "immich-server").REDIS_PORT == "16379"
+      && lib.hasInfix ''IMMICH_URL="http://127.0.0.1:12283"'' immichMoved.systemd.services.immich-bootstrap.script
+      && failedAssertions immichMoved == [ ]
     ))
 
     (expect "redis: the consumers keep today's indexes" (
