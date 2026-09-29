@@ -16,6 +16,7 @@ BASE_STATE = {
         "ro.product.model": "SEI804HM",
     },
     "packages": {},
+    "installers": {},
     "settings": {"global": {}, "secure": {}, "system": {}},
     "files": [],
     "device_owner": None,

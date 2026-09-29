@@ -9,7 +9,7 @@ import argparse
 import subprocess
 import sys
 
-from .adb import Adb, AdbError, DeviceOffline, DeviceUnauthorized
+from .adb import Adb, AdbError, DeviceInfo, DeviceOffline, DeviceUnauthorized
 from .manifest import ManifestError, load
 from .outcome import FAILED, Outcome
 from .resources import apks, cacerts, device_owner, home, obtainium, settings
@@ -45,6 +45,13 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--lockfile", required=True)
     u.add_argument("--fdroid", action="append", default=[], metavar="PACKAGE_ID")
     u.add_argument("--github", action="append", default=[], metavar="REPO=GLOB")
+
+    c = sub.add_parser("capture", help="snapshot the device's apps, settings and home screen")
+    c.add_argument("--manifest", required=True)
+    c.add_argument("--out-dir", required=True)
+    c.add_argument("--lockfile", default=None, help="apks.lock.json for the app report")
+    c.add_argument("--no-fdroid", action="store_true", help="don't look apps up on F-Droid")
+    c.add_argument("--diff", metavar="OLD", help="also compare with an earlier snapshot")
     return parser
 
 
@@ -56,23 +63,11 @@ def report(outcomes: list[Outcome]) -> None:
         print(line)
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    if args.command == "update":
-        return _update(args)
-
-    apply = args.command == "provision"
-    force = getattr(args, "force", False)
-
-    try:
-        manifest = load(args.manifest)
-    except ManifestError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_MANIFEST
-
+def _connect(manifest) -> tuple[Adb, DeviceInfo] | int:
+    """Connect, or return the exit code that explains why not."""
     adb = Adb(manifest.host, manifest.port)
     try:
-        info = adb.connect()
+        return adb, adb.connect()
     except DeviceUnauthorized as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_UNAUTHORIZED
@@ -87,6 +82,28 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return EXIT_UNREACHABLE
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    if args.command == "update":
+        return _update(args)
+    if args.command == "capture":
+        return _capture(args)
+
+    apply = args.command == "provision"
+    force = getattr(args, "force", False)
+
+    try:
+        manifest = load(args.manifest)
+    except ManifestError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_MANIFEST
+
+    connected = _connect(manifest)
+    if isinstance(connected, int):
+        return connected
+    adb, info = connected
 
     verb = "provisioning" if apply else "planning"
     print(f"{verb} {manifest.device} ({manifest.host}:{manifest.port}) "
@@ -128,6 +145,24 @@ def _update(args) -> int:
 
     updater.write_lockfile(args.lockfile, entries)
     print(f"wrote {len(entries)} entries to {args.lockfile}")
+    return EXIT_OK
+
+
+def _capture(args) -> int:
+    from . import snapshot
+
+    try:
+        manifest = load(args.manifest)
+    except ManifestError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_MANIFEST
+    connected = _connect(manifest)
+    if isinstance(connected, int):
+        return connected
+    adb, info = connected
+    snap = snapshot.take(adb, info, device=manifest.device)
+    path = snapshot.save(snap, args.out_dir)
+    print(f"snapshot of {manifest.device} written to {path}")
     return EXIT_OK
 
 

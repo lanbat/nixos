@@ -1,0 +1,81 @@
+import json
+import stat
+
+import pytest
+
+from android_provision import snapshot
+from android_provision.adb import Adb
+from android_provision.cli import main
+
+
+def take(device):
+    adb = Adb("192.0.2.50", 5555)
+    return snapshot.take(adb, adb.connect(), device="bedroom")
+
+
+def test_records_apps_with_version_and_installer(device):
+    device.state["packages"] = {"com.nendo.argosy": 218, "com.netflix.ninja": 5}
+    device.state["installers"] = {"com.netflix.ninja": "com.android.vending"}
+    device.commit()
+    snap = take(device)
+    assert snap["packages"]["com.nendo.argosy"] == {"versionCode": 218, "installer": None}
+    assert snap["packages"]["com.netflix.ninja"]["installer"] == "com.android.vending"
+
+
+def test_records_settings_home_and_device_facts(device):
+    device.state["settings"]["global"]["screen_off_timeout"] = "600000"
+    device.commit()
+    snap = take(device)
+    assert snap["settings"]["global"] == {"screen_off_timeout": "600000"}
+    assert snap["home"] == "com.google.android.tvlauncher/.MainActivity"
+    assert snap["model"] == "SEI804HM" and snap["sdk"] == 34
+    assert snap["schema"] == snapshot.SCHEMA
+
+
+def test_value_with_equals_and_continuation_lines():
+    text = "a=1\nb=x=y\nc=first\nsecond\nd=\n"
+    assert snapshot.parse_settings(text) == {
+        "a": "1", "b": "x=y", "c": "first\nsecond", "d": "",
+    }
+
+
+def test_capture_changes_nothing(device):
+    before = json.loads(device.path.read_text())
+    take(device)
+    assert device.reload() == before
+
+
+def test_save_is_private_and_load_round_trips(device, tmp_path):
+    snap = take(device)
+    path = snapshot.save(snap, str(tmp_path / "snaps"))
+    assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    assert snapshot.load(str(path)) == snap
+
+
+def test_load_rejects_other_schema(tmp_path):
+    p = tmp_path / "s.json"
+    p.write_text(json.dumps({"schema": 99}))
+    with pytest.raises(snapshot.SnapshotError):
+        snapshot.load(str(p))
+
+
+def test_capture_cli_writes_a_snapshot(device, tmp_path):
+    manifest = tmp_path / "m.json"
+    manifest.write_text(json.dumps({
+        "device": "bedroom", "host": "192.0.2.50", "port": 5555, "abi": "arm64-v8a",
+    }))
+    out = tmp_path / "snaps"
+    assert main(["capture", "--manifest", str(manifest), "--out-dir", str(out),
+                 "--no-fdroid"]) == 0
+    assert len(list(out.glob("*.json"))) == 1
+
+
+def test_capture_cli_unauthorized_exits_3(device, tmp_path):
+    device.state["connect"] = "unauthorized"
+    device.commit()
+    manifest = tmp_path / "m.json"
+    manifest.write_text(json.dumps({
+        "device": "bedroom", "host": "192.0.2.50", "port": 5555, "abi": "arm64-v8a",
+    }))
+    assert main(["capture", "--manifest", str(manifest), "--out-dir", str(tmp_path),
+                 "--no-fdroid"]) == 3

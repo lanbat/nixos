@@ -72,8 +72,14 @@ def shell(state, args):
     if args[0] == "settings":
         return settings(state, args[1:])
     if args[0] == "pm" and args[1] == "list" and args[2] == "packages":
+        flags = args[3:]
         for pkg in sorted(state["packages"]):
-            print(f"package:{pkg}")
+            line = f"package:{pkg}"
+            if "--show-versioncode" in flags:
+                line += f" versionCode:{state['packages'][pkg]}"
+            if "-i" in flags:
+                line += f"  installer={state.get('installers', {}).get(pkg, 'null')}"
+            print(line)
         return 0
     if args[0] == "dumpsys" and args[1] == "package":
         code = state["packages"].get(args[2])
@@ -146,8 +152,13 @@ def shell(state, args):
 
 
 def settings(state, args):
-    verb, ns, key = args[0], args[1], args[2]
+    verb, ns = args[0], args[1]
     table = state.setdefault("settings", {}).setdefault(ns, {})
+    if verb == "list":
+        for key in sorted(table):
+            print(f"{key}={table[key]}")
+        return 0
+    key = args[2]
     if verb == "get":
         print(table.get(key, "null"))
         return 0
