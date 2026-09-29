@@ -79,3 +79,20 @@ def test_capture_cli_unauthorized_exits_3(device, tmp_path):
     }))
     assert main(["capture", "--manifest", str(manifest), "--out-dir", str(tmp_path),
                  "--no-fdroid"]) == 3
+
+
+def test_capture_cli_device_drops_mid_capture_exits_2_without_traceback(device, tmp_path, capsys):
+    # adb.connect() succeeds, but the box stops answering (Wi-Fi drop, reboot)
+    # before the capture finishes. This must exit cleanly, not raise -- the
+    # unit runs unattended.
+    device.state["drops_after_connect"] = True
+    device.commit()
+    manifest = tmp_path / "m.json"
+    manifest.write_text(json.dumps({
+        "device": "bedroom", "host": "192.0.2.50", "port": 5555, "abi": "arm64-v8a",
+    }))
+    code = main(["capture", "--manifest", str(manifest), "--out-dir", str(tmp_path),
+                 "--no-fdroid"])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "Traceback" not in err

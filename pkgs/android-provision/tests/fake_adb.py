@@ -72,6 +72,11 @@ def shell(state, args):
     if args[0] == "settings":
         return settings(state, args[1:])
     if args[0] == "pm" and args[1] == "list" and args[2] == "packages":
+        if state.get("drops_after_connect"):
+            # A box that drops Wi-Fi (or otherwise stops answering) partway
+            # through a run that already passed adb.connect().
+            print("error: closed", file=sys.stderr)
+            return 1
         flags = args[3:]
         for pkg in sorted(state["packages"]):
             line = f"package:{pkg}"

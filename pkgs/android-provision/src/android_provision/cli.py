@@ -160,8 +160,25 @@ def _capture(args) -> int:
     if isinstance(connected, int):
         return connected
     adb, info = connected
-    snap = snapshot.take(adb, info, device=manifest.device)
-    path = snapshot.save(snap, args.out_dir)
+
+    try:
+        snap = snapshot.take(adb, info, device=manifest.device)
+    except (AdbError, subprocess.TimeoutExpired) as exc:
+        # The box answered `adb connect` but stopped responding partway
+        # through the capture (Wi-Fi drop, reboot, ...). This unit runs
+        # unattended, so it must exit cleanly rather than raise.
+        print(
+            f"error: {manifest.host}:{manifest.port} did not respond as expected: {exc}",
+            file=sys.stderr,
+        )
+        return EXIT_UNREACHABLE
+
+    try:
+        path = snapshot.save(snap, args.out_dir)
+    except OSError as exc:
+        print(f"error: cannot write snapshot: {exc}", file=sys.stderr)
+        return EXIT_RESOURCE_FAILED
+
     print(f"snapshot of {manifest.device} written to {path}")
     return EXIT_OK
 
