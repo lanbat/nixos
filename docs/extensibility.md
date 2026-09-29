@@ -88,6 +88,34 @@ sources reference credentials as `{FRIGATE_RTSP_USER}` and `{FRIGATE_RTSP_PASSWO
 which Frigate substitutes from `secrets/frigate-rtsp-env.age`, so no credential is
 ever written into the profile.
 
+Other services with a schema keep a default that reproduces the repository's own
+layout, so a profile sets only what differs:
+
+| Service | Settings | Default |
+|---|---|---|
+| Samba | workgroup, server and NetBIOS names, `homes` (the per-user `[homes]` share), `shares.<name>` (drive, path, access, masks, a directory to create, raw keys) and `extraGlobal` | the media, private and shared shares on drives `a` and `b` |
+| Wyoming | `wakeWord.threshold`, `speechToText.{model,language}`, `textToSpeech.voice`, and the server satellite's `satellite.{name,speaker,mixer,microphoneUsbId}` | British English (`en`, `en_GB-alan-medium`) and the onboard Intel codec (ALSA card `PCH`) |
+| Home Assistant | `zigbee2mqttBridge`: the bridge-offline notification and the Overview card | on when Zigbee2MQTT runs on the host |
+| Telegraf | `pingTargets`: the hosts pinged for reachability | the storage Pi, the default gateway and `1.1.1.1` |
+| RomM | `drive`, `libraryPath` and `browserArcadePath`: where the ROM library and the browser's zip copies of the arcade sets live on Pi storage | drive `b`, `media/roms` and `media/roms-browser/mame` |
+| Immich | `drive` and `uploadPath`: where the originals and uploads live on Pi storage | drive `a`, `photos` |
+| Nextcloud | `storage.{drive,path}`: the directory created for the External Storage app's bulk user data | drive `b`, `nextcloud` |
+
+A default share is defined field by field at `lib.mkDefault`, so a profile changes
+one field of it, drops it with `enable = false`, or adds its own beside it:
+
+```nix
+# deployments/<profile>/samba.nix, listed in hosts.server.modules
+{
+  lanbat.services.samba.settings.shares = {
+    private.enable = false;
+    scans = { drive = "a"; path = "scans"; readOnly = false; validUsers = [ "@media" ]; };
+  };
+}
+```
+
+Samba's smbd binds to the NFS mounts of exactly the drives its enabled shares use.
+
 ## Roles
 
 Roles bundle infrastructure modules for a host type. They are not optional — every host declares `role = "server"` (or `storage-pi`, `voice-pi`, or a role one of its plugins adds).

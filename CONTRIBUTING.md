@@ -220,6 +220,14 @@ This creates a database and owner role named `<name>`. A NixOS-native service ru
 the system user `<name>` logs in over the socket without a password; take the socket, port
 and the unit to order after from `config.lanbat.postgresql.instances.<instance>`.
 
+A service using the shared Redis (`services/redis.nix`) claims a database index of its
+own and reads it back rather than repeating the number; evaluation rejects two services
+claiming the same index:
+```nix
+lanbat.redis.databases.<name>.index = 3;   # 0 Authentik, 1 Immich, 2 RomM
+# REDIS_DB = toString config.lanbat.redis.databases.<name>.index;
+```
+
 ### Rootless containers
 Give each container service its own account:
 ```nix

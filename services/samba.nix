@@ -5,8 +5,23 @@
 # Architecture
 # ------------
 # - Samba lives on the server only.
-# - Shares are backed by NFS-mounted Pi storage (/srv/storage/b).
+# - Shares are backed by NFS-mounted Pi storage (/srv/storage/<drive>).
 # - Users authenticate via Authentik LDAP outpost.
+#
+# Shares
+# ------
+# The share layout is lanbat.services.samba.settings (options below): the
+# workgroup and names, [homes] on the per-user storage, and shares.<name>,
+# each on one Pi drive. The module defines a default layout matching the
+# storage layout the other services use; a profile changes it from a module in
+# the host's modules (docs/extensibility.md#service-settings):
+#
+#   lanbat.services.samba.settings.shares = {
+#     private.enable = false;
+#     scans = { drive = "a"; path = "scans"; readOnly = false; validUsers = [ "@media" ]; };
+#   };
+#
+# smbd binds to the NFS mounts of exactly the drives the enabled shares use.
 #
 # Auth approach
 # -------------
@@ -32,7 +47,7 @@
 #   - sssd + Authentik LDAP (good for POSIX, not SMB passwords)
 #
 # NFS dependency: strong.
-#   Shares are backed by /srv/storage/b.  Stop Samba when Pi is gone.
+#   Shares are backed by the Pi's drives.  Stop Samba when Pi is gone.
 {
   config,
   pkgs,
@@ -40,7 +55,283 @@
   ...
 }:
 
+let
+  inherit (lib) mkOption types;
+
+  cfg = config.lanbat.services.samba.settings;
+  userStorage = config.lanbat.userStorage;
+
+  # Where the server mounts a Pi storage drive (modules/wiring/nfs.nix).
+  mountPoint = drive: "/srv/storage/${drive}";
+
+  yesNo = b: if b then "yes" else "no";
+
+  shareOptions = {
+    options = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Whether to serve this share. Set false to drop one of the default shares.";
+      };
+      comment = mkOption {
+        type = types.str;
+        default = "";
+        description = "Description clients show for the share.";
+      };
+      drive = mkOption {
+        type = types.strMatching "[a-z0-9]+";
+        example = "b";
+        description = ''
+          Pi storage drive the share lives on, by its key in the storage host's
+          storage.drives. Samba's smbd binds to that drive's NFS mount.
+        '';
+      };
+      path = mkOption {
+        type = types.strMatching "[^/].*";
+        example = "media";
+        description = "Directory of the share, relative to the drive's mount (/srv/storage/<drive>).";
+      };
+      browseable = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Whether the share appears in share listings and network discovery.";
+      };
+      readOnly = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Whether clients may only read.";
+      };
+      guestOk = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Whether guests (no password) may connect.";
+      };
+      validUsers = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "@media" ];
+        description = "Users, or @groups, allowed to connect (valid users). Empty allows every user.";
+      };
+      vetoFiles = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "adult" ];
+        description = "Names hidden from and refused to clients (veto files).";
+      };
+      createMask = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "0664";
+        description = "Permission bits new files may have (create mask).";
+      };
+      directoryMask = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "0775";
+        description = "Permission bits new directories may have (directory mask).";
+      };
+      forceGroup = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Group every file created in the share belongs to (force group).";
+      };
+      createDirectory = mkOption {
+        type = types.nullOr (
+          types.submodule {
+            options = {
+              user = mkOption {
+                type = types.str;
+                default = "root";
+                description = "Owner of the directory.";
+              };
+              group = mkOption {
+                type = types.str;
+                default = "root";
+                description = "Group of the directory.";
+              };
+              mode = mkOption {
+                type = types.strMatching "[0-7]{4}";
+                default = "0755";
+                description = "Mode of the directory.";
+              };
+            };
+          }
+        );
+        default = null;
+        description = ''
+          Create the share's directory with this owner and mode (systemd-tmpfiles)
+          when nothing else does. Null leaves the directory to whatever
+          populates it.
+        '';
+      };
+      extraConfig = mkOption {
+        type = types.attrsOf (
+          types.oneOf [
+            types.bool
+            types.int
+            types.str
+          ]
+        );
+        default = { };
+        example = {
+          "hide dot files" = "yes";
+        };
+        description = "Raw smb.conf keys for this share, merged last.";
+      };
+    };
+  };
+
+  sambaSettings = {
+    options = {
+      workgroup = mkOption {
+        type = types.str;
+        default = "WORKGROUP";
+        description = "Windows workgroup the server joins.";
+      };
+      serverString = mkOption {
+        type = types.str;
+        default = "Homelab Server";
+        description = "Server description clients show (server string).";
+      };
+      netbiosName = mkOption {
+        type = types.str;
+        default = "server";
+        description = "NetBIOS name the server announces.";
+      };
+      homes = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Serve each user's files/ directory under the per-user storage
+          (lanbat.userStorage) as the [homes] share.
+        '';
+      };
+      shares = mkOption {
+        type = types.attrsOf (types.submodule shareOptions);
+        default = { };
+        description = ''
+          The shares, by share name. The module defines a default layout for
+          the repository's storage layout (media on both drives, a private
+          share, a shared space); a profile adds shares, changes a field of a
+          default one, or drops it with enable = false.
+        '';
+      };
+      extraGlobal = mkOption {
+        type = types.attrsOf (
+          types.oneOf [
+            types.bool
+            types.int
+            types.str
+          ]
+        );
+        default = { };
+        description = "Raw smb.conf keys for [global], merged last.";
+      };
+    };
+  };
+
+  # The default share layout: media split across both drives
+  # (modules/pi/storage.nix), which qBittorrent saves into, and the private
+  # media kept apart from it.
+  defaultShares = {
+    # ---- Shared media shares (read-only for all users) ----
+    media = {
+      comment = "Media: movies, TV, music videos";
+      drive = "a";
+      path = "media";
+      validUsers = [ "@media" ];
+    };
+
+    media-b = {
+      comment = "Media: music, documentaries, books, ROMs";
+      drive = "b";
+      path = "media";
+      validUsers = [ "@media" ];
+      # Adult video is only in the private share.
+      vetoFiles = [ "adult" ];
+    };
+
+    # ---- Private media (restricted to "private" group) ----
+    # Not browseable — does not appear in network discovery.
+    # Only users explicitly added to the "private" group can access it.
+    # Add users: usermod -aG private <username> && smbpasswd -a <username>
+    private = {
+      comment = "Private";
+      drive = "b";
+      path = "media/adult";
+      browseable = false; # hidden from share listings
+      validUsers = [ "@private" ];
+    };
+
+    # ---- Shared space ----
+    shared = {
+      comment = "Shared";
+      drive = "b";
+      path = "shared";
+      readOnly = false;
+      validUsers = [ "@media" ];
+      createMask = "0664";
+      directoryMask = "0775";
+      forceGroup = "media";
+      createDirectory = {
+        group = "media";
+        mode = "0775";
+      };
+    };
+  };
+
+  shares = lib.filterAttrs (_: share: share.enable) cfg.shares;
+
+  sharePath = share: "${mountPoint share.drive}/${share.path}";
+
+  renderShare =
+    share:
+    {
+      inherit (share) comment;
+      path = sharePath share;
+      browseable = yesNo share.browseable;
+      "read only" = yesNo share.readOnly;
+      "guest ok" = yesNo share.guestOk;
+    }
+    // lib.optionalAttrs (share.validUsers != [ ]) {
+      "valid users" = lib.concatStringsSep " " share.validUsers;
+    }
+    // lib.optionalAttrs (share.vetoFiles != [ ]) {
+      "veto files" = "/" + lib.concatMapStrings (name: "${name}/") share.vetoFiles;
+    }
+    // lib.optionalAttrs (share.createMask != null) { "create mask" = share.createMask; }
+    // lib.optionalAttrs (share.directoryMask != null) { "directory mask" = share.directoryMask; }
+    // lib.optionalAttrs (share.forceGroup != null) { "force group" = share.forceGroup; }
+    // share.extraConfig;
+
+  # The drives smbd needs: those of the shares, and the per-user storage's for
+  # [homes].
+  drives = lib.sort lib.lessThan (
+    lib.unique (
+      lib.mapAttrsToList (_: share: share.drive) shares ++ lib.optional cfg.homes userStorage.drive
+    )
+  );
+in
 {
+  # The schema is merged into lanbat.services.samba.settings; checks.nix
+  # rejects any key it does not declare.
+  lanbat.settingsSchema.samba = sambaSettings;
+
+  # Each default share is defined at normal priority with every field at
+  # mkDefault, so a profile's definitions merge with it field by field.
+  lanbat.services.samba.settings.shares =
+    let
+      defaults = v: if lib.isAttrs v then lib.mapAttrs (_: defaults) v else lib.mkDefault v;
+    in
+    defaults defaultShares;
+
+  assertions = [
+    {
+      assertion = shares != { } || cfg.homes;
+      message = "lanbat.services.samba: no share is enabled. Enable settings.homes or a share, or drop Samba from the host.";
+    }
+  ];
+
   lanbat.services.samba = {
     extraPorts = [
       139
@@ -59,10 +350,7 @@
       mode = "0755";
     });
     nfs = {
-      drives = [
-        "a"
-        "b"
-      ];
+      inherit drives;
       units = [ "samba-smbd" ];
     };
   };
@@ -73,9 +361,9 @@
 
     settings = {
       global = {
-        workgroup = "WORKGROUP";
-        "server string" = "Homelab Server";
-        "netbios name" = "server";
+        inherit (cfg) workgroup;
+        "server string" = cfg.serverString;
+        "netbios name" = cfg.netbiosName;
         security = "user";
         "map to guest" = "bad user";
         "log level" = "1";
@@ -101,8 +389,10 @@
         # "passdb backend" = "ldapsam:ldap://127.0.0.1:3389";
         # "ldap admin dn"  = "cn=admin,dc=s,dc=10ctr,dc=vg,dc=cd";
         # "ldap ssl"       = "no";
-      };
-
+      }
+      // cfg.extraGlobal;
+    }
+    // lib.optionalAttrs cfg.homes {
       # ---- User home share ----
       homes = {
         comment = "Home Directories";
@@ -111,58 +401,10 @@
         "create mask" = "0700";
         "directory mask" = "0700";
         "valid users" = "%S";
-        path = "${config.lanbat.userStorage.mountOnServer}/%S/files";
+        path = "${userStorage.mountOnServer}/%S/files";
       };
-
-      # ---- Shared media shares (read-only for all users) ----
-      # One per drive: media is split across both (modules/pi/storage.nix).
-      # qBittorrent saves into these folders.
-      media = {
-        comment = "Media: movies, TV, music videos";
-        path = "/srv/storage/a/media";
-        browseable = "yes";
-        "read only" = "yes";
-        "guest ok" = "no";
-        "valid users" = "@media";
-      };
-
-      media-b = {
-        comment = "Media: music, documentaries, books, ROMs";
-        path = "/srv/storage/b/media";
-        browseable = "yes";
-        "read only" = "yes";
-        "guest ok" = "no";
-        "valid users" = "@media";
-        # Adult video is only in the private share.
-        "veto files" = "/adult/";
-      };
-
-      # ---- Private media (restricted to "private" group) ----
-      # Not browseable — does not appear in network discovery.
-      # Only users explicitly added to the "private" group can access it.
-      # Add users: usermod -aG private <username> && smbpasswd -a <username>
-      private = {
-        comment = "Private";
-        path = "/srv/storage/b/media/adult";
-        browseable = "no"; # hidden from share listings
-        "read only" = "yes";
-        "guest ok" = "no";
-        "valid users" = "@private";
-      };
-
-      # ---- Shared space ----
-      shared = {
-        comment = "Shared";
-        path = "/srv/storage/b/shared";
-        browseable = "yes";
-        "read only" = "no";
-        "guest ok" = "no";
-        "valid users" = "@media";
-        "create mask" = "0664";
-        "directory mask" = "0775";
-        "force group" = "media";
-      };
-    };
+    }
+    // lib.mapAttrs (_: renderShare) shares;
   };
 
   # Samba avahi announcement for macOS autodiscovery. avahi-daemon stays always-on
@@ -185,9 +427,13 @@
   };
 
   # User home dirs are created by human-users.nix (files/ subdir per user).
-  systemd.tmpfiles.rules = [
-    "d /srv/storage/b/shared 0775 root media -"
-  ];
+  systemd.tmpfiles.rules = lib.mapAttrsToList (
+    _: share:
+    let
+      d = share.createDirectory;
+    in
+    "d ${sharePath share} ${d.mode} ${d.user} ${d.group} -"
+  ) (lib.filterAttrs (_: share: share.createDirectory != null) shares);
 
   # Note: add Samba users manually after deploying:
   #   smbpasswd -a <username>

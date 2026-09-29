@@ -12,6 +12,9 @@
 # postgresql failed to evaluate with "option lanbat.postgresql does not exist",
 # which is a confusing way to say that nothing on this host serves databases.
 #
+# A consumer of the shared Redis likewise claims its database index in
+# lanbat.redis.databases.<name>, where clashing claims are rejected.
+#
 # Instance names are not fixed here. The built-in provider offers "workload"
 # and "always-on", one per storage tier, but a deployment may replace it with a
 # provider that offers different ones.
@@ -24,6 +27,13 @@
 let
   inherit (lib) mkOption types;
   cfg = config.lanbat.postgresql;
+
+  # Redis index -> the consumers claiming it, where more than one does.
+  redisClashes = lib.filterAttrs (_: names: lib.length names > 1) (
+    lib.zipAttrs (
+      lib.mapAttrsToList (name: db: { ${toString db.index} = name; }) config.lanbat.redis.databases
+    )
+  );
 in
 {
   options.lanbat.postgresql = {
@@ -94,7 +104,41 @@ in
       + " Add one to this host's services, or drop the service that wants it."
     ));
 
+  # ── Redis database indexes ─────────────────────────────────────────────────
+  # The shared Redis (services/redis.nix) keeps each consumer in a database of
+  # its own. The index is claimed here, where evaluation sees every claim, rather
+  # than agreed by convention in each consumer's environment.
+  options.lanbat.redis.databases = mkOption {
+    type = types.attrsOf (
+      types.submodule {
+        options.index = mkOption {
+          type = types.ints.between 0 15;
+          description = "Database number (SELECT index) in the shared Redis; Redis has 16 by default.";
+        };
+      }
+    );
+    default = { };
+    example = {
+      authentik.index = 0;
+    };
+    description = ''
+      Redis databases, by consumer. A consumer claims an index and reads it
+      back from here; evaluation rejects two consumers claiming the same one.
+    '';
+  };
+
   config.assertions = [
+    {
+      assertion = redisClashes == { };
+      message =
+        "lanbat.redis.databases: "
+        + lib.concatStringsSep "; " (
+          lib.mapAttrsToList (
+            index: names: "index ${index} is claimed by ${lib.concatStringsSep " and " names}"
+          ) redisClashes
+        )
+        + ". Give each consumer an index of its own.";
+    }
     {
       assertion = cfg.databases == { } || cfg.instances != { };
       message =

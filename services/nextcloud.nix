@@ -6,10 +6,14 @@
 # -------------
 # Server-local (fast, reliable, always-on):
 #   /var/lib/nextcloud/     — app code, config, skeleton
-#   PostgreSQL              — database (shared instance)
+#   PostgreSQL              — database (workload instance)
 #
-# Pi-backed via NFS (/srv/storage/b):
-#   /srv/storage/b/nextcloud/external/  — bulk user data (External Storage app)
+# Pi-backed via NFS (/srv/storage/<drive>):
+#   /srv/storage/<drive>/<path>/external/  — bulk user data (External Storage app)
+#   /srv/storage/<drive>/<path>/users/
+#   settings.storage.{drive,path} place them; by default b and nextcloud. The
+#   module only creates the directories: the External Storage mounts that use
+#   them are set up in Nextcloud's admin settings.
 #
 # If the Pi is down, Nextcloud still works — external storage shows errors
 # for those folders only; the app itself is healthy.
@@ -38,14 +42,59 @@
 
 let
   domain = config.lanbat.deployment.domain;
+
+  cfg = config.lanbat.services.nextcloud.settings;
+  # Where the server mounts the Pi storage drive (modules/wiring/nfs.nix).
+  bulkDir = "/srv/storage/${cfg.storage.drive}/${cfg.storage.path}";
+
+  nextcloudSettings = {
+    options.storage = {
+      drive = lib.mkOption {
+        type = lib.types.str;
+        default = "b";
+        description = ''
+          Pi storage drive holding the bulk user data that the External Storage
+          app serves, by its key in the storage host's storage.drives.
+          Nextcloud deliberately does not bind to its NFS mount (see the top of
+          services/nextcloud.nix).
+        '';
+      };
+      path = lib.mkOption {
+        type = lib.types.str;
+        default = "nextcloud";
+        description = ''
+          Directory of the bulk user data, relative to the drive's mount
+          (/srv/storage/<drive>). The module creates it with external/ and
+          users/ inside.
+        '';
+      };
+    };
+  };
+  db = config.lanbat.postgresql.instance "workload";
 in
 
 {
+  # The schema is merged into lanbat.services.nextcloud.settings; checks.nix
+  # rejects any key it does not declare.
+  lanbat.settingsSchema.nextcloud = nextcloudSettings;
+
   # The timer would start nextcloud-cron, and with it the workload layer, five
   # minutes after boot. Run it only while the layer is unlocked.
   systemd.timers.nextcloud-cron = {
     wantedBy = lib.mkForce [ "workload-online.target" ];
     partOf = [ "workload-online.target" ];
+  };
+
+  # The database and its owner role, both "nextcloud", on the workload instance
+  # (services/postgresql.nix), which puts them in the NixOS module's
+  # ensureDatabases and ensureUsers exactly as database.createLocally did. The
+  # nextcloud system user logs in over the socket without a password (peer).
+  lanbat.postgresql.databases.nextcloud.instance = "workload";
+
+  # createLocally ordered setup after the database; keep that.
+  systemd.services.nextcloud-setup = {
+    after = [ db.unit ];
+    requires = [ db.unit ];
   };
 
   lanbat.services.nextcloud = {
@@ -106,12 +155,13 @@ in
 
     https = true;
 
-    # Use local PostgreSQL via Unix socket (peer auth — no password needed).
-    # The module creates the database and user automatically.
-    database.createLocally = true;
-
     config = {
+      # PostgreSQL over the workload instance's Unix socket (peer auth, no
+      # password), in the database lanbat.postgresql.databases.nextcloud.
       dbtype = "pgsql";
+      dbhost = db.socket;
+      dbname = "nextcloud";
+      dbuser = "nextcloud";
       adminuser = "admin";
       adminpassFile = config.lanbat.secrets.nextcloud-admin-pass.path;
     };
@@ -204,8 +254,8 @@ in
 
   # External storage paths (created when NFS is mounted).
   systemd.tmpfiles.rules = [
-    "d /srv/storage/b/nextcloud          0750 nextcloud nextcloud -"
-    "d /srv/storage/b/nextcloud/external 0750 nextcloud nextcloud -"
-    "d /srv/storage/b/nextcloud/users    0750 nextcloud nextcloud -"
+    "d ${bulkDir}          0750 nextcloud nextcloud -"
+    "d ${bulkDir}/external 0750 nextcloud nextcloud -"
+    "d ${bulkDir}/users    0750 nextcloud nextcloud -"
   ];
 }

@@ -12,14 +12,19 @@
 #                               from RomM's settings)
 #   /var/lib/romm/resources/  — scraped artwork and metadata
 #   /var/lib/romm/assets/     — uploaded saves, states and screenshots
-#   /srv/storage/b/media/roms — the ROM library on the Pi, in ES-DE's layout
+#   /srv/storage/<drive>/<libraryPath>
+#                             — the ROM library on the Pi, in ES-DE's layout
 #                               (roms/<system>), shared with EmulationStation
 #                               on the TV. qBittorrent saves ROM torrents there.
-#   /srv/storage/b/media/roms-browser/mame
+#   /srv/storage/<drive>/<browserArcadePath>
 #                             — zip copies of the arcade sets, which RomM shows
 #                               in place of roms/mame (below)
 #   Workload PostgreSQL        — "romm" database
-#   Shared Redis               — database 2 (Authentik uses 0, Immich 1)
+#   Shared Redis               — database 2 (lanbat.redis.databases)
+#
+# Settings (lanbat.services.romm.settings): drive, libraryPath and
+# browserArcadePath place the library on Pi storage; the defaults are drive b,
+# media/roms and media/roms-browser/mame.
 #
 # Auth: Caddy forward auth (Authentik), then RomM's own accounts. The first
 # visit runs RomM's setup wizard, which creates the admin account.
@@ -47,8 +52,43 @@ let
   backendPort = 8100;
   workloadDb = (config.lanbat.postgresql.instance "workload");
 
-  library = "/srv/storage/b/media/roms";
-  browserArcade = "/srv/storage/b/media/roms-browser/mame";
+  cfg = config.lanbat.services.romm.settings;
+
+  # Where the server mounts a Pi storage drive (modules/wiring/nfs.nix).
+  onDrive = path: "/srv/storage/${cfg.drive}/${path}";
+  library = onDrive cfg.libraryPath;
+  browserArcade = onDrive cfg.browserArcadePath;
+
+  rommSettings = {
+    options = {
+      drive = lib.mkOption {
+        type = lib.types.str;
+        default = "b";
+        description = ''
+          Pi storage drive holding the ROM library and the browser's arcade
+          copies, by its key in the storage host's storage.drives. RomM and
+          romm-browser-romsets bind to that drive's NFS mount.
+        '';
+      };
+      libraryPath = lib.mkOption {
+        type = lib.types.str;
+        default = "media/roms";
+        description = ''
+          The ROM library, in ES-DE's layout (<system>/), relative to the
+          drive's mount (/srv/storage/<drive>).
+        '';
+      };
+      browserArcadePath = lib.mkOption {
+        type = lib.types.str;
+        default = "media/roms-browser/mame";
+        description = ''
+          Where romm-browser-romsets writes the zip copies of the arcade sets
+          that RomM shows in place of the library's mame folder, relative to
+          the drive's mount.
+        '';
+      };
+    };
+  };
   browserRomsets = pkgs.callPackage ../pkgs/romm-browser-romsets { };
 
   # ES-DE's folder names are RomM's platform names, except atari800. bios is
@@ -80,6 +120,10 @@ let
   '';
 in
 {
+  # The schema is merged into lanbat.services.romm.settings; checks.nix
+  # rejects any key it does not declare.
+  lanbat.settingsSchema.romm = rommSettings;
+
   lanbat.services.romm = {
     subdomain = "romm";
     inherit port;
@@ -92,7 +136,7 @@ in
       user = "romm";
     });
     nfs = {
-      drives = [ "b" ];
+      drives = [ cfg.drive ];
       units = [
         "podman-romm"
         "romm-browser-romsets"
@@ -129,6 +173,9 @@ in
     passwordFile = config.lanbat.secrets.romm-db-pass.path;
   };
 
+  # Task queues and cache in the shared Redis (services/redis.nix).
+  lanbat.redis.databases.romm.index = 2;
+
   virtualisation.oci-containers.containers."romm" = {
     image = "docker.io/rommapp/romm:5";
 
@@ -136,7 +183,7 @@ in
       ROMM_PORT = toString port;
       # The entrypoint also points nginx's upstream at it.
       DEV_PORT = toString backendPort;
-      ROMM_BASE_URL = "https://romm.${config.lanbat.deployment.domain}";
+      ROMM_BASE_URL = "https://${config.lanbat.services.romm.subdomain}.${config.lanbat.deployment.domain}";
       ROMM_SESSION_SECURE_COOKIE = "true";
       ROMM_DB_DRIVER = "postgresql";
       DB_HOST = "127.0.0.1";
@@ -145,8 +192,8 @@ in
       DB_USER = "romm";
       # The shared Redis: RomM's internal Valkey would listen on 6379 too.
       REDIS_HOST = "127.0.0.1";
-      REDIS_PORT = "6379";
-      REDIS_DB = "2";
+      REDIS_PORT = toString config.services.redis.servers.shared.port;
+      REDIS_DB = toString config.lanbat.redis.databases.romm.index;
       HASHEOUS_API_ENABLED = "true";
       LAUNCHBOX_API_ENABLED = "true";
       # Picks up the zips romm-browser-romsets adds or replaces.

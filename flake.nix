@@ -154,6 +154,19 @@
         overlay = import ./tests/overlay.nix { inherit lib pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
         secrets = import ./tests/secrets.nix { inherit lib pkgs; };
+        service-settings = import ./tests/service-settings.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         settings-guard = import ./tests/settings-guard.nix { inherit lib pkgs; };
         settings-schema = import ./tests/settings-schema.nix { inherit lib pkgs; };
         validate-deploy = import ./tests/validate-deploy.nix { inherit lib pkgs; };

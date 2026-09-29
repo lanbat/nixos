@@ -13,6 +13,15 @@
 # Zigbee devices are bridged via Zigbee2MQTT (see zigbee2mqtt.nix).
 # Z2M owns the USB dongle and publishes to Mosquitto; HA discovers devices
 # via MQTT auto-discovery.  Do NOT add ZHA here — it would conflict with Z2M.
+# settings.zigbee2mqttBridge (on by default when Zigbee2MQTT runs on this host)
+# adds a notification while the bridge is offline and its card on the Overview
+# dashboard.
+#
+# Other services
+# --------------
+# The loopback URLs of Home Assistant itself, Frigate, Music Assistant and the
+# MQTT port come from those services' descriptions (lanbat.services.<name>.port
+# and the Mosquitto endpoint), not literals.
 #
 # Auth with Authentik
 # -------------------
@@ -89,6 +98,86 @@ let
       config.lanbat.deployment.storageIp
     else
       config.lanbat.endpointHost "voice-satellite" storageKey;
+
+  # Home Assistant on the loopback: what Music Assistant and the local tools
+  # call, rather than the public URL behind forward auth.
+  internalUrl = "http://127.0.0.1:${toString config.lanbat.services.home-assistant.port}";
+
+  # The web port of another service on this host, from its description.
+  localUrl = name: path: "http://127.0.0.1:${toString config.lanbat.services.${name}.port}${path}";
+
+  cfg = config.lanbat.services.home-assistant.settings;
+
+  homeAssistantSettings = {
+    options.zigbee2mqttBridge = lib.mkOption {
+      type = lib.types.bool;
+      default = config.lanbat.hasService "zigbee2mqtt";
+      defaultText = lib.literalExpression ''config.lanbat.hasService "zigbee2mqtt"'';
+      description = ''
+        Watch the Zigbee2MQTT bridge: a persistent notification while it has
+        lost its MQTT connection, and a card on the Overview dashboard with its
+        state and permit-join switch. The default follows whether Zigbee2MQTT
+        runs on this host.
+      '';
+    };
+  };
+
+  zigbeeAutomations = [
+    {
+      alias = "Zigbee bridge offline";
+      id = "lanbat_zigbee_bridge_offline";
+      trigger = [
+        {
+          platform = "state";
+          entity_id = "binary_sensor.zigbee2mqtt_bridge_connection_state";
+          to = "off";
+        }
+      ];
+      action = [
+        {
+          service = "persistent_notification.create";
+          data = {
+            notification_id = "zigbee_bridge_offline";
+            title = "Zigbee bridge offline";
+            message = "Zigbee2MQTT lost its MQTT connection.";
+          };
+        }
+      ];
+    }
+    {
+      alias = "Zigbee bridge online";
+      id = "lanbat_zigbee_bridge_online";
+      trigger = [
+        {
+          platform = "state";
+          entity_id = "binary_sensor.zigbee2mqtt_bridge_connection_state";
+          to = "on";
+        }
+      ];
+      action = [
+        {
+          service = "persistent_notification.dismiss";
+          data.notification_id = "zigbee_bridge_offline";
+        }
+      ];
+    }
+  ];
+
+  zigbeeView = {
+    title = "Overview";
+    path = "home";
+    cards = [
+      {
+        type = "entities";
+        title = "Zigbee bridge";
+        entities = [
+          "switch.zigbee2mqtt_bridge_permit_join"
+          "binary_sensor.zigbee2mqtt_bridge_connection_state"
+          "binary_sensor.zigbee2mqtt_bridge_restart_required"
+        ];
+      }
+    ];
+  };
 in
 {
   options.lanbat.homeAssistant = {
@@ -103,6 +192,10 @@ in
   };
 
   config = {
+    # The schema is merged into lanbat.services.home-assistant.settings;
+    # checks.nix rejects any key it does not declare.
+    lanbat.settingsSchema.home-assistant = homeAssistantSettings;
+
     lanbat.services.home-assistant = {
       # Home Assistant connects to each voice satellite, which normally runs on
       # another host.
@@ -211,7 +304,7 @@ in
         set -a
         . ${config.lanbat.secrets.hass-bootstrap-env.path}
         set +a
-        export INTERNAL_URL="http://127.0.0.1:8123"
+        export INTERNAL_URL="${internalUrl}"
         export EXTERNAL_URL="https://ha.${domain}"
         export SSO_USERS="${lib.concatStringsSep " " config.lanbat.homeAssistant.ssoUsers}"
         exec home-assistant-bootstrap
@@ -246,12 +339,12 @@ in
       script = ''
         ${lib.optionalString (config.lanbat.hasService "mosquitto") ''
           export MQTT_BROKER="127.0.0.1"
-          export MQTT_PORT="1883"
+          export MQTT_PORT="${toString config.lanbat.services.mosquitto.endpoint.port}"
           export MQTT_USERNAME="homeassistant"
           export MQTT_PASSWORD="$(cat ${config.lanbat.secrets.mosquitto-ha-pass.path})"
         ''}
-        export FRIGATE_URL="http://127.0.0.1:5000/"
-        export MUSIC_ASSISTANT_URL="http://127.0.0.1:8095"
+        ${lib.optionalString (config.lanbat.hasService "frigate") ''export FRIGATE_URL="${localUrl "frigate" "/"}"''}
+        ${lib.optionalString (config.lanbat.hasService "music-assistant") ''export MUSIC_ASSISTANT_URL="${localUrl "music-assistant" ""}"''}
         export PI_HOST="${piHost}"
         ${lib.optionalString satellite.enable ''
           export LOCAL_SATELLITE_PORT="${lib.last (lib.splitString ":" satellite.uri)}"
@@ -354,7 +447,7 @@ in
           external_url = "https://ha.${domain}";
           # Music Assistant fetches tts_proxy URLs server-side; use loopback so
           # announcements are not blocked by ip_ban when MA calls 192.168.1.10.
-          internal_url = "http://127.0.0.1:8123";
+          internal_url = internalUrl;
         };
 
         # Voice replies in a room (modules/core/voice-satellite.nix). A satellite
@@ -439,66 +532,12 @@ in
           };
         };
 
-        automation = [
-          {
-            alias = "Zigbee bridge offline";
-            id = "lanbat_zigbee_bridge_offline";
-            trigger = [
-              {
-                platform = "state";
-                entity_id = "binary_sensor.zigbee2mqtt_bridge_connection_state";
-                to = "off";
-              }
-            ];
-            action = [
-              {
-                service = "persistent_notification.create";
-                data = {
-                  notification_id = "zigbee_bridge_offline";
-                  title = "Zigbee bridge offline";
-                  message = "Zigbee2MQTT lost its MQTT connection.";
-                };
-              }
-            ];
-          }
-          {
-            alias = "Zigbee bridge online";
-            id = "lanbat_zigbee_bridge_online";
-            trigger = [
-              {
-                platform = "state";
-                entity_id = "binary_sensor.zigbee2mqtt_bridge_connection_state";
-                to = "on";
-              }
-            ];
-            action = [
-              {
-                service = "persistent_notification.dismiss";
-                data.notification_id = "zigbee_bridge_offline";
-              }
-            ];
-          }
-        ];
+        automation = lib.optionals cfg.zigbee2mqttBridge zigbeeAutomations;
       };
 
       lovelaceConfig = {
         title = "Home";
-        views = [
-          {
-            title = "Overview";
-            path = "home";
-            cards = [
-              {
-                type = "entities";
-                title = "Zigbee bridge";
-                entities = [
-                  "switch.zigbee2mqtt_bridge_permit_join"
-                  "binary_sensor.zigbee2mqtt_bridge_connection_state"
-                  "binary_sensor.zigbee2mqtt_bridge_restart_required"
-                ];
-              }
-            ];
-          }
+        views = lib.optional cfg.zigbee2mqttBridge zigbeeView ++ [
           {
             # Everything else, from Home Assistant's built-in "original-states"
             # view strategy: it generates the cards from the entity and area

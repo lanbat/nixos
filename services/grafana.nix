@@ -11,6 +11,8 @@
 #   break-glass.  Auto-assign the Viewer role to all Authentik users;
 #   promote individuals to Editor/Admin in the Grafana UI as needed.
 # - InfluxDB datasource and Homelab dashboards are provisioned declaratively.
+#   The datasource reaches InfluxDB over localhost at the port its endpoint
+#   publishes (services/influxdb.nix says why not 127.0.0.1).
 #
 # Secrets (all in grafana-env.age, one KEY=value per line)
 # -------
@@ -138,8 +140,8 @@ in
       server = {
         http_addr = "127.0.0.1";
         http_port = config.lanbat.services.grafana.port;
-        domain = "grafana.${domain}";
-        root_url = "https://grafana.${domain}";
+        domain = "${config.lanbat.services.grafana.subdomain}.${domain}";
+        root_url = "https://${config.lanbat.services.grafana.subdomain}.${domain}";
       };
 
       dashboards.default_home_dashboard_uid = "homelab-overview";
@@ -204,7 +206,11 @@ in
             uid = "influxdb-homelab";
             type = "influxdb";
             access = "proxy";
-            url = "http://localhost:8086";
+            url =
+              let
+                inherit (config.lanbat.services.influxdb) endpoint;
+              in
+              "${endpoint.scheme}://localhost:${toString endpoint.port}";
             isDefault = true;
             editable = false;
 

@@ -55,7 +55,7 @@ let
   authentikEnv = {
     AUTHENTIK_REDIS__HOST = "127.0.0.1";
     AUTHENTIK_REDIS__PORT = "6379";
-    AUTHENTIK_REDIS__DB = "0";
+    AUTHENTIK_REDIS__DB = toString config.lanbat.redis.databases.authentik.index;
     AUTHENTIK_POSTGRESQL__HOST = "127.0.0.1";
     AUTHENTIK_POSTGRESQL__PORT = toString (config.lanbat.postgresql.instance "always-on").port;
     AUTHENTIK_POSTGRESQL__USER = "authentik";
@@ -140,6 +140,9 @@ in
     passwordFile = authentikEnvFile;
     passwordVariable = "AUTHENTIK_POSTGRESQL__PASSWORD";
   };
+
+  # Sessions and cache in the shared Redis (services/redis.nix).
+  lanbat.redis.databases.authentik.index = 0;
 
   # ---------------------------------------------------------------------------
   # Authentik server container
