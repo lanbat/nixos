@@ -52,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--lockfile", default=None, help="apks.lock.json for the app report")
     c.add_argument("--no-fdroid", action="store_true", help="don't look apps up on F-Droid")
     c.add_argument("--diff", metavar="OLD", help="also compare with an earlier snapshot")
+    c.add_argument("--ignore", action="append", default=[], metavar="NS/KEY")
 
     df = sub.add_parser("diff", help="compare two snapshots; prints a restore fragment")
     df.add_argument("old")
@@ -205,29 +206,35 @@ def _capture(args) -> int:
 
     from . import sources, update
 
+    # The snapshot is already saved above; nothing from here on -- a bad
+    # lockfile, an unreachable F-Droid index, or a malformed lockfile entry --
+    # may fail the unit. This block is advisory only.
     try:
-        lock = sources.load_lock(args.lockfile or sources.default_lockfile())
-    except (OSError, ValueError) as exc:
-        # The snapshot is already saved; a missing or unreadable lockfile
-        # (e.g. running from source without --lockfile) must not fail the
-        # capture -- just skip the app-source report.
-        print(f"warning: cannot read lockfile ({exc}); skipping app source report",
-              file=sys.stderr)
-    else:
-        index = None
-        if not args.no_fdroid:
-            try:
-                index = update.fetch_json(update.FDROID_INDEX)
-            except (OSError, ValueError) as exc:
-                print(f"warning: F-Droid index unavailable ({exc}); unlocked apps show as unknown",
-                      file=sys.stderr)
-        print(sources.fragment(sources.propose(snap["packages"], lock, index)), end="")
+        try:
+            lock = sources.load_lock(args.lockfile or sources.default_lockfile())
+        except (OSError, ValueError) as exc:
+            # A missing or unreadable lockfile (e.g. running from source
+            # without --lockfile) must not fail the capture -- just skip the
+            # app-source report.
+            print(f"warning: cannot read lockfile ({exc}); skipping app source report",
+                  file=sys.stderr)
+        else:
+            index = None
+            if not args.no_fdroid:
+                try:
+                    index = update.fetch_json(update.FDROID_INDEX)
+                except (OSError, ValueError) as exc:
+                    print(f"warning: F-Droid index unavailable ({exc}); unlocked apps show as unknown",
+                          file=sys.stderr)
+            print(sources.fragment(sources.propose(snap["packages"], lock, index)), end="")
+    except Exception as exc:
+        print(f"warning: app report skipped: {exc}", file=sys.stderr)
 
     if args.diff:
         old = _load_snapshot_or_report(snapshot, args.diff)
         if isinstance(old, int):
             return old
-        _print_diff(diff, old, snap)
+        _print_diff(diff, old, snap, frozenset(args.ignore))
 
     return EXIT_OK
 

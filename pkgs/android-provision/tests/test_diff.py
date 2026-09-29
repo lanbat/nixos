@@ -87,6 +87,25 @@ def test_capture_cli_diff_prints_restore_fragment(device, tmp_path, capsys):
     assert '"screen_off_timeout" = "600000";' in capsys.readouterr().out
 
 
+def test_capture_cli_diff_ignore_excludes_a_key(device, tmp_path, capsys):
+    device.state["settings"]["global"]["screen_off_timeout"] = "300000"
+    device.commit()
+    import json
+    from android_provision.cli import main
+    old = tmp_path / "old.json"
+    old.write_text(json.dumps(snap({"global": {"screen_off_timeout": "600000"}})))
+    manifest = tmp_path / "m.json"
+    manifest.write_text(json.dumps({
+        "device": "bedroom", "host": "192.0.2.50", "port": 5555, "abi": "arm64-v8a",
+    }))
+    out = tmp_path / "snaps"
+    code = main(["capture", "--manifest", str(manifest), "--out-dir", str(out),
+                 "--lockfile", LOCKFILE, "--no-fdroid", "--diff", str(old),
+                 "--ignore", "global/screen_off_timeout"])
+    assert code == 0
+    assert "screen_off_timeout" not in capsys.readouterr().out
+
+
 def test_capture_cli_diff_missing_old_snapshot_exits_manifest_but_keeps_new_snapshot(device, tmp_path):
     import json
     from android_provision.cli import EXIT_MANIFEST, main

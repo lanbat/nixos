@@ -91,6 +91,30 @@ def test_capture_cli_missing_lockfile_warns_but_still_succeeds(device, tmp_path,
     assert "Traceback" not in err
 
 
+def test_capture_cli_malformed_lockfile_entry_warns_but_still_succeeds(device, tmp_path, capsys):
+    # The snapshot is already saved by the time the app report runs; a
+    # lockfile entry missing a required field (packageId) must not fail the
+    # capture -- just skip the app-source report with a warning.
+    device.state["packages"] = {"com.nendo.argosy": 218}
+    device.commit()
+    manifest = tmp_path / "m.json"
+    manifest.write_text(json.dumps({
+        "device": "bedroom", "host": "192.0.2.50", "port": 5555, "abi": "arm64-v8a",
+    }))
+    lockfile = tmp_path / "broken.lock.json"
+    lockfile.write_text(json.dumps({
+        "rommapp/argosy-launcher": {"source": "github", "variants": {}},
+    }))
+    out = tmp_path / "snaps"
+    code = main(["capture", "--manifest", str(manifest), "--out-dir", str(out),
+                 "--lockfile", str(lockfile), "--no-fdroid"])
+    assert code == 0
+    assert len(list(out.glob("*.json"))) == 1
+    err = capsys.readouterr().err
+    assert "warning:" in err
+    assert "Traceback" not in err
+
+
 def test_capture_cli_unauthorized_exits_3(device, tmp_path):
     device.state["connect"] = "unauthorized"
     device.commit()
