@@ -47,8 +47,8 @@ Hosts are exposed as `<profile>-<host-key>`:
 | `cabin` | `server` | `cabin-server` | `cabin-server` |
 
 ```bash
-deploy path:.#homelab-server
-deploy path:.#cabin-pi-storage
+deploy --skip-checks path:.#homelab-server
+deploy --skip-checks path:.#cabin-pi-storage
 ```
 
 A single-profile setup that inlines `{ deployment, hosts }` directly in `deploy.nix` (without a `profiles` wrapper) uses the implicit profile name `default`, so host names stay `server` and `pi-storage`.
@@ -418,9 +418,9 @@ in
 Deploy each host independently:
 
 ```bash
-deploy path:.#homelab-server
-deploy path:.#homelab-pi-storage
-deploy path:.#homelab-pi-bedroom
+deploy --skip-checks path:.#homelab-server
+deploy --skip-checks path:.#homelab-pi-storage
+deploy --skip-checks path:.#homelab-pi-bedroom
 ```
 
 See [secrets/README.md](../secrets/README.md) for multi-Pi and multi-profile

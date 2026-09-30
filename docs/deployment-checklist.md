@@ -261,7 +261,7 @@ systemctl status caddy podman-authentik-server postgresql
 The root CA cert is pinned in the repo and available at boot (`/etc/caddy/ca-root.crt`);
 Caddy does not need time to generate it.
 
-From now on, deploy changes from your workstation with `deploy path:.#homelab-server`.
+From now on, deploy changes from your workstation with `deploy --skip-checks path:.#homelab-server`.
 
 ---
 
@@ -405,7 +405,7 @@ ssh root@<pi-ip> reboot
 
 After the reboot, log in as `admin` on the Pi's static IP; the configuration disables root login.
 
-From now on, deploy with `deploy path:.#homelab-pi-storage`.
+From now on, deploy with `deploy --skip-checks path:.#homelab-pi-storage`.
 
 ### 2g. First Pi boot
 
@@ -428,8 +428,8 @@ SSH host key, update `secrets/secrets.nix`, then:
 
 ```bash
 (cd secrets && agenix -r)
-deploy path:.#homelab-server
-deploy path:.#homelab-pi-storage
+deploy --skip-checks path:.#homelab-server
+deploy --skip-checks path:.#homelab-pi-storage
 ```
 
 ### 3b. Authentik initial setup
@@ -459,7 +459,7 @@ Assistant and Jellyfin (see manual steps below).
 Deploy to apply the new secrets:
 
 ```bash
-deploy path:.#homelab-server
+deploy --skip-checks path:.#homelab-server
 ```
 
 After the deploy, Authentik restarts and the blueprints run automatically.
@@ -579,6 +579,12 @@ rotation. If a browser still warns after install, see the same doc (TLS chain
 troubleshooting) — a server-side intermediate cleanup is only needed when the
 served chain does not verify against the pinned root.
 
+**Android TV boxes can't always take the CA.** From Android 11, a CA installs only from
+Settings, and Android TV's Settings may have no certificate screen at all; on the
+reference box it can't be installed. Apps with their own certificate import (Argosy)
+still work, and Jellyfin clients can use a per-device HTTP exception. Both are in
+[Android device provisioning](android-devices.md#apps-that-cant-trust-the-internal-ca-jellyfin-clients).
+
 ### 3f. Configure Frigate cameras
 
 Each profile keeps its camera layout in `deployments/<profile>/frigate.nix`, next to
@@ -621,7 +627,7 @@ rm /tmp/rclone.conf
 After setting the Authentik OIDC client secret in `grafana-env.age` (covered in step 3b):
 
 ```bash
-deploy path:.#homelab-server
+deploy --skip-checks path:.#homelab-server
 ```
 
 Visit `https://grafana.<domain>` — the InfluxDB datasource is provisioned
@@ -791,9 +797,19 @@ device, which you can get locally from
    journalctl -u home-assistant-post-setup | grep -i xiaomi
    ```
 
+### 3q. Android TV boxes (optional)
+
+Declare each box under `androidDevices` in the profile, enable
+`lanbatPlugins.android` on the server, then follow
+[Android device provisioning](android-devices.md): turn on USB debugging on the box
+(on Ethernet, Wireless debugging isn't needed), run
+`systemctl start android-provision-<box>-plan` once and accept the "Allow USB
+debugging?" dialog on the TV, check the plan, take a baseline
+`android-capture-<box>`, then run `android-provision-<box>`.
+
 ## Phase 4 — Ongoing
 
-- Deploy changes immediately: `deploy path:.#homelab-server` / `deploy path:.#homelab-pi-storage`.
+- Deploy changes immediately: `deploy --skip-checks path:.#homelab-server` / `deploy --skip-checks path:.#homelab-pi-storage`.
 - Update inputs: `nix flake update`, commit `flake.lock`, then deploy each host
   (`docs/operations.md` § Updating). Hosts never rebuild on their own: deploy-rs from
   the workstation is the only way a host changes. For unattended updates, schedule

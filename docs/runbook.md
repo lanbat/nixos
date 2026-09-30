@@ -1,7 +1,11 @@
 # Operational Runbook
 
-Quick reference for server and Raspberry Pi operations.
-See `docs/secure-layers.md` for the full design rationale.
+Procedures for the encrypted layers and for recovery: unlocking after a reboot, locking
+for maintenance, Tang and Clevis, LUKS headers, backups and restores. Day-to-day work
+(deploying, updating, health checks, per-service tasks) is in the
+[operations guide](operations.md); what happens when a host or the Pi goes away is in
+[failure modes](failure-modes.md). The design behind the layers is in
+[secure layers](secure-layers.md).
 
 ---
 
@@ -156,7 +160,7 @@ without them.
 
 1. Edit `services/nextcloud.nix`: bump `package = pkgs.nextcloudNN` by one major
    (currently `pkgs.nextcloud32`; next step is `pkgs.nextcloud33`).
-2. From the workstation: `deploy path:.#homelab-server`.
+2. From the workstation: `deploy --skip-checks path:.#homelab-server`.
 3. On the server, watch migration units:
    ```bash
    journalctl -u nextcloud-setup -u nextcloud-update-db -f

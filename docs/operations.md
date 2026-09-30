@@ -1,9 +1,13 @@
 # Operations Guide
 
+Day-to-day work on a running site: deploying, updating, checking health, and per-service
+tasks. For locking and unlocking the encrypted layers, restores and other procedures
+after a reboot or failure, see the [runbook](runbook.md).
+
 ## Tools
 
 `nix develop` in the repository opens a shell with `deploy` (deploy-rs), `agenix` and
-`nixos-anywhere`.
+`nixos-anywhere`. `deploy` only exists inside that shell.
 
 ## Deploying changes
 
@@ -11,12 +15,21 @@ Deploy from your workstation with a `path:` flake reference. `deploy.nix` and pr
 files under `deployments/` are gitignored and only a `path:` reference includes them.
 
 ```bash
-deploy path:.#homelab-server
-deploy path:.#homelab-pi-storage   # builds on the Pi itself
+nix develop                                        # once per terminal
+deploy --skip-checks path:.#homelab-server
+deploy --skip-checks path:.#homelab-pi-storage     # builds on the Pi itself
 
 # Build without deploying, to check for errors
 nix build path:.#nixosConfigurations.homelab-server.config.system.build.toplevel
 ```
+
+**Why `--skip-checks`:** before deploying, deploy-rs runs `nix flake check`, which
+*builds* every check, including the Pi's `aarch64-linux` ones. An `x86_64` workstation
+can't build those ("platform mismatch"), and the check needs 15–19 GB of memory in one
+process. CI runs every check on each pull request, one process per check and the
+`aarch64` ones on an arm runner, so skipping them locally loses nothing. To check a
+change before deploying, build the host as above, or one check with
+`nix build .#checks.x86_64-linux.<name>`.
 
 Host names are `<profile>-<host-key>`. A single-profile setup that inlines
 `{ deployment, hosts }` in `deploy.nix` without a `profiles` wrapper uses unprefixed
@@ -46,10 +59,10 @@ To update nixpkgs and the other inputs:
 
 ```bash
 nix flake update
-nix flake check --no-build path:.
+nix build path:.#nixosConfigurations.homelab-server.config.system.build.toplevel
 git commit -m "flake.lock: update" flake.lock
-deploy path:.#homelab-server
-deploy path:.#homelab-pi-storage
+deploy --skip-checks path:.#homelab-server
+deploy --skip-checks path:.#homelab-pi-storage
 ```
 
 **Server:** a deploy activates the new system but never reboots the machine; a new
@@ -71,8 +84,8 @@ NFS-dependent services on the server briefly pause and restart as usual.
 If you want updates without running `deploy` by hand, schedule the deploy itself
 rather than a rebuild on the host, so the scheduled run deploys exactly what you
 would have deployed. For example, a timer or cron job on the workstation that runs
-`nix flake update`, `nix flake check --no-build path:.` and then `deploy` for each
-host, or a CI job with SSH access to the hosts and a copy of your `deploy.nix`. The
+`nix flake update`, builds each host (`nix build path:.#nixosConfigurations.<host>.config.system.build.toplevel`)
+and then runs `deploy --skip-checks` for each host, or a CI job with SSH access to the hosts and a copy of your `deploy.nix`. The
 job needs the same checkout, including the gitignored `deploy.nix` and
 `deployments/<profile>/deploy.nix`, that you deploy from by hand. This repository
 does not ship such automation.
@@ -370,7 +383,7 @@ Authentik is pinned to a specific version in `services/authentik/default.nix`
 1. Check the [Authentik release notes](https://docs.goauthentik.io/docs/releases) —
    Authentik requires sequential upgrades (do not skip major versions).
 2. Update `authentikVersion`.
-3. Deploy: `deploy path:.#homelab-server`
+3. Deploy: `deploy --skip-checks path:.#homelab-server`
 
 ### Adding a user
 

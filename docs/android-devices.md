@@ -13,7 +13,7 @@ user build) and hold for any similar unrooted box.
 
 | Limit | Consequence |
 |---|---|
-| Since Android 7, apps ignore user-installed CAs unless they opt in | Installing the internal CA fixes the **browser**. It does **not** fix Kodi, Jellyfin or YouTube. |
+| Since Android 7, apps ignore user-installed CAs unless they opt in | Where the internal CA can be installed, that fixes the **browser**, not Kodi, Jellyfin or YouTube. Where it can't (next rows), see [Apps that can't trust the internal CA](#apps-that-cant-trust-the-internal-ca-jellyfin-clients). |
 | No `adb` command installs a CA silently on an unrooted user build | Below Android 11, one on-screen "Install this certificate?" confirmation per box, every time the CA changes. |
 | From Android 11 the CA install dialog can't be opened from `adb`; CA certificates install only from Settings | The provisioner copies the CA to `/sdcard/Download/` and launches nothing. The reference box (Android 14) has only Android TV's Settings, with **no certificate screen**, so its user trust store can't take the CA at all: only apps with their own certificate import (Argosy) can use it. |
 | The trust store (`/data/misc/user/0/cacerts-added/`) can't be read without root | Obtainium idempotency, and the CA's below Android 11, is **marker-backed** — a file the tool wrote to `/sdcard/.lanbat-provision/` last time, not proof the device still agrees. `provision --force` re-applies regardless of the marker. |
@@ -47,6 +47,12 @@ deployment.androidDevices = {
 
 `lanbatPlugins.android` configures nothing when `androidDevices` is empty, so it's safe
 to enable on every server even before the first box is declared.
+
+Then, per box and in this order: authorize ADB once (next section), run the `-plan` unit
+and read what it would change, take a baseline with `android-capture-<box>`
+([Snapshots](#snapshots-and-restoring-after-a-reset)), and run
+`android-provision-<box>`. Set `abi` to what the box reports: many TV boxes run 32-bit
+Android (see [RomM through Argosy](#romm-through-argosy)).
 
 ## One-time ADB authorization
 
@@ -300,11 +306,61 @@ trusted by Argosy". The import is trusted by Argosy alone.
 
 Pairing is the other step this module can't do for you, since Argosy keeps its server
 and session in its private data: create an API token in RomM's web UI, then enter its
-8-character pairing code in Argosy, with RomM's address. RomM's move
-to its own login plus Authentik OIDC (so a browser sign-in gates the web UI) is tracked
-separately and isn't part of what this branch changes — from the box's point of view,
-Argosy talks to RomM's API with its own paired session regardless of how a browser signs
-into RomM.
+8-character pairing code in Argosy, with RomM's address. Argosy then talks to RomM's API
+with that paired session; how a browser signs in to RomM (its own accounts or Authentik)
+doesn't affect it.
+
+A remote's spare button can open Argosy directly: install Key Mapper
+(`packages = [ "io.github.sds100.keymapper" ]`), switch its accessibility service on
+through `settings.secure.enabled_accessibility_services`
+(`io.github.sds100.keymapper/io.github.sds100.keymapper.system.accessibility.MyAccessibilityService`,
+with `accessibility_enabled = "1"`), then map the button once in Key Mapper's UI to
+"Launch app → Argosy". The setting is a single list for all accessibility services, so
+include any others the box already has (the plan run shows the current value before it
+changes anything).
+
+## Apps that can't trust the internal CA (Jellyfin clients)
+
+On a box like the reference one, where the internal CA can't be installed (see the limits
+at the top), every app without its own certificate import refuses every service Caddy
+serves. Wholphin, a Jellyfin client, fails with `SecureConnectionFailed … Unknown SSL
+error` (visible in `adb logcat`), and the box's browser can't open any service either.
+
+The workaround is to let that box reach Jellyfin's own plain-HTTP port, 8096, on the
+server. Jellyfin already listens on all interfaces; the firewall policy
+(`modules/wiring/policy.nix`) drops 8096 for everything but localhost, so the exception is
+an `ACCEPT` above that `DROP`. Add it to the server host's `modules` in the site's
+`deploy.nix`, reading the address from the box's `androidDevices` entry so it's written
+once:
+
+```nix
+hosts.server.modules = [
+  (
+    { config, lib, ... }:
+    let
+      spec = "INPUT -p tcp --dport 8096 -s ${config.lanbat.deployment.androidDevices.bedroom.host} -j ACCEPT";
+    in
+    {
+      # mkAfter: inserted after the policy's DROP, so it lands above it.
+      networking.firewall.extraCommands = lib.mkAfter "iptables -I ${spec}";
+      networking.firewall.extraStopCommands = lib.mkAfter "iptables -D ${spec} 2>/dev/null || true";
+    }
+  )
+];
+```
+
+Then add the server in the client by hand as `http://<server address>:8096` and sign in
+with a Jellyfin account. Only that box can use the port, and its Jellyfin traffic
+(including the sign-in) is unencrypted on the LAN; every other device keeps HTTPS through
+Caddy. Keep the box's address fixed in the router, since the rule trusts whichever device
+holds it.
+
+Discovery can't hand the box that address. Jellyfin answers discovery with the HTTPS URL
+the service sets (`JELLYFIN_PublishedServerUrl`), which disables its per-subnet overrides,
+and even without it an override for a single device is ignored: Jellyfin applies an
+override only when one of the server's own interfaces lies inside its subnet. A
+publicly trusted certificate removes the problem at its root — the box would then trust
+the HTTPS address discovery already advertises — and is tracked in #111.
 
 ## Option reference
 
