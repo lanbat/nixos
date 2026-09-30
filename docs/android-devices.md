@@ -51,12 +51,16 @@ to enable on every server even before the first box is declared.
 
 Before the server can reach a box, do this once per box:
 
-1. On the box, enable **ADB over TCP** (Settings → Device Preferences → Developer
-   options → Network debugging, wording varies by vendor skin) so `adbd` listens on
-   port 5555.
-2. Run the provisioning unit once: `systemctl start android-provision-bedroom`.
-3. The box shows an on-screen **"Allow USB debugging?"** dialog. Accept it with
-   **always allow**.
+1. On the box, enable developer options (Settings → About → press **Build** seven
+   times), then turn on **USB debugging** in them. What the server needs is `adbd`
+   listening on TCP port 5555; check from the server with
+   `nc -z <box> 5555`. The reference box, connected by Ethernet, listened there.
+   **Wireless debugging** (Android 11+, pairing codes) is Wi-Fi only and not needed.
+2. Run the plan unit once: `systemctl start android-provision-bedroom-plan`. It fails
+   with exit code 3 (`… has not authorized this key; accept the on-screen 'Allow USB
+   debugging?' dialog`), and the box shows that dialog.
+3. Accept it with **Always allow from this computer**, then run the plan unit again. It
+   now lists what a provisioning run would change, without changing anything.
 
 `adb`'s client key lives at `/var/lib/android-provision/.android/adbkey` (the unit sets
 `HOME=/var/lib/android-provision` so `adb` creates and reuses the key there) and is
@@ -135,7 +139,7 @@ run never depends on F-Droid or GitHub being reachable. Never hand-edit the lock
 ```bash
 nix run .#android-update -- "" \
   --fdroid de.badaix.snapcast \
-  --github 'rommapp/argosy-launcher=argosy-v*-arm64.apk'
+  --github 'rommapp/argosy-launcher=argosy-v*.[0-9].apk'
 ```
 
 Review the diff (`git diff pkgs/android-provision/apks.lock.json`) before committing —
@@ -259,25 +263,27 @@ configuration, not a special case:
 ```nix
 androidDevices.bedroom = {
   github = [
-    { repo = "rommapp/argosy-launcher"; asset = "argosy-v*-arm64.apk"; }
+    { repo = "rommapp/argosy-launcher"; asset = "argosy-v*.[0-9].apk"; }
   ];
   homeActivity = "com.nendo.argosy/.MainActivity";
+  abi = "armeabi-v7a"; # what the box reports; see below
   # caCerts left at its default: the internal CA, so Argosy trusts RomM's TLS.
 };
 ```
 
-The pinned asset glob (`argosy-v*-arm64.apk`) matches Argosy's `arm64-v8a` release only
-— this module pins one APK per device `abi`, not a set of variants for every ABI a
-release publishes. One repo pins exactly one lockfile entry: `update.resolve_github`
-keys its result by repo, `write_lockfile` builds `{ key: entry }`, and the module looks
-up `lock.${g.repo}` — a second `github` entry for the same repo would just replace this
-one, not add an arm32 variant alongside it. A box with a different ABI, or a deployment
-mixing arm64 and arm32 boxes, should pin the release's universal asset instead: Argosy
-ships `argosy-v<version>.apk` (no ABI suffix) alongside the per-ABI ones, and the glob
-`argosy-v*.[0-9].apk` matches only that universal asset, not `argosy-v2.18.0-arm32.apk`
-or `argosy-v2.18.0-arm64.apk`. `apk_metadata` then reads every ABI the universal APK
-actually contains, so the resulting lockfile entry works for any device `abi`. Keep the
-`arm64-v8a`-only pin above when every box is arm64 — it's a smaller download.
+The pinned asset glob (`argosy-v*.[0-9].apk`) matches Argosy's universal release,
+`argosy-v<version>.apk`, and not the per-ABI `argosy-v2.18.0-arm32.apk` or
+`argosy-v2.18.0-arm64.apk`. `apk_metadata` reads every ABI the universal APK contains
+(`arm64-v8a` and `armeabi-v7a` among them), so one lockfile entry serves every box. It
+has to be one: `update.resolve_github` keys its result by repo, `write_lockfile` builds
+`{ key: entry }` and the module looks up `lock.${g.repo}`, so a second `github` entry for
+the same repo would replace the first rather than add a variant.
+
+Set the device's `abi` to what the box reports, not what its chip is. Many Android TV
+boxes run a 32-bit Android on a 64-bit chip: the reference Homatics Box R 4K Plus reports
+only `armeabi-v7a, armeabi`. The plan unit prints the reported list when an APK doesn't
+match (`skipped apk/… -- configured abi 'arm64-v8a' not supported by device (device
+reports: armeabi-v7a, armeabi)`), and `abi` defaults to `arm64-v8a`.
 
 Setting `homeActivity` to Argosy's launch activity makes it the box's default home
 screen, so the box boots straight into the game library. `caCerts` at its default

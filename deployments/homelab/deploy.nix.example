@@ -39,7 +39,7 @@
     #     # Argosy Launcher (RomM client), as the box's default home screen.
     #     # See docs/android-devices.md#romm-through-argosy.
     #     # github = [
-    #     #   { repo = "rommapp/argosy-launcher"; asset = "argosy-v*-arm64.apk"; }
+    #     #   { repo = "rommapp/argosy-launcher"; asset = "argosy-v*.[0-9].apk"; }
     #     # ];
     #     # homeActivity = "com.nendo.argosy/.MainActivity";
     #   };

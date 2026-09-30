@@ -93,10 +93,12 @@ let
       github = [
         {
           repo = "rommapp/argosy-launcher";
-          asset = "argosy-v*-arm64.apk";
+          asset = "argosy-v*.[0-9].apk";
         }
       ];
       homeActivity = "com.nendo.argosy/.MainActivity";
+      # The reference box runs 32-bit Android; the universal APK covers it.
+      abi = "armeabi-v7a";
     };
   };
 
