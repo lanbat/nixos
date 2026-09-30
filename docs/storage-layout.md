@@ -131,6 +131,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 │   ├── profile/       User profile photos
 │   └── model-cache/   CLIP / face detection ML models (~4 GB)
 ├── jellyfin/          Jellyfin metadata and configuration
+├── audiobookshelf/    Audiobookshelf SQLite DB (accounts, progress), book details and covers
 ├── qbittorrent/       qBittorrent config + fast-resume data
 ├── bitmagnet/         Bitmagnet config
 ├── romm/              RomM config, artwork, saves and states
@@ -154,6 +155,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Nextcloud | server-local | workload PostgreSQL | Pi/b (external storage) |
 | Immich | server-local | workload PostgreSQL | Pi/a/photos |
 | Jellyfin | server-local | server-local | Pi/a/media + Pi/b/media |
+| Audiobookshelf | server-local | server-local (SQLite) | Pi/b/media/audiobooks (read in place) |
 | qBittorrent | server-local | — | Pi/a/media + Pi/b/media (by category) |
 | Frigate | server-local | server-local (SQLite) | Pi/a/surveillance |
 | Bitmagnet | server-local | workload PostgreSQL | — |

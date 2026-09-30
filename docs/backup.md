@@ -19,6 +19,7 @@
 | InfluxDB data (metrics) | `/var/lib/influxdb2/` | `backup-server.sh` |
 | Grafana state | `/var/lib/grafana/` | `backup-server.sh` |
 | Syncthing config + index | `/var/lib/syncthing/` | `backup-server.sh` |
+| Audiobookshelf accounts + listening progress | `/var/lib/audiobookshelf/config/` | `backup-server.sh` |
 
 ### Important (back up — slow to regenerate)
 
@@ -37,6 +38,7 @@
 |---|---|
 | Container images | Re-pull from registry |
 | Jellyfin metadata/posters | Re-scan from media files |
+| Audiobookshelf book details and covers (`/var/lib/audiobookshelf/metadata/`) | Re-scan and "Match books" |
 | Immich thumbnails | Re-generated from originals |
 | Transcode cache | Temporary by definition |
 | Frigate ML models | Re-download from source |

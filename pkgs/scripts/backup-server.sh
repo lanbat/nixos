@@ -16,6 +16,7 @@
 #   - /var/lib/frigate/config
 #   - /var/lib/qbittorrent
 #   - /var/lib/bitmagnet
+#   - /var/lib/audiobookshelf/config (accounts and listening progress)
 #
 # NOT backed up by this script:
 #   - /srv/storage/a (Pi storage — backs up in its own right)
@@ -99,6 +100,7 @@ if workload_online; then
   rsync -a --delete /var/lib/qbittorrent/    "$DEST/qbittorrent/"
   rsync -a --delete /var/lib/bitmagnet/      "$DEST/bitmagnet/"
   rsync -a --delete /var/lib/immich/profile/ "$DEST/immich-profile/"
+  rsync -a --delete /var/lib/audiobookshelf/config/ "$DEST/audiobookshelf-config/"
 else
   echo "  Skipping workload service state: the workload layer is locked."
 fi

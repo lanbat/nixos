@@ -26,6 +26,9 @@
 #   - Grafana: its InfluxDB datasource follows InfluxDB's endpoint port.
 #   - Nextcloud: the bulk data directories default to drive b's nextcloud,
 #     and a profile moves them.
+#   - Audiobookshelf: the library defaults to drive b's media/audiobooks and
+#     Audible, a profile moves it and picks another provider, and the NFS
+#     dependency follows the drive.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -165,6 +168,19 @@ let
 
   haNoZigbee = serverWith [
     { lanbat.services.home-assistant.settings.zigbee2mqttBridge = false; }
+  ];
+
+  # ── Audiobookshelf ───────────────────────────────────────────────────────
+  absEnv = config: config.systemd.services.audiobookshelf-bootstrap.environment;
+
+  absMoved = serverWith [
+    {
+      lanbat.services.audiobookshelf.settings = {
+        drive = "a";
+        libraryPath = "books/audio";
+        metadataProvider = "audible.uk";
+      };
+    }
   ];
 
   # ── Redis indexes and Nextcloud's database ───────────────────────────────
@@ -561,6 +577,22 @@ let
       && lib.any (u: u.name == "nextcloud" && u.ensureDBOwnership) pg.ensureUsers
       && lib.elem "postgresql.target" base.systemd.services.nextcloud-setup.requires
       && lib.elem "postgresql.target" base.systemd.services.nextcloud-setup.after
+    ))
+
+    (expect "audiobookshelf: the library defaults to drive b's audiobooks and Audible" (
+      (absEnv base).LIBRARY_PATH == "/srv/storage/b/media/audiobooks"
+      && (absEnv base).METADATA_PROVIDER == "audible"
+      && base.lanbat.services.audiobookshelf.nfs.drives == [ "b" ]
+      && (absEnv base).EXTERNAL_URL == "https://audiobooks.home.example.com"
+    ))
+
+    (expect "audiobookshelf: a profile moves the library and picks the provider" (
+      (absEnv absMoved).LIBRARY_PATH == "/srv/storage/a/books/audio"
+      && (absEnv absMoved).METADATA_PROVIDER == "audible.uk"
+      && absMoved.systemd.services.audiobookshelf-match.environment.METADATA_PROVIDER == "audible.uk"
+      && absMoved.lanbat.services.audiobookshelf.nfs.drives == [ "a" ]
+      && lib.elem "srv-storage-a.mount" absMoved.systemd.services.audiobookshelf.bindsTo
+      && failedAssertions absMoved == [ ]
     ))
 
     (expect "the example profile's server has no failed assertion" (failedAssertions base == [ ]))

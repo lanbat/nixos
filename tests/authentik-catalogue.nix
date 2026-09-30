@@ -207,6 +207,11 @@ let
         })
         [
           {
+            n = "audiobookshelf";
+            name = "Audiobookshelf";
+            secret = "AUTHENTIK_AUDIOBOOKSHELF_CLIENT_SECRET";
+          }
+          {
             n = "grafana";
             name = "Grafana";
             secret = "AUTHENTIK_GRAFANA_CLIENT_SECRET";
@@ -245,6 +250,7 @@ let
           hidden = n == "home-assistant" || n == "immich";
         })
         [
+          "audiobookshelf"
           "grafana"
           "home-assistant"
           "immich"
