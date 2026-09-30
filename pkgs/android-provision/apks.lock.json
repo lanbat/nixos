@@ -29,6 +29,36 @@
     "versionCode": 2902,
     "versionName": "0.29.0.2"
   },
+  "io.github.sds100.keymapper": {
+    "key": "io.github.sds100.keymapper",
+    "minSdk": 26,
+    "packageId": "io.github.sds100.keymapper",
+    "source": "fdroid",
+    "variants": {
+      "arm64-v8a": {
+        "sha256": "sha256-mJal2betl2zBT49tiKtPV5UrRPm8MvaMh7A+GYcgSAY=",
+        "size": 15034751,
+        "url": "https://f-droid.org/repo/io.github.sds100.keymapper_271.apk"
+      },
+      "armeabi-v7a": {
+        "sha256": "sha256-mJal2betl2zBT49tiKtPV5UrRPm8MvaMh7A+GYcgSAY=",
+        "size": 15034751,
+        "url": "https://f-droid.org/repo/io.github.sds100.keymapper_271.apk"
+      },
+      "x86": {
+        "sha256": "sha256-mJal2betl2zBT49tiKtPV5UrRPm8MvaMh7A+GYcgSAY=",
+        "size": 15034751,
+        "url": "https://f-droid.org/repo/io.github.sds100.keymapper_271.apk"
+      },
+      "x86_64": {
+        "sha256": "sha256-mJal2betl2zBT49tiKtPV5UrRPm8MvaMh7A+GYcgSAY=",
+        "size": 15034751,
+        "url": "https://f-droid.org/repo/io.github.sds100.keymapper_271.apk"
+      }
+    },
+    "versionCode": 271,
+    "versionName": "4.5.0-foss"
+  },
   "rommapp/argosy-launcher": {
     "key": "rommapp/argosy-launcher",
     "minSdk": 26,

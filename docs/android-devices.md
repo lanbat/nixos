@@ -139,6 +139,7 @@ run never depends on F-Droid or GitHub being reachable. Never hand-edit the lock
 ```bash
 nix run .#android-update -- "" \
   --fdroid de.badaix.snapcast \
+  --fdroid io.github.sds100.keymapper \
   --github 'rommapp/argosy-launcher=argosy-v*.[0-9].apk'
 ```
 
