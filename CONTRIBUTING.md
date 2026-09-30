@@ -26,8 +26,16 @@ secrets are required: CI evaluates the `example` profile as `example-server` and
 
 ```bash
 nix fmt                                   # format all .nix files
-nix flake check --no-build --all-systems  # evaluate the example hosts and the checks
+nix flake check --no-build --all-systems  # evaluate the example hosts and the checks (needs ~16 GB, see below)
 nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql,music-assistant,overlay-mesh,overlay,policy,plugins,settings-guard,validate-deploy,load-deployments,deploy-rs-fixture}
+```
+
+`nix flake check` evaluates everything in one process, which peaks at 13–19 GB of memory.
+On a smaller machine, evaluate one check or host at a time, as CI does:
+
+```bash
+nix eval --raw .#checks.x86_64-linux.<name>.drvPath
+nix eval --raw .#nixosConfigurations.example-server.config.system.build.toplevel.drvPath
 ```
 
 The workload-gate, postgresql, music-assistant and overlay-mesh tests boot VMs and need

@@ -13,17 +13,24 @@ queries (`nix run .#hosts`, `nix run .#deploy-query -- server-ip`).
 
 ## Quick links
 
+**Setting up a site**
+- [Deployment checklist](docs/deployment-checklist.md): from bare hardware to a running site, step by step
+- [Secrets setup](secrets/README.md)
+- [Extensibility](docs/extensibility.md): profiles, hosts, plugins and per-site settings
+- [Android device provisioning](docs/android-devices.md): TV boxes over ADB
+
+**Running it**
+- [Operations guide](docs/operations.md): deploying, updating, health checks, per-service tasks
+- [Runbook](docs/runbook.md): unlocking after a reboot, locking, Tang/Clevis, restores
+- [Failure modes](docs/failure-modes.md): what happens when the server or the Pi goes away
+- [Backup strategy](docs/backup.md)
+
+**How it works**
 - [Architecture](docs/architecture.md)
 - [Secure layers design](docs/secure-layers.md)
-- [Operational runbook](docs/runbook.md)
-- [Deployment checklist](docs/deployment-checklist.md)
 - [Storage layout](docs/storage-layout.md)
-- [Failure modes](docs/failure-modes.md)
 - [Security model](docs/security.md)
-- [Backup strategy](docs/backup.md)
-- [Operations guide](docs/operations.md)
-- [Android device provisioning](docs/android-devices.md)
-- [Secrets setup](secrets/README.md)
+- [Plugins](docs/plugins.md) and [migrating an older site](docs/migration.md)
 
 ## How it fits together
 
@@ -68,6 +75,16 @@ tests/                    assertion tests and VM tests
 docs/                     architecture, extensibility, plugins, migration
 ```
 
+## Before you start
+
+You need:
+
+- an `x86_64` server and a Raspberry Pi 5 with NVMe storage;
+- a domain for the services (`<service>.<domain>`), and local DNS that resolves those
+  names to the server. The services stay on your LAN; Caddy serves them with certificates
+  from an internal CA that each client device trusts once;
+- a workstation with [Nix](https://nixos.org/download/) and flakes enabled.
+
 ## First run
 
 Going from a fresh clone to a running site. The full step-by-step — disk layout
@@ -90,8 +107,8 @@ Going from a fresh clone to a running site. The full step-by-step — disk layou
 3. **Encrypt your secrets** — see [secrets/README.md](secrets/README.md).
 4. **Deploy** each host:
    ```bash
-   deploy path:.#homelab-server
-   deploy path:.#homelab-pi-storage
+   deploy --skip-checks path:.#homelab-server
+   deploy --skip-checks path:.#homelab-pi-storage
    ```
 
 ## Services
@@ -147,9 +164,13 @@ Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) fo
 nix develop               # deploy (deploy-rs), agenix, nixos-anywhere
 
 # (First time? see "First run" above.) Deploy with a path: reference:
-deploy path:.#homelab-server
-deploy path:.#homelab-pi-storage
+deploy --skip-checks path:.#homelab-server
+deploy --skip-checks path:.#homelab-pi-storage
 ```
+
+`--skip-checks` skips deploy-rs's own `nix flake check`, which would build the Pi's
+`aarch64` checks on your workstation; CI runs them instead. See
+[Deploying changes](docs/operations.md#deploying-changes).
 
 Host names are `<profile>-<host-key>` (e.g. `homelab-server`). A single-profile
 setup that inlines `{ deployment, hosts }` in `deploy.nix` without a `profiles`

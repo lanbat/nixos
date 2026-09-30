@@ -16,8 +16,8 @@ cp deploy.nix.example deploy.nix
 # 3. Fill in deployments/homelab/deploy.nix with your values
 
 # 4. Deploy (profile-prefixed names)
-deploy path:.#homelab-server
-deploy path:.#homelab-pi-storage
+deploy --skip-checks path:.#homelab-server
+deploy --skip-checks path:.#homelab-pi-storage
 ```
 
 ## Field mapping

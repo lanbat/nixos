@@ -241,14 +241,22 @@ of the host lists. This means the same encrypted file works on every profile tha
 The tradeoff is duplication: a cabin-only secret still sits beside homelab secrets,
 and you must re-run `agenix -r` when any profile's host key changes.
 
-## Future: per-profile secrets
+## Per-profile secrets
 
-The desired end state is `deployments/<profile>/secrets.nix` with profile-scoped
-`.age` files, so homelab and cabin never share recipient lists. That layout is
-**not implemented yet** — track progress in
-[docs/superpowers/plans/2026-09-16-post-restructure-hardening.md](../docs/superpowers/plans/2026-09-16-post-restructure-hardening.md).
+A profile can keep its own secrets instead of sharing `secrets/` with the others, so
+homelab and cabin never share recipient lists. Point the profile's
+`deployment.secrets.root` at its own directory, for example `./secrets` next to its
+`deploy.nix` (the path is resolved relative to the profile), and give that directory its
+own `secrets.nix`, generated from the profile's requirements:
 
-Until then, use the union-of-keys pattern above.
+```bash
+nix run .#secrets-recipients -- cabin   # the body of deployments/cabin/secrets/secrets.nix
+cd deployments/cabin/secrets && agenix -e <name>.age
+```
+
+Put the internal CA's public certificate (`caddy-ca-root.crt`) there too, or set
+`deployment.secrets.caCertificate` to the shared one. Profiles that keep the shared
+`secrets/` directory use the union-of-keys pattern above.
 
 ## Notes
 
