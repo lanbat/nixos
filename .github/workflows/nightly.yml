@@ -9,6 +9,12 @@ permissions:
   contents: read
 
 jobs:
+  # The whole pull-request suite on master. Nothing runs on the push that
+  # merges a pull request, so this is what catches two that pass alone and
+  # break together.
+  check:
+    uses: ./.github/workflows/check.yml
+
   server-vm:
     name: server-vm
     runs-on: ubuntu-latest

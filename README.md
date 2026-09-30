@@ -1,6 +1,6 @@
 # lanbat nixos
 
-[![check](https://github.com/lanbat/nixos/actions/workflows/check.yml/badge.svg)](https://github.com/lanbat/nixos/actions/workflows/check.yml)
+[![nightly](https://github.com/lanbat/nixos/actions/workflows/nightly.yml/badge.svg)](https://github.com/lanbat/nixos/actions/workflows/nightly.yml)
 
 Extensible NixOS configuration for homelab deployments. Each **deployment profile**
 is a site (home lab, cabin, staging, …) with its own domain, hosts, and plugins.
