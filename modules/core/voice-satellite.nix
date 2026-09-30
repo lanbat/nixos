@@ -43,7 +43,9 @@ let
   # The module always adds webrtc-noise-gain, for auto gain and noise
   # suppression. Its bundled WebRTC code uses uint32_t without including
   # <cstdint>, which GCC 15 rejects on x86_64. stdint.h, because the flags
-  # reach its C files too.
+  # reach its C files too. Elsewhere (the Pi) it builds unchanged, and the
+  # unchanged package comes from the binary cache instead of a two-minute
+  # compile.
   webrtcNoiseGain = pkgs.python3Packages.webrtc-noise-gain.overridePythonAttrs (old: {
     env = (old.env or { }) // {
       NIX_CFLAGS_COMPILE = toString [
@@ -52,6 +54,15 @@ let
       ];
     };
   });
+  satellitePackage =
+    if pkgs.stdenv.hostPlatform.isx86_64 then
+      pkgs.wyoming-satellite.overridePythonAttrs (old: {
+        optional-dependencies = old.optional-dependencies // {
+          webrtc = [ webrtcNoiseGain ];
+        };
+      })
+    else
+      pkgs.wyoming-satellite;
 
   vendor = lib.head (lib.splitString ":" cfg.microphone.usbId);
   product = lib.last (lib.splitString ":" cfg.microphone.usbId);
@@ -220,11 +231,7 @@ in
 
     services.wyoming.satellite = {
       enable = true;
-      package = pkgs.wyoming-satellite.overridePythonAttrs (old: {
-        optional-dependencies = old.optional-dependencies // {
-          webrtc = [ webrtcNoiseGain ];
-        };
-      });
+      package = satellitePackage;
       inherit (cfg) name uri;
       user = "wyoming-satellite";
       group = "wyoming-satellite";

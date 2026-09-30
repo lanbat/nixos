@@ -22,7 +22,8 @@ env:
   # the `rest` job, so a new check cannot be left out.
   CHECK_GROUPS: |
     system deploy-rs-fixture
-    vm music-assistant overlay-mesh postgresql workload-gate
+    vm-services music-assistant postgresql
+    vm-host overlay-mesh workload-gate
     settings frigate-settings service-settings settings-guard settings-schema storage-drives
 
 jobs:
@@ -71,11 +72,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [system, vm, settings, rest]
+        group: [system, vm-services, vm-host, settings, rest]
     steps:
       - uses: actions/checkout@v7
-      # Every group, not only vm: a new VM test lands in rest until it is
-      # listed in CHECK_GROUPS.
+      # Every group, not only the vm ones: a new VM test lands in rest until it
+      # is listed in CHECK_GROUPS.
       - name: Enable KVM
         run: |
           if [ ! -e /dev/kvm ]; then
