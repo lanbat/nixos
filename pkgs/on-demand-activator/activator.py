@@ -19,6 +19,7 @@ import argparse
 import http.client
 import http.server
 import os
+import socket
 import subprocess
 import sys
 import threading
@@ -126,11 +127,71 @@ def write_stamp(path: str):
         pass
 
 
+# A tunnelled connection refreshes the stamp at most this often while data
+# flows, so the idle timer sees a long-lived WebSocket as activity.
+STAMP_INTERVAL = 30
+
+
 class ActivatorHandler(http.server.BaseHTTPRequestHandler):
+    def _is_upgrade(self) -> bool:
+        return (
+            "upgrade" in self.headers.get("Connection", "").lower()
+            and bool(self.headers.get("Upgrade"))
+        )
+
+    def _tunnel(self):
+        """Hand an Upgrade request (a WebSocket) to the service and relay raw
+        bytes both ways until either side closes: after 101 Switching
+        Protocols the connection is no longer HTTP request/response."""
+        upstream = socket.create_connection(("127.0.0.1", ARGS.real_port), timeout=30)
+        lines = [f"{self.command} {self.path} HTTP/1.1"]
+        lines += [f"{k}: {v}" for k, v in self.headers.items() if k.lower() != "x-forwarded-for"]
+        lines.append(f"X-Forwarded-For: {self.client_address[0]}")
+        upstream.sendall(("\r\n".join(lines) + "\r\n\r\n").encode("latin-1"))
+        upstream.settimeout(None)
+        self.connection.settimeout(None)
+        self.close_connection = True
+
+        last_stamp = [time.monotonic()]
+
+        def note_activity():
+            now = time.monotonic()
+            if now - last_stamp[0] >= STAMP_INTERVAL or not os.path.exists(ARGS.stamp_file):
+                last_stamp[0] = now
+                write_stamp(ARGS.stamp_file)
+
+        def relay(read, dst):
+            try:
+                while data := read(65536):
+                    note_activity()
+                    dst.sendall(data)
+            except OSError:
+                pass
+            finally:
+                for s in (upstream, self.connection):
+                    try:
+                        s.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+
+        # The client side reads through rfile, which may already hold bytes
+        # the client sent right after its headers.
+        back = threading.Thread(target=relay, args=(upstream.recv, self.connection), daemon=True)
+        back.start()
+        relay(self.rfile.read1, upstream)
+        back.join()
+        upstream.close()
+
     def do_request(self, method: str):
         if is_service_healthy(ARGS.real_port):
             # Service is up — proxy the request.
             write_stamp(ARGS.stamp_file)
+            if self._is_upgrade():
+                try:
+                    self._tunnel()
+                except OSError as exc:
+                    self._send_loading(f"Proxy error: {exc}")
+                return
             try:
                 body_len = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(body_len) if body_len else b""

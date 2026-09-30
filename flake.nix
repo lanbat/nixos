@@ -152,6 +152,7 @@
         policy = import ./tests/policy.nix { inherit lib pkgs; };
         caddy-remote = import ./tests/caddy-remote.nix { inherit lib pkgs; };
         overlay = import ./tests/overlay.nix { inherit lib pkgs; };
+        on-demand-activator = import ./tests/on-demand-activator.nix { inherit pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
         secrets = import ./tests/secrets.nix { inherit lib pkgs; };
         service-settings = import ./tests/service-settings.nix {
