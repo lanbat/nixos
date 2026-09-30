@@ -14,8 +14,9 @@ user build) and hold for any similar unrooted box.
 | Limit | Consequence |
 |---|---|
 | Since Android 7, apps ignore user-installed CAs unless they opt in | Installing the internal CA fixes the **browser**. It does **not** fix Kodi, Jellyfin or YouTube. |
-| No `adb` command installs a CA silently on an unrooted user build | One on-screen "Install this certificate?" confirmation per box, every time the CA changes. |
-| The trust store (`/data/misc/user/0/cacerts-added/`) can't be read without root | CA and Obtainium idempotency is **marker-backed** — a file the tool wrote to `/sdcard/.lanbat-provision/` last time, not proof the device still agrees. `provision --force` re-applies regardless of the marker. |
+| No `adb` command installs a CA silently on an unrooted user build | Below Android 11, one on-screen "Install this certificate?" confirmation per box, every time the CA changes. |
+| From Android 11 the CA install dialog can't be opened from `adb`; CA certificates install only from Settings | The provisioner copies the CA to `/sdcard/Download/` and launches nothing. The reference box (Android 14) has only Android TV's Settings, with **no certificate screen**, so its user trust store can't take the CA at all: only apps with their own certificate import (Argosy) can use it. |
+| The trust store (`/data/misc/user/0/cacerts-added/`) can't be read without root | Obtainium idempotency, and the CA's below Android 11, is **marker-backed** — a file the tool wrote to `/sdcard/.lanbat-provision/` last time, not proof the device still agrees. `provision --force` re-applies regardless of the marker. |
 | Google Play-only apps can't be provisioned by any of the three sources (F-Droid, GitHub releases, Obtainium) | Roughly 10 of the 24 apps on the reference box (Stremio, Twitch, Castify, Projectivy Launcher, Nova BG among them). Unsupported by design, not a bug — put these on Obtainium's list if it can track them, or install them by hand. |
 | The reference box has no DocumentsUI | Every Storage Access Framework file picker fails, so Obtainium's file-based list import doesn't work either. The provisioner pushes the URL list to `/sdcard/Download/` and prints it; you paste it into Obtainium's "Import from URL list" text field by hand. |
 | Device Owner mode requires a box with **no configured accounts** | In practice, a factory reset per box. The tool will never perform one for you — `deviceOwner.enable` only calls `dpm set-device-owner` and reports `failed` with the reason if an account is already configured. |
@@ -252,7 +253,8 @@ android-capture-<box>`.
 Beyond that runbook, the manual steps a reset can never avoid are: enable network ADB
 and accept the ADB prompt, pair Argosy with one code (see below), and sign in to Play
 Store apps. Everything else — apps, changed settings, the home screen, the internal CA
-— comes back from one run of the box's provisioning unit.
+file — comes back from one run of the box's provisioning unit. On Android 11 and later
+the CA itself then has to be installed from Settings or imported in each app again.
 
 ## RomM through Argosy
 
@@ -268,7 +270,8 @@ androidDevices.bedroom = {
   ];
   homeActivity = "com.nendo.argosy/.MainActivity";
   abi = "armeabi-v7a"; # what the box reports; see below
-  # caCerts left at its default: the internal CA, so Argosy trusts RomM's TLS.
+  # caCerts left at its default: the internal CA, delivered to Download for
+  # Argosy's own certificate import (see below).
 };
 ```
 
@@ -287,13 +290,17 @@ match (`skipped apk/… -- configured abi 'arm64-v8a' not supported by device (d
 reports: armeabi-v7a, armeabi)`), and `abi` defaults to `arm64-v8a`.
 
 Setting `homeActivity` to Argosy's launch activity makes it the box's default home
-screen, so the box boots straight into the game library. `caCerts` at its default
-installs the internal CA Caddy issues from into the user trust store — Argosy is one of
-the apps that opts into trusting user CAs, so it can reach `romm.<domain>` over the
-deployment's own TLS without a browser-only workaround.
+screen, so the box boots straight into the game library. Argosy has to trust the
+internal CA that Caddy issues `romm.<domain>`'s certificate from. It trusts user CAs, but
+on Android 11 and later the provisioner can't install one (see the limits above), so
+`caCerts` at its default only delivers `caddy-ca-root.crt` to `/sdcard/Download/`. Argosy
+has its own import for this: in its RomM settings (or on its first-run screen), **Add
+Certificate** and pick `Download/caddy-ca-root.crt`; the button then reads "1 certificate
+trusted by Argosy". The import is trusted by Argosy alone.
 
-Pairing is the one step this module can't do for you: on the box, open Argosy and
-generate (or scan) a pairing code; enter that code in RomM to link the two. RomM's move
+Pairing is the other step this module can't do for you, since Argosy keeps its server
+and session in its private data: create an API token in RomM's web UI, then enter its
+8-character pairing code in Argosy, with RomM's address. RomM's move
 to its own login plus Authentik OIDC (so a browser sign-in gates the web UI) is tracked
 separately and isn't part of what this branch changes — from the box's point of view,
 Argosy talks to RomM's API with its own paired session regardless of how a browser signs
@@ -312,7 +319,7 @@ Every field of `androidDevices.<name>`, with its default:
 | `packages` | `[ ]` | F-Droid package identifiers, pinned by `apks.lock.json`. |
 | `github` | `[ ]` | GitHub releases, pinned by `apks.lock.json`. Each entry is `{ repo, asset }`, `asset` a glob matching exactly one release asset (default `"*.apk"`). |
 | `obtainium` | `[ ]` | Apps handed to Obtainium as `{ url }` entries. Obtainium owns their updates; the provisioner never installs them itself. |
-| `caCerts` | `[ ../../secrets/caddy-ca-root.crt ]` | CA certificates to install into the user trust store. Setting this **replaces** the default rather than adding to it. |
+| `caCerts` | `[ ../../secrets/caddy-ca-root.crt ]` | CA certificates for the user trust store: below Android 11 pushed and the install dialog opened; from Android 11 delivered to `/sdcard/Download/` for Settings or an app's own import. Setting this **replaces** the default rather than adding to it. |
 | `settings` | `{ }` | `settings put` values by namespace (`global`, `secure`, `system`), e.g. `{ global.screen_off_timeout = 600000; }`. |
 | `allowDowngrade` | `false` | Replace an installed app that is newer than the lockfile's pinned version. |
 | `homeActivity` | `null` | Activity to make the default home screen, as `package/activity`. Set after the apps are installed; a box that refuses is reported `failed`. |
