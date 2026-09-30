@@ -26,6 +26,8 @@
 #   - Grafana: its InfluxDB datasource follows InfluxDB's endpoint port.
 #   - Nextcloud: the bulk data directories default to drive b's nextcloud,
 #     and a profile moves them.
+#   - Jellyfin: IMVDb is off and needs no key by default; settings.imvdb
+#     requires jellyfin-imvdb-env and hands it to jellyfin-bootstrap.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -166,6 +168,11 @@ let
   haNoZigbee = serverWith [
     { lanbat.services.home-assistant.settings.zigbee2mqttBridge = false; }
   ];
+
+  # ── Jellyfin ─────────────────────────────────────────────────────────────
+  jellyfinBootstrap = config: config.systemd.services.jellyfin-bootstrap.script;
+
+  jellyfinImvdb = serverWith [ { lanbat.services.jellyfin.settings.imvdb = true; } ];
 
   # ── Redis indexes and Nextcloud's database ───────────────────────────────
   redisClash = serverWith [ { lanbat.redis.databases.other.index = 1; } ];
@@ -561,6 +568,18 @@ let
       && lib.any (u: u.name == "nextcloud" && u.ensureDBOwnership) pg.ensureUsers
       && lib.elem "postgresql.target" base.systemd.services.nextcloud-setup.requires
       && lib.elem "postgresql.target" base.systemd.services.nextcloud-setup.after
+    ))
+
+    (expect "jellyfin: IMVDb is off by default and needs no key" (
+      !(base.lanbat.secrets ? jellyfin-imvdb-env) && !lib.hasInfix "imvdb" (jellyfinBootstrap base)
+    ))
+
+    (expect "jellyfin: settings.imvdb requires the IMVDb key and hands it to the bootstrap" (
+      jellyfinImvdb.lanbat.secrets ? jellyfin-imvdb-env
+      && lib.hasInfix jellyfinImvdb.lanbat.secrets.jellyfin-imvdb-env.path (
+        jellyfinBootstrap jellyfinImvdb
+      )
+      && failedAssertions jellyfinImvdb == [ ]
     ))
 
     (expect "the example profile's server has no failed assertion" (failedAssertions base == [ ]))

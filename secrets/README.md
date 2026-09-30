@@ -297,6 +297,7 @@ Put the internal CA's public certificate (`caddy-ca-root.crt`) there too, or set
 | `ha-xiaomi-ble.age` | `<MAC> <bindkey> [entry title]` lines, one Xiaomi BLE device each | `home-assistant-post-setup`, which adds each device's `xiaomi_ble` config entry so Home Assistant can decrypt its advertisements; only with `haXiaomiBle` set. Get a bindkey locally from [Mi Activation](https://atc1441.github.io/Temp_universal_mi_activate.html) — no Xiaomi cloud account |
 | `caddy-ca-root.crt` | PEM root certificate (public) | Caddy internal CA — committed plaintext; `deployment.secrets.caCertificate` defaults to it |
 | `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |
+| `jellyfin-imvdb-env.age` | `IMVDB_API_KEY=<value>`, a free key from [imvdb.com](https://imvdb.com/developers/api) | `jellyfin-bootstrap`, which gives it to the IMVDb plugin for music video metadata; only with `lanbat.services.jellyfin.settings.imvdb` set |
 | `romm-db-pass.age` | `POSTGRES_PASSWORD=<value>` and `DB_PASSWD=<same value>` | RomM database password (PostgreSQL setup and the container) |
 | `romm-env.age` | `ROMM_AUTH_SECRET_KEY=<openssl rand -hex 32>` and metadata provider keys (`IGDB_CLIENT_ID=`, `SCREENSCRAPER_USER=`, …) | RomM container |
 | `romm-oidc-env.age` | `OIDC_CLIENT_SECRET=<value>`, the same value as `AUTHENTIK_ROMM_CLIENT_SECRET` | RomM container, Authentik OIDC login |
