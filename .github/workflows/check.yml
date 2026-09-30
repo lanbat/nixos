@@ -1,10 +1,13 @@
 name: check
 
+# No push trigger: a pull request is already checked against its merge with
+# master, so running again on the push that merges it repeats the same work.
+# The nightly workflow calls this one on master, which catches two pull
+# requests that pass alone and break together.
 on:
   pull_request:
-  push:
-    branches: [master]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -12,6 +15,15 @@ permissions:
 concurrency:
   group: check-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  # x86_64 checks that run as a parallel job of their own, one line per job:
+  # "<group> <check>...". Every other check except `server` (nightly) runs in
+  # the `rest` job, so a new check cannot be left out.
+  CHECK_GROUPS: |
+    system deploy-rs-fixture
+    vm music-assistant overlay-mesh postgresql workload-gate
+    settings frigate-settings service-settings settings-guard settings-schema storage-drives
 
 jobs:
   format:
@@ -29,21 +41,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
-      # One nix process per check and per host. A single `nix flake check`
-      # holds every evaluation at once, which outgrows the runner's 16 GB; the
-      # runner is then killed and the job reports "The operation was canceled".
-      # Listing them from the flake means a new check or host cannot be left out.
-      - name: Evaluate each check and host
+      # The checks and aarch64 jobs evaluate every check they build. This job
+      # evaluates what neither builds: the full server VM test, which only runs
+      # nightly, and the hosts' system closures. One nix process each: holding
+      # every evaluation at once, as `nix flake check` does, outgrows the
+      # runner's 16 GB; the runner is then killed and the job reports "The
+      # operation was canceled".
+      - name: Evaluate the server VM test and each host
         shell: bash
         run: |
           set -euo pipefail
-          for system in x86_64-linux aarch64-linux; do
-            for check in $(nix eval --json ".#checks.$system" --apply builtins.attrNames | jq -r '.[]'); do
-              echo "::group::checks.$system.$check"
-              nix eval --raw ".#checks.$system.$check.drvPath"
-              echo; echo "::endgroup::"
-            done
-          done
+          echo "::group::checks.x86_64-linux.server"
+          nix eval --raw .#checks.x86_64-linux.server.drvPath
+          echo; echo "::endgroup::"
           for host in $(nix eval --json .#nixosConfigurations --apply builtins.attrNames | jq -r '.[]'); do
             echo "::group::nixosConfigurations.$host"
             nix eval --raw ".#nixosConfigurations.$host.config.system.build.toplevel.drvPath"
@@ -55,15 +65,21 @@ jobs:
           nix eval --json .#apps --apply 'as: builtins.mapAttrs (_: builtins.mapAttrs (_: a: a.program)) as'
           nix eval --json .#devShells --apply 'ds: builtins.mapAttrs (_: builtins.mapAttrs (_: d: d.drvPath)) ds'
 
-  vm-test:
-    name: vm-test
+  checks:
+    name: checks (${{ matrix.group }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [system, vm, settings, rest]
     steps:
       - uses: actions/checkout@v7
+      # Every group, not only vm: a new VM test lands in rest until it is
+      # listed in CHECK_GROUPS.
       - name: Enable KVM
         run: |
           if [ ! -e /dev/kvm ]; then
-            echo "::error::This runner has no /dev/kvm; the VM test needs KVM."
+            echo "::error::This runner has no /dev/kvm; the VM tests need KVM."
             exit 1
           fi
           sudo chmod 0666 /dev/kvm
@@ -71,23 +87,48 @@ jobs:
       - uses: cachix/install-nix-action@v31
         with:
           extra_nix_config: system-features = nixos-test benchmark big-parallel kvm
-      # Every x86_64 check except the full server VM test, which runs nightly.
-      # Listing them from the flake means a new check cannot be left out.
-      - name: Run the wiring and VM tests
+      - name: Run the group's wiring and VM tests
         shell: bash
+        env:
+          GROUP: ${{ matrix.group }}
         run: |
-          list=$(
-            nix eval --json .#checks.x86_64-linux \
-              --apply 'cs: builtins.filter (n: n != "server") (builtins.attrNames cs)' |
-              jq -r '.[] | ".#checks.x86_64-linux." + .'
-          )
-          mapfile -t checks <<<"$list"
+          set -euo pipefail
+          all=$(nix eval --json .#checks.x86_64-linux --apply builtins.attrNames | jq -r '.[]' | sort)
+          grouped=$(awk '{ for (i = 2; i <= NF; i++) print $i }' <<<"$CHECK_GROUPS" | sort -u)
+          unknown=$(comm -13 <(echo "$all") <(echo "$grouped"))
+          if [ -n "$unknown" ]; then
+            echo "::error::CHECK_GROUPS lists checks the flake does not have: ${unknown//$'\n'/ }"
+            exit 1
+          fi
+          if [ "$GROUP" = rest ]; then
+            names=$(comm -23 <(echo "$all") <(echo "$grouped") | grep -vx server || true)
+          else
+            names=$(awk -v g="$GROUP" '$1 == g { for (i = 2; i <= NF; i++) print $i }' <<<"$CHECK_GROUPS")
+          fi
+          if [ -z "$names" ]; then
+            echo "::error::No checks in group $GROUP."
+            exit 1
+          fi
+          mapfile -t checks <<<"$names"
           printf '%s\n' "${checks[@]}"
           # One nix process per check: building them all in one evaluates them
           # all at once, which outgrows the runner's memory (see eval).
           for check in "${checks[@]}"; do
-            nix build -L "$check"
+            nix build -L ".#checks.x86_64-linux.$check"
           done
+
+  # The master ruleset requires a status named vm-test; this reports one for
+  # the whole matrix. `always()` because a skipped job would count as passed.
+  vm-test:
+    name: vm-test
+    needs: checks
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every group passed
+        env:
+          RESULT: ${{ needs.checks.result }}
+        run: test "$RESULT" = success
 
   # GitHub's arm64 runners have no /dev/kvm, so the Pi VM tests cannot boot
   # here. Building each test's driver still builds the hosts' full system

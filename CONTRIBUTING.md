@@ -31,10 +31,13 @@ nix build .#checks.x86_64-linux.{assertions,workload-gate,postgresql,music-assis
 ```
 
 The workload-gate, postgresql, music-assistant and overlay-mesh tests boot VMs and need
-KVM. CI runs every `x86_64-linux` check except `server` on every pull request.
+KVM. CI runs every `x86_64-linux` check except `server` on every pull request, in
+parallel groups (`CHECK_GROUPS` in `.github/workflows/check.yml`; a check not listed there
+runs in the `rest` group). Nothing runs on the push that merges a pull request.
 
 The full server VM test boots the complete server configuration and is too slow for every
-PR. CI runs it nightly (03:00 UTC) and on manual dispatch via the **nightly** workflow.
+PR. CI runs it nightly (03:00 UTC) and on manual dispatch via the **nightly** workflow,
+which also runs the whole pull-request suite on `master`.
 Run it locally when you change a host, a service's tier or the unlock scripts:
 
 ```bash
