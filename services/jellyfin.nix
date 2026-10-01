@@ -32,6 +32,16 @@
 # First-run onboarding, media libraries, plugins, and Authentik SSO are
 # completed automatically by jellyfin-bootstrap.
 #
+# Metadata
+# --------
+# Jellyfin itself fetches metadata only for movies, TV and music (TMDb, OMDb,
+# MusicBrainz, TheAudioDB). jellyfin-bootstrap adds the official Bookshelf
+# plugin (Google Books, Comic Vine) for Books and, with settings.imvdb, the
+# IMVDb plugin for Music Videos, which needs an API key from imvdb.com in
+# secrets/jellyfin-imvdb-env.age. Installing either fetches its library's
+# metadata again. Audiobooks get no online metadata here, and a book in several
+# files shows as one item per file.
+#
 # That bootstrap logs in to Home Assistant and configures OIDC against
 # Authentik, so it only exists when the deployment runs both. Without them
 # Jellyfin still serves media; it just keeps its own accounts and is not
@@ -50,8 +60,26 @@ let
   # The bootstrap reads secrets that home-assistant.nix and authentik own, so
   # it can only exist when those services are part of the deployment.
   integrates = config.lanbat.hasService "home-assistant" && config.lanbat.hasService "authentik";
+
+  cfg = config.lanbat.services.jellyfin.settings;
+
+  jellyfinSettings = {
+    options.imvdb = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Fetch music video metadata and artwork from IMVDb. jellyfin-bootstrap
+        installs the IMVDb plugin and gives it IMVDB_API_KEY from
+        secrets/jellyfin-imvdb-env.age (a free key from imvdb.com).
+      '';
+    };
+  };
 in
 {
+  # The schema is merged into lanbat.services.jellyfin.settings; checks.nix
+  # rejects any key it does not declare.
+  lanbat.settingsSchema.jellyfin = jellyfinSettings;
+
   lanbat.services.jellyfin = {
     subdomain = "media";
     port = 8096;
@@ -65,6 +93,8 @@ in
       "hass-bootstrap-env"
       "authentik-oidc-secrets"
     ];
+    # IMVDB_API_KEY, for jellyfin-bootstrap (root).
+    secrets.jellyfin-imvdb-env.enable = cfg.imvdb && integrates;
     tier = "workload";
     state = [ "jellyfin" ];
     units = [
@@ -138,6 +168,7 @@ in
       set -a
       . ${config.lanbat.secrets.hass-bootstrap-env.path}
       . ${config.lanbat.secrets.authentik-oidc-secrets.path}
+      ${lib.optionalString cfg.imvdb ". ${config.lanbat.secrets.jellyfin-imvdb-env.path}"}
       set +a
       export JELLYFIN_URL="http://127.0.0.1:8096"
       export EXTERNAL_URL="https://media.${domain}"

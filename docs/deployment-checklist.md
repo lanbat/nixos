@@ -506,13 +506,21 @@ automatically and registers the Authentik provider.  No further steps needed.
 - Media libraries for every Pi folder except `adult/` (Samba-only), `incomplete/`
   (active downloads), and `roms/` (RomM): Movies, TV, Music Videos, Music,
   Documentaries, Audiobooks, Books, Gym, Games, Misc
-- Plugins: Open Subtitles, Trakt, SSO Authentication
+- Plugins: Open Subtitles, Trakt, SSO Authentication, and Bookshelf (Google Books
+  and Comic Vine metadata for Books)
 - Authentik OIDC provider (`authentik`) from `authentik-oidc-secrets.age`
 - Realtime monitoring disabled (NFS cannot use inotify); library scan every 2 hours
   plus a full scan on each bootstrap run
 
 Grant users access to the **Jellyfin** application in Authentik.  Adult content
 is only available via the hidden Samba `private` share (`@private` group).
+
+Music videos get online metadata only through the IMVDb plugin, which needs a
+free API key: register at [imvdb.com/developers/api](https://imvdb.com/developers/api),
+put `IMVDB_API_KEY=<key>` in `jellyfin-imvdb-env.age` (`agenix -e
+jellyfin-imvdb-env.age`), and set `lanbat.services.jellyfin.settings.imvdb = true`
+in a module of the server's `modules`. The next deploy installs the plugin, gives
+it the key and fetches the Music Videos library's metadata again.
 
 #### Audiobookshelf — automatic setup
 

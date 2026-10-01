@@ -26,6 +26,8 @@
 #   - Grafana: its InfluxDB datasource follows InfluxDB's endpoint port.
 #   - Nextcloud: the bulk data directories default to drive b's nextcloud,
 #     and a profile moves them.
+#   - Jellyfin: IMVDb is off and needs no key by default; settings.imvdb
+#     requires jellyfin-imvdb-env and hands it to jellyfin-bootstrap.
 #   - Audiobookshelf: the library defaults to drive b's media/audiobooks and
 #     Audible, a profile moves it and picks another provider, and the NFS
 #     dependency follows the drive.
@@ -169,6 +171,11 @@ let
   haNoZigbee = serverWith [
     { lanbat.services.home-assistant.settings.zigbee2mqttBridge = false; }
   ];
+
+  # ── Jellyfin ─────────────────────────────────────────────────────────────
+  jellyfinBootstrap = config: config.systemd.services.jellyfin-bootstrap.script;
+
+  jellyfinImvdb = serverWith [ { lanbat.services.jellyfin.settings.imvdb = true; } ];
 
   # ── Audiobookshelf ───────────────────────────────────────────────────────
   absEnv = config: config.systemd.services.audiobookshelf-bootstrap.environment;
@@ -577,6 +584,18 @@ let
       && lib.any (u: u.name == "nextcloud" && u.ensureDBOwnership) pg.ensureUsers
       && lib.elem "postgresql.target" base.systemd.services.nextcloud-setup.requires
       && lib.elem "postgresql.target" base.systemd.services.nextcloud-setup.after
+    ))
+
+    (expect "jellyfin: IMVDb is off by default and needs no key" (
+      !(base.lanbat.secrets ? jellyfin-imvdb-env) && !lib.hasInfix "imvdb" (jellyfinBootstrap base)
+    ))
+
+    (expect "jellyfin: settings.imvdb requires the IMVDb key and hands it to the bootstrap" (
+      jellyfinImvdb.lanbat.secrets ? jellyfin-imvdb-env
+      && lib.hasInfix jellyfinImvdb.lanbat.secrets.jellyfin-imvdb-env.path (
+        jellyfinBootstrap jellyfinImvdb
+      )
+      && failedAssertions jellyfinImvdb == [ ]
     ))
 
     (expect "audiobookshelf: the library defaults to drive b's audiobooks and Audible" (

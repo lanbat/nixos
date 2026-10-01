@@ -100,6 +100,7 @@ layout, so a profile sets only what differs:
 | Audiobookshelf | `drive` and `libraryPath`: the audiobooks folder on Pi storage; `metadataProvider`: where "Match books" looks books up (an Audible store, Google, Open Library, iTunes, FantLab) | drive `b`, `media/audiobooks`; `audible` |
 | RomM | `drive`, `libraryPath` and `browserArcadePath`: where the ROM library and the browser's zip copies of the arcade sets live on Pi storage; `authentikAdmin`: the Authentik user whose email RomM's admin gets | drive `b`, `media/roms` and `media/roms-browser/mame`; `akadmin` |
 | Immich | `drive` and `uploadPath`: where the originals and uploads live on Pi storage | drive `a`, `photos` |
+| Jellyfin | `imvdb`: music video metadata from IMVDb, with the key in `jellyfin-imvdb-env.age` | off |
 | Nextcloud | `storage.{drive,path}`: the directory created for the External Storage app's bulk user data | drive `b`, `nextcloud` |
 
 A default share is defined field by field at `lib.mkDefault`, so a profile changes

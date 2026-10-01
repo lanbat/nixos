@@ -216,6 +216,7 @@ in
       rsync
       gzip
       postgresql
+      sqlite
     ];
     serviceConfig = {
       Type = "oneshot";

@@ -14,9 +14,13 @@
 #   - /var/lib/nextcloud
 #   - /var/lib/immich/profile
 #   - /var/lib/frigate/config
+#   - /var/lib/music-assistant
 #   - /var/lib/qbittorrent
 #   - /var/lib/bitmagnet
 #   - /var/lib/audiobookshelf/config (accounts and listening progress)
+#   - /var/lib/vaultwarden (the database through SQLite's online backup)
+#   - Syncthing's config and identity (/var/lib/syncthing/.config/syncthing,
+#     without the index, which Syncthing rebuilds)
 #
 # NOT backed up by this script:
 #   - /srv/storage/a (Pi storage — backs up in its own right)
@@ -86,6 +90,9 @@ rsync -a --delete /var/lib/hass/           "$DEST/hass/"
 rsync -a --delete /var/lib/caddy/          "$DEST/caddy/"
 rsync -a --delete /var/lib/authentik/      "$DEST/authentik/"
 rsync -a --delete /var/lib/frigate/config/ "$DEST/frigate-config/"
+if [ -d /var/lib/music-assistant ]; then
+  rsync -a --delete /var/lib/music-assistant/ "$DEST/music-assistant/"
+fi
 
 if control_online; then
   echo "  Backing up control-layer state..."
@@ -100,7 +107,24 @@ if workload_online; then
   rsync -a --delete /var/lib/qbittorrent/    "$DEST/qbittorrent/"
   rsync -a --delete /var/lib/bitmagnet/      "$DEST/bitmagnet/"
   rsync -a --delete /var/lib/immich/profile/ "$DEST/immich-profile/"
-  rsync -a --delete /var/lib/audiobookshelf/config/ "$DEST/audiobookshelf-config/"
+  if [ -d /var/lib/audiobookshelf/config ]; then
+    rsync -a --delete /var/lib/audiobookshelf/config/ "$DEST/audiobookshelf-config/"
+  fi
+
+  # The vault: attachments, sends and keys by rsync, and the live database
+  # through SQLite's online backup, so a write during the copy can't tear it.
+  if [ -d /var/lib/vaultwarden ]; then
+    rsync -a --delete --exclude 'db.sqlite3*' --exclude 'icon_cache/' \
+      /var/lib/vaultwarden/ "$DEST/vaultwarden/"
+    sqlite3 /var/lib/vaultwarden/db.sqlite3 ".backup '$DEST/vaultwarden/db.sqlite3'"
+  fi
+
+  # Syncthing's device identity (cert.pem, key.pem) and folder config; the
+  # index is rebuilt by rescanning.
+  if [ -d /var/lib/syncthing/.config/syncthing ]; then
+    rsync -a --delete --exclude 'index-*' \
+      /var/lib/syncthing/.config/syncthing/ "$DEST/syncthing/"
+  fi
 else
   echo "  Skipping workload service state: the workload layer is locked."
 fi

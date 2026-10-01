@@ -60,7 +60,10 @@
   # Bitmagnet container
   # ---------------------------------------------------------------------------
   virtualisation.oci-containers.containers."bitmagnet" = {
-    image = "ghcr.io/bitmagnet-io/bitmagnet:v0.17.0";
+    # v0.10.1 is the newest release (latest points at it). Not older: the
+    # database is at migration 20, which keeps the blocklist filter in a large
+    # object; v0.10.0 still reads the dropped column and crashes on startup.
+    image = "ghcr.io/bitmagnet-io/bitmagnet:v0.10.1";
     cmd = [
       "worker"
       "run"

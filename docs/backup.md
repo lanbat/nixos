@@ -15,10 +15,9 @@
 | agenix secrets | `secrets/*.age` | git repository |
 | Frigate config | Rendered from `lanbat.services.frigate.settings` in your `deploy.nix` | Back up `deploy.nix` and the modules it lists (gitignored) |
 | Nextcloud config | `/var/lib/nextcloud/` | `backup-server.sh` (back up before any major upgrade — see `docs/runbook.md` § Nextcloud major version upgrade) |
-| Vaultwarden data | `/var/lib/vaultwarden/` | `backup-server.sh` |
-| InfluxDB data (metrics) | `/var/lib/influxdb2/` | `backup-server.sh` |
-| Grafana state | `/var/lib/grafana/` | `backup-server.sh` |
-| Syncthing config + index | `/var/lib/syncthing/` | `backup-server.sh` |
+| Vaultwarden data | `/var/lib/vaultwarden/` | `backup-server.sh` (the database through SQLite's online backup) |
+| Grafana state | always-on PostgreSQL (`grafana`) | `pg_dump` via `backup-server.sh`; dashboards are provisioned from this repo |
+| Syncthing config + identity | `/var/lib/syncthing/.config/syncthing/` | `backup-server.sh` (without the index, which Syncthing rebuilds) |
 | Audiobookshelf accounts + listening progress | `/var/lib/audiobookshelf/config/` | `backup-server.sh` |
 
 ### Important (back up — slow to regenerate)
@@ -26,7 +25,8 @@
 | Data | Location | Method |
 |---|---|---|
 | Immich originals | `/srv/storage/a/photos/` | Already on Pi LUKS storage |
-| Immich DB | `/var/lib/immich/db/` | `backup-server.sh` |
+| Immich DB | workload PostgreSQL (`immich`) | `pg_dump` via `backup-server.sh` |
+| InfluxDB data (metrics history) | `/var/lib/influxdb2/` | Not backed up: copying the live database isn't safe, and losing it only loses history |
 | Kodi library | `/var/lib/kodi/.kodi/` | manual rsync |
 | Nextcloud user data | `/srv/storage/b/nextcloud/` | Already on Pi LUKS storage |
 | qBittorrent config | `/var/lib/qbittorrent/` | `backup-server.sh` |
