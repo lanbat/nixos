@@ -9,6 +9,8 @@
 # - Web UI is protected by Authentik forward auth via Caddy (sync.<domain>).
 #   Syncthing sync clients connect directly on port 22000 and never go through
 #   Caddy, so forward auth does not affect them.
+# - Web UI: Authentik admins only (access.groups). Sync clients are limited to
+#   the devices declared in settings.
 # - Sync traffic on port 22000 (TCP + UDP) is open to the LAN.
 #   For devices outside the LAN (phone on mobile data, laptop elsewhere):
 #     Option A — open port 22000 on your router for direct connections.
@@ -151,6 +153,8 @@ in
       22000 # sync
     ];
     auth = "forward-auth";
+    # One server identity syncs every folder: the web UI is for admins only.
+    access.groups = lib.mkDefault [ "authentik Admins" ];
     # Homepage's Syncthing widget calls /rest/* without an Authentik session.
     caddy.authBypassPaths = [ "/rest/*" ];
     tier = "workload";

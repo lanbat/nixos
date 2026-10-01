@@ -109,6 +109,24 @@ let
       // extraAttrs;
     };
 
+  # One binding per group in access.groups. An application with no bindings
+  # admits every user; with policy_engine_mode "any", a member of any bound
+  # group gets in.
+  bindings =
+    svc: slug:
+    lib.imap0 (i: group: {
+      model = "authentik_policies.policybinding";
+      state = "present";
+      identifiers = {
+        target = find "authentik_core.application" "slug" slug;
+        group = find "authentik_core.group" "name" group;
+      };
+      attrs = {
+        order = i;
+        enabled = true;
+      };
+    }) svc.access.groups;
+
   proxyEntries =
     svc:
     let
@@ -136,7 +154,8 @@ let
         slug = svc.name + proxySuffix svc;
         provider = proxyProviderId svc;
       })
-    ];
+    ]
+    ++ bindings svc (svc.name + proxySuffix svc);
 
   secretVariable =
     svc:
@@ -145,39 +164,42 @@ let
     else
       "AUTHENTIK_${lib.toUpper (lib.replaceStrings [ "-" ] [ "_" ] svc.name)}_CLIENT_SECRET";
 
-  oidcEntries = svc: [
-    {
-      model = "authentik_providers_oauth2.oauth2provider";
-      id = oidcProviderId svc;
-      state = "present";
-      identifiers.name = displayName svc;
-      attrs = flows // {
-        name = displayName svc;
-        client_id = svc.name;
-        client_secret = tag "!Env" (secretVariable svc);
-        client_type = "confidential";
-        redirect_uris = map (url: {
-          inherit url;
-          matching_mode = "strict";
-        }) (map (path: serviceUrl svc + path) svc.oidc.redirectPaths ++ svc.oidc.redirectUris);
-        signing_key = find "authentik_crypto.certificatekeypair" "name" "authentik Self-signed Certificate";
-        sub_mode = "hashed_user_id";
-        include_claims_in_id_token = true;
-        property_mappings = map (find "authentik_providers_oauth2.scopemapping" "scope_name") [
-          "openid"
-          "email"
-          "profile"
-        ];
-      };
-    }
-    (application {
-      inherit svc;
-      slug = svc.name;
-      provider = oidcProviderId svc;
-      # Listed once in My applications, through its proxy application.
-      extraAttrs = lib.optionalAttrs (hasBoth svc) { meta_launch_url = "blank://blank"; };
-    })
-  ];
+  oidcEntries =
+    svc:
+    [
+      {
+        model = "authentik_providers_oauth2.oauth2provider";
+        id = oidcProviderId svc;
+        state = "present";
+        identifiers.name = displayName svc;
+        attrs = flows // {
+          name = displayName svc;
+          client_id = svc.name;
+          client_secret = tag "!Env" (secretVariable svc);
+          client_type = "confidential";
+          redirect_uris = map (url: {
+            inherit url;
+            matching_mode = "strict";
+          }) (map (path: serviceUrl svc + path) svc.oidc.redirectPaths ++ svc.oidc.redirectUris);
+          signing_key = find "authentik_crypto.certificatekeypair" "name" "authentik Self-signed Certificate";
+          sub_mode = "hashed_user_id";
+          include_claims_in_id_token = true;
+          property_mappings = map (find "authentik_providers_oauth2.scopemapping" "scope_name") [
+            "openid"
+            "email"
+            "profile"
+          ];
+        };
+      }
+      (application {
+        inherit svc;
+        slug = svc.name;
+        provider = oidcProviderId svc;
+        # Listed once in My applications, through its proxy application.
+        extraAttrs = lib.optionalAttrs (hasBoth svc) { meta_launch_url = "blank://blank"; };
+      })
+    ]
+    ++ bindings svc svc.name;
 
   blueprint = name: entries: {
     version = 1;
