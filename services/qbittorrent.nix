@@ -29,6 +29,19 @@
   ...
 }:
 
+let
+  puid = config.lanbat.services.qbittorrent.account.uid;
+  pgid = config.users.groups.media.gid;
+
+  # Podman ID map flags sending container ID `id` to namespace ID 0 (the user
+  # running Podman) and every other container ID 0..65535 to a sub-ID of its own.
+  idMap = flag: id: [
+    "${flag}=0:1:${toString id}"
+    "${flag}=${toString id}:0:1"
+    "${flag}=${toString (id + 1)}:${toString (id + 1)}:${toString (65535 - id)}"
+  ];
+in
+
 {
   lanbat.services.qbittorrent = {
     subdomain = "torrent";
@@ -71,9 +84,10 @@
     image = "lscr.io/linuxserver/qbittorrent:5.2.3";
 
     environment = {
-      # Match the host qbt account so NFS media dirs (qbt:media, mode 2775) are writable.
-      PUID = toString config.lanbat.services.qbittorrent.account.uid;
-      PGID = toString config.users.groups.media.gid;
+      # Mapped to the host qbt account below, so NFS media dirs (qbt:media,
+      # mode 2775) are writable.
+      PUID = toString puid;
+      PGID = toString pgid;
       TZ = config.lanbat.deployment.timezone;
       WEBUI_PORT = "8090";
     };
@@ -87,7 +101,13 @@
     # Host networking avoids pasta's IPv4 fragment drops, which break BitTorrent
     # peer connections in rootless Podman. The web UI stays on loopback via
     # WebUI\Address set in ExecStartPre below.
-    extraOptions = [ "--network=host" ];
+    #
+    # The image runs qBittorrent as PUID:PGID. Rootless Podman would put those
+    # on sub-IDs of qbt's range, which own nothing on the media drives, so they
+    # are mapped to namespace ID 0 instead: the host qbt account and its group.
+    # The media folders are qbt:media with the setgid bit, so new files still
+    # join group media. Every other ID keeps a sub-ID of its own.
+    extraOptions = [ "--network=host" ] ++ idMap "--uidmap" puid ++ idMap "--gidmap" pgid;
 
     podman.user = "qbt";
     user = "0";
@@ -95,12 +115,13 @@
   };
 
   systemd.services."podman-qbittorrent".serviceConfig = {
-    # Set before every start, so the Authentik-only login holds even if the
-    # setting is changed in the web UI. As root (+): the container owns its
-    # config as whichever user ID it runs under (PUID), which qbt, the unit's
-    # user, can't always write. The file is rewritten in place, so it keeps
-    # that owner.
+    # First, as root (+), hand the state to qbt, which PUID maps to: state
+    # written under an earlier mapping belongs to a sub-ID qBittorrent could no
+    # longer write. Then set the web UI preferences, before every start, so the
+    # Authentik-only login holds even if the setting is changed in the web UI;
+    # the file is rewritten in place, so it keeps its owner.
     ExecStartPre = lib.mkBefore [
+      "+${pkgs.coreutils}/bin/chown -R qbt:qbt /var/lib/qbittorrent"
       "+${pkgs.writeShellScript "qbittorrent-web-ui-whitelist" ''
         conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
         [ -f "$conf" ] || exit 0
