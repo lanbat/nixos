@@ -124,7 +124,10 @@ let
       ''
         install -d -m 0755 -o root -g nogroup "$base/users"
         install -d -m 0775 -o root -g ${toString mediaGid} "$base/shared"
-        install -d -m 0700 -o root -g root "$base/backups"''
+        install -d -m 0700 -o root -g root "$base/backups"
+        # backup-server.sh (on the server) only writes into an existing
+        # destination, so a missing directory reads as the NFS mount being down.
+        install -d -m 0700 -o root -g root "$base/backups/server"''
     ];
   };
 in
