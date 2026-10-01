@@ -10,6 +10,9 @@ OWNER_PASSWORD="${OWNER_PASSWORD:?OWNER_PASSWORD is required}"
 AUTHENTIK_JELLYFIN_CLIENT_SECRET="${AUTHENTIK_JELLYFIN_CLIENT_SECRET:?AUTHENTIK_JELLYFIN_CLIENT_SECRET is required}"
 # Music video metadata from IMVDb (optional; empty leaves the plugin out).
 IMVDB_API_KEY="${IMVDB_API_KEY:-}"
+# Open Subtitles account (optional; empty skips credential configuration).
+OPENSUBTITLES_USERNAME="${OPENSUBTITLES_USERNAME:-}"
+OPENSUBTITLES_PASSWORD="${OPENSUBTITLES_PASSWORD:-}"
 STATE_DIR="${STATE_DIR:-/var/lib/jellyfin}"
 WIZARD_STATE_FILE="${WIZARD_STATE_FILE:-${STATE_DIR}/.lanbat-bootstrap-complete}"
 CONFIG_STATE_FILE="${CONFIG_STATE_FILE:-${STATE_DIR}/.lanbat-jellyfin-config-complete}"
@@ -378,6 +381,33 @@ configure_imvdb() {
   REFRESH_LIBRARIES+=("Music Videos")
 }
 
+# Set or update the Open Subtitles plugin credentials so Jellyfin can download
+# subtitles automatically (the plugin is always installed; this step is skipped
+# when OPENSUBTITLES_USERNAME is not set).
+configure_opensubtitles() {
+  [[ -n "$OPENSUBTITLES_USERNAME" ]] || return 0
+  local id current
+  id="$(api_call "${JELLYFIN_URL}/Plugins" | jq -r '[.[] | select(.Name == "Open Subtitles") | .Id][0] // empty')"
+  if [[ -z "$id" ]]; then
+    log "Open Subtitles plugin not loaded yet"
+    return 1
+  fi
+  current="$(api_call "${JELLYFIN_URL}/Plugins/${id}/Configuration")"
+  if [[ "$(jq -r '.Username // empty' <<<"$current")" == "$OPENSUBTITLES_USERNAME" &&
+        "$(jq -r '.Password // empty' <<<"$current")" == "$OPENSUBTITLES_PASSWORD" ]]; then
+    return 0
+  fi
+  log "setting Open Subtitles credentials for ${OPENSUBTITLES_USERNAME}"
+  api_call -X POST "${JELLYFIN_URL}/Plugins/${id}/Configuration" \
+    -H 'Content-Type: application/json' \
+    -d "$(jq \
+      --arg u "$OPENSUBTITLES_USERNAME" \
+      --arg p "$OPENSUBTITLES_PASSWORD" \
+      '.Username = $u | .Password = $p' \
+      <<<"$current")" \
+    -o /dev/null
+}
+
 # Fetch missing metadata and images for a whole library, as its "Refresh
 # metadata" menu does, keeping what items already have.
 refresh_library_metadata() {
@@ -542,6 +572,7 @@ run_configuration() {
   configure_scheduled_scan
   setup_plugins
   configure_imvdb
+  configure_opensubtitles
   setup_sso
   setup_branding
   api_auth
@@ -562,6 +593,7 @@ if [[ -f "$CONFIG_STATE_FILE" ]] && wizard_complete && configuration_complete 2>
   # Plugins added to this script after the server was first set up.
   setup_plugins
   configure_imvdb
+  configure_opensubtitles
   refresh_all_libraries
   refresh_new_provider_libraries
   log "configuration already complete"

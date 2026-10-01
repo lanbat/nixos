@@ -20,6 +20,16 @@
 # Snapserver", host 127.0.0.1, control port 1705.  Do NOT use MA's built-in
 # snapserver (it would bind the same ports).
 #
+# Sendspin (builtin WebRTC player provider)
+# -----------------------------------------
+# MA 2.7.x treats "sendspin" as builtin (builtin=true, allow_disable=false).
+# It runs an internal WebRTC signalling server on loopback port 8927 that the
+# webserver's sendspin_proxy forwards to from the public MA port (8095/8097).
+# Without "sendspin" in the providers list aiosendspin is not installed and the
+# provider fails to load at startup, breaking the web UI's browser audio player
+# and logging a RuntimeError on every restart.  No extra firewall rules are
+# needed: external clients connect through the existing 8095/8097 ports.
+#
 # Local music library
 # -------------------
 # The filesystem_local provider reads the music library over NFS; its path is
@@ -125,6 +135,7 @@ in
     providers = [
       "snapcast"
       "filesystem_local"
+      "sendspin" # builtin WebRTC player; see comment above
     ];
   };
 
