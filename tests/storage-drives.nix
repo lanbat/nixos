@@ -322,6 +322,19 @@ let
       "c"
     ]
     ++ [
+      # backup-server.sh refuses to run unless its destination already exists,
+      # so the drive it writes to must create that directory, not only its parent.
+      (expect "the backup destination backup-server.sh checks for is created" (
+        let
+          script = builtins.readFile ../pkgs/scripts/backup-server.sh;
+          m = builtins.match ".*\nBACKUP_DIR=/srv/storage/([^/]+)/([^\n]+)\n.*" script;
+          drive = lib.elemAt m 0;
+          dir = lib.elemAt m 1;
+        in
+        m != null
+        && lib.hasInfix ''"$base/${dir}"''
+          (cfg "three-pi-storage").systemd.services."storage-${drive}-init".serviceConfig.ExecStart.text
+      ))
       (expect "one drive: nothing refers to the absent a or b" (
         !(one.systemd.services ? "storage-a-unlock")
         && !(one.systemd.services ? "storage-b-init")
