@@ -217,6 +217,7 @@ in
       gzip
       postgresql
       sqlite
+      util-linux # runuser, to dump as postgres
     ];
     serviceConfig = {
       Type = "oneshot";

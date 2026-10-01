@@ -332,8 +332,20 @@ let
           dir = lib.elemAt m 1;
         in
         m != null
-        && lib.hasInfix ''"$base/${dir}"''
-          (cfg "three-pi-storage").systemd.services."storage-${drive}-init".serviceConfig.ExecStart.text
+        &&
+          lib.hasInfix ''"$base/${dir}"''
+            (cfg "three-pi-storage").systemd.services."storage-${drive}-init".serviceConfig.ExecStart.text
+      ))
+      # The unit runs as root with only its own path; sudo is a setuid wrapper
+      # outside it, so the script drops to postgres with runuser instead.
+      (expect "backup-server drops privileges with a command its unit provides" (
+        let
+          script = builtins.readFile ../pkgs/scripts/backup-server.sh;
+          unitPath = (cfg "three-server").systemd.services.backup-server.path;
+        in
+        !(lib.hasInfix "sudo " script)
+        && lib.hasInfix "runuser -u postgres --" script
+        && lib.any (p: (p.pname or "") == "util-linux") unitPath
       ))
       (expect "one drive: nothing refers to the absent a or b" (
         !(one.systemd.services ? "storage-a-unlock")

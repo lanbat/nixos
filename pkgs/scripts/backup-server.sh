@@ -65,11 +65,11 @@ dump_instance() {
   echo "  Dumping PostgreSQL ($label)..."
   install -d "$DEST/postgres-$label"
   # shellcheck disable=SC2086
-  sudo -u postgres pg_dumpall $conn --clean --if-exists | \
+  runuser -u postgres -- pg_dumpall $conn --clean --if-exists | \
     gzip > "$DEST/postgres-$label/pg_dumpall.sql.gz"
   for db in "$@"; do
     # shellcheck disable=SC2086
-    sudo -u postgres pg_dump $conn --clean --if-exists "$db" | \
+    runuser -u postgres -- pg_dump $conn --clean --if-exists "$db" | \
       gzip > "$DEST/postgres-$label/${db}.sql.gz"
   done
 }
