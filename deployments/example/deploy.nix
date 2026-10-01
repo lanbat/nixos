@@ -79,7 +79,21 @@
         inputs.self.lanbatPlugins.xiaomi-clock
       ];
       # Merged last, so they override anything core, the role or a plugin set.
-      modules = [ ./frigate.nix ];
+      modules = [
+        ./frigate.nix
+        # Syncthing's devices and folders (services/syncthing.nix). Folder IDs
+        # are the ones the other devices already use.
+        {
+          lanbat.services.syncthing.settings = {
+            devices.laptop.id = "AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH";
+            folders.example-sync = {
+              label = "Sync";
+              path = "/srv/storage/b/users/admin/sync/example";
+              devices = [ "laptop" ];
+            };
+          };
+        }
+      ];
     };
 
     pi-storage = {

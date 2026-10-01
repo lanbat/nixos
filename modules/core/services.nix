@@ -254,6 +254,22 @@ let
           '';
         };
 
+        access.groups = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [ "authentik Admins" ];
+          description = ''
+            Authentik groups whose members may open the service; empty admits
+            every Authentik user. Enforced at the service's Authentik
+            applications (forward auth and OIDC), so it needs one of them.
+            A group Authentik does not have yet is created, empty, so a
+            mistyped name locks the service rather than opening it.
+            Blueprints only add and update, so a group removed from this list
+            keeps its binding until it is deleted in Authentik's admin UI
+            (Applications → the application → Policy / Group / User Bindings).
+          '';
+        };
+
         apiClients = mkOption {
           type = types.bool;
           default = false;

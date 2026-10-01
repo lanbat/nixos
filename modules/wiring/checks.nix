@@ -158,6 +158,10 @@ let
         + " profile, or make the integration conditional on lanbat.hasService.";
     }
     {
+      assertion = s.access.groups == [ ] || s.auth == "forward-auth" || s.oidc != null;
+      message = "lanbat: ${s.name} limits access to Authentik groups, but Authentik guards neither its web UI (auth = \"forward-auth\") nor its login (oidc), so nothing would enforce it";
+    }
+    {
       assertion = s.auth != "forward-auth" || config.lanbat.authProvider != null;
       message = "lanbat: ${s.name} uses forward auth, but no authentication provider runs on this host";
     }

@@ -25,6 +25,7 @@
 | Data | Location | Method |
 |---|---|---|
 | Immich originals | `/srv/storage/a/photos/` | Already on Pi LUKS storage |
+| Bulk data on the Pi (Immich originals, `users/`, `media/`) | `/srv/storage/{a,b}/` | **No second copy**: each drive is a single LUKS disk, so keep another copy elsewhere (an off-site copy, or the devices that sync it) |
 | Immich DB | workload PostgreSQL (`immich`) | `pg_dump` via `backup-server.sh` |
 | InfluxDB data (metrics history) | `/var/lib/influxdb2/` | Not backed up: copying the live database isn't safe, and losing it only loses history |
 | Kodi library | `/var/lib/kodi/.kodi/` | manual rsync |

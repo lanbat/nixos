@@ -85,6 +85,8 @@ let
     subdomain = "demo";
     port = 8123;
     auth = "forward-auth";
+    # Carried across hosts, so the server's Authentik binds it.
+    access.groups = [ "demo-users" ];
     dashboard = {
       group = "Utilities";
       name = "Demo";
@@ -324,6 +326,22 @@ let
     ))
     (expect "the Authentik catalogue on the server lists the remote service" (
       lib.elem "provider-demo" proxyIds
+    ))
+    (expect "the remote service's access groups reach the server's Authentik" (
+      lib.any (
+        e:
+        e.model == "authentik_policies.policybinding"
+        &&
+          lib.last e.identifiers.target.value == [
+            "slug"
+            "demo"
+          ]
+        &&
+          lib.last e.identifiers.group.value == [
+            "name"
+            "demo-users"
+          ]
+      ) catalogue.proxy.entries
     ))
     (expect "the embedded outpost serves the remote service" (
       lib.any (p: p.value == "provider-demo")

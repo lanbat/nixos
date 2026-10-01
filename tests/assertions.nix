@@ -165,6 +165,15 @@ let
       [ "demo is on-demand, but this host has no on-demand wiring" ]
     )
 
+    (expect "access groups that nothing enforces" {
+      demo = {
+        subdomain = "demo";
+        port = 8000;
+        auth = "app";
+        access.groups = [ "admins" ];
+      };
+    } [ "demo limits access to Authentik groups" ])
+
     (expect "tang with an endpoint" {
       tang.endpoint.port = 7500;
     } [ "tang publishes an endpoint" ])

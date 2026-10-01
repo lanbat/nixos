@@ -129,7 +129,7 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Vaultwarden | Own account system + admin token | Bitwarden clients need direct API access; no forward auth |
 | Grafana | OIDC (Authentik) + local admin | Native generic_oauth support |
 | InfluxDB | Token auth (not exposed publicly) | Accessed by Grafana only; no browser UI needed on LAN |
-| Syncthing | Caddy forward-auth (Authentik) | Sync clients use port 22000 directly, not Caddy |
+| Syncthing | Caddy forward-auth (Authentik), admins only (`access.groups`) | Sync clients use port 22000 directly, not Caddy; only devices declared in the profile connect |
 | Music Assistant | Caddy forward-auth (Authentik) | No native OIDC; stream port (8097) not exposed on firewall |
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming and control ports (1704/1705) admit only declared clients (`services/snapcast.nix`) |
 | Wyoming satellites | No auth (Pi: firewall-restricted to server IP; server: localhost only) | Internal protocol; only HA connects |
