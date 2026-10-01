@@ -7,12 +7,12 @@
    Authentik, HA, Grafana, InfluxDB, Mosquitto, Frigate, Music Assistant, Snapcast, Wyoming, SearXNG, Telegraf.
 3. Admin SSHes in and runs `sudo unlock-control` → Tang starts on port 7500.
 4. Admin runs `sudo unlock-workload` → the PostgreSQL workload instance, Nextcloud, Immich,
-   Jellyfin, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM come up.
+   Jellyfin, Audiobookshelf, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM come up.
 5. Pi boots from SD card. After network is up, `storage-a-unlock` and `storage-b-unlock`
    contact Tang, unlock both NVMe drives (retries every 5 min until Tang is reachable).
 6. `/mnt/storage-a` and `/mnt/storage-b` mount on the Pi. NFS server starts.
 7. Server automounts `/srv/storage/a` and `/srv/storage/b` on first access.
-8. NFS-dependent services (Jellyfin, qBittorrent, Frigate, Samba) fully operational.
+8. NFS-dependent services (Jellyfin, Audiobookshelf, qBittorrent, Frigate, Samba) fully operational.
 
 Steps 1–2 are automatic. Steps 3–4 require a single SSH session after reboot.
 Use `sudo unlock-all` to run both in sequence.
@@ -99,6 +99,7 @@ Services that stay up during Pi reboot (always-on tier):
 
 Workload-gated services that pause and restart (NFS-dependent):
 - Jellyfin ⏸→▶
+- Audiobookshelf ⏸→▶
 - qBittorrent ⏸→▶
 - Frigate ⏸→▶
 - Samba ⏸→▶

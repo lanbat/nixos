@@ -121,6 +121,7 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Frigate | Caddy forward-auth (Authentik) | No native OIDC |
 | qBittorrent | Caddy forward-auth + local app auth | No OIDC |
 | Bitmagnet | Caddy forward-auth (Authentik) | No native OIDC |
+| Audiobookshelf | Own accounts + native OIDC (Authentik) | Phone apps log in through the same OIDC; an Authentik user gets the account with their username, or a new one |
 | RomM | Own accounts + native OIDC (Authentik) | App clients (Argosy Launcher) pair by code; admin email must match the Authentik user |
 | SearXNG | None (intentional) | Public LAN search |
 | Samba | Local smbpasswd (optionally Authentik LDAP) | SMB doesn't speak OIDC |
@@ -151,6 +152,7 @@ Caddy and Authentik on this one.
 | `cloud.<domain>` | Nextcloud |
 | `photos.<domain>` | Immich |
 | `media.<domain>` | Jellyfin |
+| `audiobooks.<domain>` | Audiobookshelf |
 | `ha.<domain>` | Home Assistant |
 | `nvr.<domain>` | Frigate NVR |
 | `torrent.<domain>` | qBittorrent |

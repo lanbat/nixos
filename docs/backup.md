@@ -18,6 +18,7 @@
 | Vaultwarden data | `/var/lib/vaultwarden/` | `backup-server.sh` (the database through SQLite's online backup) |
 | Grafana state | always-on PostgreSQL (`grafana`) | `pg_dump` via `backup-server.sh`; dashboards are provisioned from this repo |
 | Syncthing config + identity | `/var/lib/syncthing/.config/syncthing/` | `backup-server.sh` (without the index, which Syncthing rebuilds) |
+| Audiobookshelf accounts + listening progress | `/var/lib/audiobookshelf/config/` | `backup-server.sh` |
 
 ### Important (back up — slow to regenerate)
 
@@ -37,6 +38,7 @@
 |---|---|
 | Container images | Re-pull from registry |
 | Jellyfin metadata/posters | Re-scan from media files |
+| Audiobookshelf book details and covers (`/var/lib/audiobookshelf/metadata/`) | Re-scan and "Match books" |
 | Immich thumbnails | Re-generated from originals |
 | Transcode cache | Temporary by definition |
 | Frigate ML models | Re-download from source |

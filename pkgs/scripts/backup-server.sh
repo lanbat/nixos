@@ -17,6 +17,7 @@
 #   - /var/lib/music-assistant
 #   - /var/lib/qbittorrent
 #   - /var/lib/bitmagnet
+#   - /var/lib/audiobookshelf/config (accounts and listening progress)
 #   - /var/lib/vaultwarden (the database through SQLite's online backup)
 #   - Syncthing's config and identity (/var/lib/syncthing/.config/syncthing,
 #     without the index, which Syncthing rebuilds)
@@ -106,6 +107,9 @@ if workload_online; then
   rsync -a --delete /var/lib/qbittorrent/    "$DEST/qbittorrent/"
   rsync -a --delete /var/lib/bitmagnet/      "$DEST/bitmagnet/"
   rsync -a --delete /var/lib/immich/profile/ "$DEST/immich-profile/"
+  if [ -d /var/lib/audiobookshelf/config ]; then
+    rsync -a --delete /var/lib/audiobookshelf/config/ "$DEST/audiobookshelf-config/"
+  fi
 
   # The vault: attachments, sends and keys by rsync, and the live database
   # through SQLite's online backup, so a write during the copy can't tear it.

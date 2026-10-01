@@ -12,6 +12,7 @@
 # voice-satellite is described by modules/core/voice-satellite.nix, which every
 # host imports, so it is not selectable here.
 {
+  audiobookshelf = ../../services/audiobookshelf.nix;
   authentik = ../../services/authentik;
   bitmagnet = ../../services/bitmagnet.nix;
   caddy = ../../services/caddy.nix;

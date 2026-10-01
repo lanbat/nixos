@@ -97,6 +97,7 @@ layout, so a profile sets only what differs:
 | Wyoming | `wakeWord.threshold`, `speechToText.{model,language}`, `textToSpeech.voice`, and the server satellite's `satellite.{name,speaker,mixer,microphoneUsbId}` | British English (`en`, `en_GB-alan-medium`) and the onboard Intel codec (ALSA card `PCH`) |
 | Home Assistant | `zigbee2mqttBridge`: the bridge-offline notification and the Overview card | on when Zigbee2MQTT runs on the host |
 | Telegraf | `pingTargets`: the hosts pinged for reachability | the storage Pi, the default gateway and `1.1.1.1` |
+| Audiobookshelf | `drive` and `libraryPath`: the audiobooks folder on Pi storage; `metadataProvider`: where "Match books" looks books up (an Audible store, Google, Open Library, iTunes, FantLab) | drive `b`, `media/audiobooks`; `audible` |
 | RomM | `drive`, `libraryPath` and `browserArcadePath`: where the ROM library and the browser's zip copies of the arcade sets live on Pi storage; `authentikAdmin`: the Authentik user whose email RomM's admin gets | drive `b`, `media/roms` and `media/roms-browser/mame`; `akadmin` |
 | Immich | `drive` and `uploadPath`: where the originals and uploads live on Pi storage | drive `a`, `photos` |
 | Jellyfin | `imvdb`: music video metadata from IMVDb, with the key in `jellyfin-imvdb-env.age` | off |

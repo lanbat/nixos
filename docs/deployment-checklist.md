@@ -453,7 +453,8 @@ bash secrets/generate-oidc-secrets.sh
 
 This creates `authentik-oidc-secrets.age` and updates `grafana-env.age`,
 `nextcloud-oidc-env.age`, `immich-oidc-env.age`, and `romm-oidc-env.age` with
-matching values. The script prints the client credentials needed for Home
+matching values; Jellyfin's and Audiobookshelf's setup units read their own
+client secrets from `authentik-oidc-secrets.age`. The script prints the client credentials needed for Home
 Assistant and Jellyfin (see manual steps below).
 
 Deploy to apply the new secrets:
@@ -520,6 +521,34 @@ put `IMVDB_API_KEY=<key>` in `jellyfin-imvdb-env.age` (`agenix -e
 jellyfin-imvdb-env.age`), and set `lanbat.services.jellyfin.settings.imvdb = true`
 in a module of the server's `modules`. The next deploy installs the plugin, gives
 it the key and fetches the Music Videos library's metadata again.
+
+#### Audiobookshelf — automatic setup
+
+`audiobookshelf-bootstrap` sets up Audiobookshelf when the workload layer is
+unlocked:
+
+- Root account from `hass-bootstrap-env.age` (the same break-glass login as
+  Jellyfin)
+- Authentik OIDC login from `AUTHENTIK_AUDIOBOOKSHELF_CLIENT_SECRET` in
+  `authentik-oidc-secrets.age`: an Authentik user gets the Audiobookshelf account
+  with the same username, or a new one; the phone apps log in the same way
+- An Audiobooks library on `/srv/storage/b/media/audiobooks` (the folder
+  Jellyfin's Audiobooks library also reads), scanned every two hours
+- "Match books" against Audible (`settings.metadataProvider`) at each unlock and
+  nightly, for books without an ASIN or ISBN
+
+Audiobookshelf groups a book's files by folder: `<author>/<title>/` or
+`<author>/<series>/<title>/`. A book matched to the wrong edition is fixed from
+its page with **Match**.
+
+If `authentik-oidc-secrets.age` predates Audiobookshelf, add its client secret
+before deploying: without it the setup unit stops, and Authentik's blueprint has
+no secret for the new client.
+
+```bash
+cd secrets && agenix -e authentik-oidc-secrets.age
+# add the line: AUTHENTIK_AUDIOBOOKSHELF_CLIENT_SECRET=<openssl rand -hex 32>
+```
 
 #### RomM — OIDC login
 

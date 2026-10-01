@@ -207,8 +207,8 @@ availability requirements:
 - Set `tier = "workload"`, list the `/var/lib` directories in `state` and the systemd
   units in `units`. The wiring creates the mode-0000 stubs, bind-mounts
   `/mnt/workload/<dir>` over them, and moves the units under `workload-online.target`.
-- Current members: Nextcloud, Immich, Jellyfin, Vaultwarden, Syncthing, Samba,
-  qBittorrent, Bitmagnet, RomM, PostgreSQL (workload instance)
+- Current members: Nextcloud, Immich, Jellyfin, Audiobookshelf, Vaultwarden, Syncthing,
+  Samba, qBittorrent, Bitmagnet, RomM, PostgreSQL (workload instance)
 
 When in doubt, prefer **always-on** for monitoring/automation/infrastructure services
 and **workload-gated** for personal data vaults (passwords, photos, documents, media).

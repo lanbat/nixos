@@ -272,7 +272,7 @@ Put the internal CA's public certificate (`caddy-ca-root.crt`) there too, or set
 | File | Format | Used by |
 |------|--------|---------|
 | `authentik-env.age` | `KEY=value` × 2 | Authentik server + worker |
-| `authentik-oidc-secrets.age` | `KEY=value` lines (one per OIDC client) | Authentik blueprints; shared with Jellyfin (SSO client secret for `jellyfin-bootstrap`) |
+| `authentik-oidc-secrets.age` | `KEY=value` lines (one per OIDC client, `AUTHENTIK_<NAME>_CLIENT_SECRET`) | Authentik blueprints; shared with Jellyfin and Audiobookshelf (client secrets for `jellyfin-bootstrap` and `audiobookshelf-bootstrap`) |
 | `nextcloud-admin-pass.age` | plaintext password | Nextcloud |
 | `nextcloud-oidc-env.age` | `KEY=value` × 2 | Nextcloud OIDC setup |
 | `immich-db-password.age` | `POSTGRES_PASSWORD=<value>` | Immich postgres container |
@@ -290,7 +290,7 @@ Put the internal CA's public certificate (`caddy-ca-root.crt`) there too, or set
 | `searxng-secret.age` | plaintext value | SearXNG session and image-proxy signing |
 | `homepage-widgets-env.age` | `KEY=value` lines for widget API keys/tokens | Homepage dashboard widgets |
 | `telegraf-token.age` | `TELEGRAF_INFLUXDB_TOKEN=<value>` | Telegraf (server + Pi); shared with InfluxDB on the server (write-token provisioning) |
-| `hass-bootstrap-env.age` | `OWNER_USERNAME=<value>`, `OWNER_PASSWORD=<value>` | Home Assistant onboarding; shared with Jellyfin, Immich and Music Assistant, whose setup units sign in with the same owner account |
+| `hass-bootstrap-env.age` | `OWNER_USERNAME=<value>`, `OWNER_PASSWORD=<value>` | Home Assistant onboarding; shared with Jellyfin, Immich, Music Assistant and Audiobookshelf, whose setup units sign in with the same owner account |
 | `ha-llm-api-key.age` | plaintext API key | Home Assistant's conversation agent (`lanbat.haLlm`); only with `haLlm` set |
 | `ha-voice-token.age` | Home Assistant long-lived access token, from `generate-ha-voice-token.sh` | Voice satellites (server + Pi), to speak replies on the room's speakers (`lanbat.voiceRooms`); only with `voiceRooms` set |
 | `ha-voice-refresh-token.age` | `VOICE_TOKEN_ID=`, `VOICE_TOKEN_JWT_KEY=`, `VOICE_TOKEN_CREATED=`, from `generate-ha-voice-token.sh` | `home-assistant-post-setup`, which adds the token and its "Voice satellites" user to Home Assistant |
