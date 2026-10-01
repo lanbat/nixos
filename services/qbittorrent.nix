@@ -71,9 +71,11 @@
     image = "lscr.io/linuxserver/qbittorrent:5.2.3";
 
     environment = {
-      # Match the host qbt account so NFS media dirs (qbt:media, mode 2775) are writable.
-      PUID = toString config.lanbat.services.qbittorrent.account.uid;
-      PGID = toString config.users.groups.media.gid;
+      # Namespace root maps to the rootless Podman account (host qbt:qbt).
+      # Using the host IDs here would map them again through qbt's subordinate
+      # ID range, leaving the process unable to write qbt-owned NFS paths.
+      PUID = "0";
+      PGID = "0";
       TZ = config.lanbat.deployment.timezone;
       WEBUI_PORT = "8090";
     };
@@ -96,11 +98,11 @@
 
   systemd.services."podman-qbittorrent".serviceConfig = {
     # Set before every start, so the Authentik-only login holds even if the
-    # setting is changed in the web UI. As root (+): the container owns its
-    # config as whichever user ID it runs under (PUID), which qbt, the unit's
-    # user, can't always write. The file is rewritten in place, so it keeps
-    # that owner.
+    # setting is changed in the web UI. As root (+), because existing config
+    # files may still carry a subordinate ID from the old PUID mapping. The
+    # file is rewritten in place, so it keeps that owner.
     ExecStartPre = lib.mkBefore [
+      "+${pkgs.coreutils}/bin/chown -R qbt:qbt /var/lib/qbittorrent"
       "+${pkgs.writeShellScript "qbittorrent-web-ui-whitelist" ''
         conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
         [ -f "$conf" ] || exit 0
