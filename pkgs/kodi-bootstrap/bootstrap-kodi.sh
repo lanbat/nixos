@@ -113,6 +113,7 @@ configure_video_library() {
     "tv|/mnt/storage-a/media/tv/|tvshows|metadata.tvshows.themoviedb.org.python|0|1"
     "music-videos|/mnt/storage-a/media/music-videos/|musicvideos|metadata.local|1|0"
     "documentaries|/mnt/storage-b/media/documentaries/|movies|metadata.themoviedb.org.python|1|0"
+    "documentary-series|/mnt/storage-b/media/documentary-series/|tvshows|metadata.tvshows.themoviedb.org.python|0|1"
     "gym|/mnt/storage-b/media/gym/|movies|metadata.themoviedb.org.python|1|0"
     "games|/mnt/storage-b/media/games/|movies|metadata.themoviedb.org.python|1|0"
     "misc|/mnt/storage-b/media/misc/|movies|metadata.themoviedb.org.python|1|0"

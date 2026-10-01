@@ -19,7 +19,7 @@ Raspberry Pi 5
 │
 └── Drive B  /dev/disk/by-id/DRIVE_B  →  LUKS  →  /dev/mapper/storage-b  →  XFS  →  /mnt/storage-b
     ├── /mnt/storage-b/media/              ← the rest of the media, as on drive A
-    │   ├── music/  documentaries/  adult/  roms/
+    │   ├── music/  documentaries/  documentary-series/  adult/  roms/
     │   ├── audiobooks/  books/  gym/  games/  misc/
     │   └── roms-browser/mame/                 ← zip copies of the arcade sets, for RomM's browser player
     ├── /mnt/storage-b/nextcloud/          ← Nextcloud external storage
