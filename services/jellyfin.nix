@@ -42,6 +42,14 @@
 # metadata again. Audiobooks get no online metadata here, and a book in several
 # files shows as one item per file.
 #
+# Subtitles
+# ---------
+# The Open Subtitles plugin is installed by jellyfin-bootstrap. With
+# settings.opensubtitles, the account credentials from
+# secrets/jellyfin-opensubtitles-env.age (OPENSUBTITLES_USERNAME,
+# OPENSUBTITLES_PASSWORD) are provisioned and written into the plugin's
+# configuration so Jellyfin can download subtitles automatically.
+#
 # That bootstrap logs in to Home Assistant and configures OIDC against
 # Authentik, so it only exists when the deployment runs both. Without them
 # Jellyfin still serves media; it just keeps its own accounts and is not
@@ -93,6 +101,18 @@ let
         secrets/jellyfin-imvdb-env.age (a free key from imvdb.com).
       '';
     };
+    options.opensubtitles = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Configure the Open Subtitles plugin with an opensubtitles.com account.
+        jellyfin-bootstrap installs the plugin unconditionally and, when this
+        is true, sets its username and password from
+        secrets/jellyfin-opensubtitles-env.age (OPENSUBTITLES_USERNAME,
+        OPENSUBTITLES_PASSWORD) so Jellyfin can download subtitles
+        automatically.
+      '';
+    };
   };
 in
 {
@@ -115,6 +135,8 @@ in
     ];
     # IMVDB_API_KEY, for jellyfin-bootstrap (root).
     secrets.jellyfin-imvdb-env.enable = cfg.imvdb && integrates;
+    # OPENSUBTITLES_USERNAME and OPENSUBTITLES_PASSWORD, for jellyfin-bootstrap.
+    secrets.jellyfin-opensubtitles-env.enable = cfg.opensubtitles && integrates;
     tier = "workload";
     state = [ "jellyfin" ];
     units = [
@@ -190,6 +212,7 @@ in
       . ${config.lanbat.secrets.hass-bootstrap-env.path}
       . ${config.lanbat.secrets.authentik-oidc-secrets.path}
       ${lib.optionalString cfg.imvdb ". ${config.lanbat.secrets.jellyfin-imvdb-env.path}"}
+      ${lib.optionalString cfg.opensubtitles ". ${config.lanbat.secrets.jellyfin-opensubtitles-env.path}"}
       set +a
       export JELLYFIN_URL="http://127.0.0.1:8096"
       export EXTERNAL_URL="https://media.${domain}"
