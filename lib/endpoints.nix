@@ -38,6 +38,9 @@ let
             auditLog
             ;
         };
+        # The Authentik groups it admits, which the catalogue binds wherever
+        # Authentik runs.
+        access.groups = svc.access.groups or [ ];
         # Whether it is on-demand, not the activator: the activator only exists
         # on the service's own host, which is why Caddy rejects proxying to one.
         onDemand = svc.onDemand != null;
