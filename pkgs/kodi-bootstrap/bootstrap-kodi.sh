@@ -48,11 +48,6 @@ ensure_storage() {
     exit 1
   fi
 
-  if [[ -d /mnt/storage-b/media/adult ]] && ! test -r /mnt/storage-b/media/adult; then
-    log "media user cannot read /mnt/storage-b/media/adult (needs private group)"
-    exit 1
-  fi
-
   install -d -m 0755 -o media -g media "$(dirname "$STORAGE_STAMP")"
   touch "$STORAGE_STAMP"
   chown media:media "$STORAGE_STAMP"
@@ -117,7 +112,6 @@ configure_video_library() {
     "gym|/mnt/storage-b/media/gym/|movies|metadata.themoviedb.org.python|1|0"
     "games|/mnt/storage-b/media/games/|movies|metadata.themoviedb.org.python|1|0"
     "misc|/mnt/storage-b/media/misc/|movies|metadata.themoviedb.org.python|1|0"
-    "adult|/mnt/storage-b/media/adult/|none|metadata.local|1|0"
   )
 
   local spec name path content scraper recursive folder_names

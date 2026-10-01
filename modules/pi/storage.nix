@@ -112,6 +112,10 @@ let
         install -d -m 2770 -o ${uidOf "qbittorrent"} -g ${toString privateGid} "$base/media/adult"
         chgrp ${toString privateGid} "$base/media/adult" 2>/dev/null || true
         chmod 2770 "$base/media/adult" 2>/dev/null || true
+        # Its contents too: something moved in from elsewhere in media keeps
+        # group media, readable to every media user behind this folder's lock.
+        chgrp -R ${toString privateGid} "$base/media/adult" 2>/dev/null || true
+        chmod -R o-rwx "$base/media/adult" 2>/dev/null || true
       '')
       (forService "nextcloud" ''
         # Nextcloud owns bulk user data; the Samba shared space is group media.
