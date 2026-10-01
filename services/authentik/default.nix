@@ -133,6 +133,8 @@ in
           trusted_proxies private_ranges
         }
       '';
+
+      userHeader = "X-Authentik-Username";
     };
 
   lanbat.postgresql.databases.authentik = {

@@ -56,6 +56,18 @@ in
               provider's endpoint and the headers to copy.
             '';
           };
+          userHeader = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "X-Authentik-Username";
+            description = ''
+              Request header in which forwardAuth hands the application the
+              signed-in user's name, or null when it hands none. The wiring
+              removes it from every request before the check, so a request
+              cannot name its own user, and services with caddy.auditLog
+              record it.
+            '';
+          };
         };
       }
     );

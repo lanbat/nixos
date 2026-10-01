@@ -2,6 +2,11 @@
 #
 # qBittorrent — torrent client with web UI.
 #
+# Web UI: VueTorrent (pkgs.vuetorrent), which works on phones as well as
+#   desktop browsers, unlike qBittorrent's own. qBittorrent serves it as its
+#   alternative web UI from the package, mounted read-only into the container,
+#   so it updates with nixpkgs and the API (Homepage's widget) is unchanged.
+#
 # Storage split
 # -------------
 # Server-local:
@@ -17,11 +22,21 @@
 #   If Pi storage disappears while a torrent is active, qBittorrent will
 #   write I/O errors.  We stop it immediately and restart when NFS returns.
 #
-# Auth: Authentik, through Caddy's forward auth, is the only login. After it,
-#   everyone shares the one instance: qBittorrent skips its own login for
-#   requests from the server's address, which is where the rootless port
-#   mapping delivers Caddy's requests. The port listens only on the server's
-#   loopback, so nothing on the LAN reaches qBittorrent without Authentik.
+# Auth: Authentik, through Caddy's forward auth, is the only login, for the web
+#   UI and the API alike. After it, everyone shares the one instance:
+#   qBittorrent skips its own login for requests from the server's address,
+#   which is where Caddy's requests come from. The port listens only on the
+#   server's loopback, so nothing on the LAN reaches qBittorrent without
+#   Authentik.
+#
+# Audit: caddy.auditLog records who did what, with the Authentik user on each
+#   line of /var/log/caddy/access-torrent.<domain>.log: page loads and every
+#   action (adding, pausing, deleting a torrent, changing a setting), which the
+#   API takes as POST requests. See docs/operations.md.
+#
+# Homepage: its widget reads the torrent list from qBittorrent on the server's
+#   loopback (Homepage uses host networking), which qBittorrent answers without
+#   a login, so the widget needs no credentials and Caddy no exception.
 {
   config,
   pkgs,
@@ -47,8 +62,7 @@ in
     subdomain = "torrent";
     port = 8090;
     auth = "forward-auth";
-    # Homepage's qBittorrent widget calls /api/v2/* without an Authentik session.
-    caddy.authBypassPaths = [ "/api/v2/*" ];
+    caddy.auditLog = true;
     tier = "workload";
     state = [ "qbittorrent" ];
     units = [ "podman-qbittorrent" ];
@@ -69,17 +83,15 @@ in
       description = "Torrent client";
       widget = {
         type = "qbittorrent";
-        username = "admin";
-        password = {
-          _secret = "QBITTORRENT_PASSWORD";
-        };
+        # Straight to qBittorrent, which skips its login for loopback; through
+        # Caddy the widget would need an Authentik session.
+        url = "http://127.0.0.1:${toString config.lanbat.services.qbittorrent.port}";
         enableLeechProgress = true;
       };
     };
   };
 
-  # Run qBittorrent as an OCI container to simplify volume mounts and
-  # to use the linuxserver.io image which ships a clean web UI.
+  # Run qBittorrent as an OCI container to simplify volume mounts.
   virtualisation.oci-containers.containers."qbittorrent" = {
     image = "lscr.io/linuxserver/qbittorrent:5.2.3";
 
@@ -96,6 +108,7 @@ in
       "/var/lib/qbittorrent:/config"
       "/srv/storage/a/media:/media/a"
       "/srv/storage/b/media:/media/b"
+      "${pkgs.vuetorrent}/share/vuetorrent:/vuetorrent:ro"
     ];
 
     # Host networking avoids pasta's IPv4 fragment drops, which break BitTorrent
@@ -118,11 +131,11 @@ in
     # First, as root (+), hand the state to qbt, which PUID maps to: state
     # written under an earlier mapping belongs to a sub-ID qBittorrent could no
     # longer write. Then set the web UI preferences, before every start, so the
-    # Authentik-only login holds even if the setting is changed in the web UI;
-    # the file is rewritten in place, so it keeps its owner.
+    # Authentik-only login and VueTorrent hold even if the settings are changed
+    # in the web UI; the file is rewritten in place, so it keeps its owner.
     ExecStartPre = lib.mkBefore [
       "+${pkgs.coreutils}/bin/chown -R qbt:qbt /var/lib/qbittorrent"
-      "+${pkgs.writeShellScript "qbittorrent-web-ui-whitelist" ''
+      "+${pkgs.writeShellScript "qbittorrent-web-ui-prefs" ''
         conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
         [ -f "$conf" ] || exit 0
         tmp=$(${pkgs.coreutils}/bin/mktemp)
@@ -137,6 +150,8 @@ in
           ' "$conf" > "$tmp" && ${pkgs.coreutils}/bin/cat "$tmp" > "$conf"
         }
         set_pref 'WebUI\Address' 127.0.0.1
+        set_pref 'WebUI\AlternativeUIEnabled' true
+        set_pref 'WebUI\RootFolder' /vuetorrent
         set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
         # Host networking: Caddy connects via loopback (127.0.0.1). Bridge/pasta
         # used to rewrite the source to the server IP — keep both.

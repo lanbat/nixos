@@ -294,6 +294,24 @@ journalctl -u srv-storage-a.mount -f
 journalctl -u storage-a-unlock -u storage-b-unlock -n 50
 ```
 
+### Who did what (audit logs)
+
+A service with `caddy.auditLog` (qBittorrent) has an access log that names the
+Authentik user on each line and keeps page loads and actions, without the reads
+its web UI polls with. Logs are kept 90 days. To list who opened qBittorrent and
+what they did, newest last:
+
+```bash
+sudo jq -r 'select(.user != "" and .status < 400)
+  | [(.ts | strftime("%F %T")), .user, .request.method, .request.uri] | @tsv' \
+  /var/log/caddy/access-torrent.*.log
+```
+
+The times are UTC. An action is the API endpoint it called, such as
+`/api/v2/torrents/add` or `/api/v2/torrents/delete`; which torrent it affected is
+in qBittorrent's execution log (VueTorrent's logs page) at the same
+time.
+
 ## Backup status
 
 ```bash

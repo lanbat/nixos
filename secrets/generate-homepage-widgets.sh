@@ -167,10 +167,6 @@ SYNCTHING_KEY="$(ssh -o BatchMode=yes "$SERVER_HOST" \
   || true)"
 write_env_value "SYNCTHING_API_KEY" "$SYNCTHING_KEY"
 
-# ---- qBittorrent ----
-QBT_PASSWORD="$(read_secret_file hass-bootstrap-env OWNER_PASSWORD || true)"
-write_env_value "QBITTORRENT_PASSWORD" "$QBT_PASSWORD"
-
 # ---- Authentik ----
 # Default tokens expire after 30 minutes; mark the Homepage token non-expiring.
 # akadmin needs global permissions to view users and events.

@@ -326,6 +326,20 @@ let
               (Music Assistant probes /info and /ws before its own login screen).
             '';
           };
+          auditLog = mkOption {
+            type = types.bool;
+            default = false;
+            description = ''
+              Record who does what on the subdomain. Each line of the vhost's
+              access log (/var/log/caddy/access-<subdomain>.<domain>.log, JSON,
+              kept 90 days) names the signed-in user in a `user` field, and the
+              log keeps page loads (GET /) and requests that change something
+              (any method but GET and HEAD), leaving out the reads a web UI
+              polls with. Needs auth = "forward-auth" and a provider that names
+              the user (lanbat.authProvider.userHeader). Requests to
+              authBypassPaths are logged without a user.
+            '';
+          };
         };
 
         # ── Cross-host endpoints (modules/wiring/endpoints.nix) ───────────────
