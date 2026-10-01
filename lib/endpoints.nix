@@ -31,7 +31,12 @@ let
           oidc
           ;
         caddy = {
-          inherit (svc.caddy) extraConfig proxyOptions authBypassPaths;
+          inherit (svc.caddy)
+            extraConfig
+            proxyOptions
+            authBypassPaths
+            auditLog
+            ;
         };
         # Whether it is on-demand, not the activator: the activator only exists
         # on the service's own host, which is why Caddy rejects proxying to one.

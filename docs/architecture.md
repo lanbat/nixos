@@ -119,7 +119,7 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Immich | Caddy forward-auth (Authentik) + native OIDC | Bootstrap admin links to Authentik email; mobile apps use /api/* |
 | Jellyfin | OIDC (plugin) or local | Native OIDC plugin available |
 | Frigate | Caddy forward-auth (Authentik) | No native OIDC |
-| qBittorrent | Caddy forward-auth + local app auth | No OIDC |
+| qBittorrent | Caddy forward-auth (Authentik), web UI and API | No OIDC; VueTorrent web UI; who did what is in the audit log; Homepage reads it on loopback |
 | Bitmagnet | Caddy forward-auth (Authentik) | No native OIDC |
 | Audiobookshelf | Own accounts + native OIDC (Authentik) | Phone apps log in through the same OIDC; an Authentik user gets the account with their username, or a new one |
 | RomM | Own accounts + native OIDC (Authentik) | App clients (Argosy Launcher) pair by code; admin email must match the Authentik user |

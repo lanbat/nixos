@@ -22,11 +22,21 @@
 #   If Pi storage disappears while a torrent is active, qBittorrent will
 #   write I/O errors.  We stop it immediately and restart when NFS returns.
 #
-# Auth: Authentik, through Caddy's forward auth, is the only login. After it,
-#   everyone shares the one instance: qBittorrent skips its own login for
-#   requests from the server's address, which is where the rootless port
-#   mapping delivers Caddy's requests. The port listens only on the server's
-#   loopback, so nothing on the LAN reaches qBittorrent without Authentik.
+# Auth: Authentik, through Caddy's forward auth, is the only login, for the web
+#   UI and the API alike. After it, everyone shares the one instance:
+#   qBittorrent skips its own login for requests from the server's address,
+#   which is where Caddy's requests come from. The port listens only on the
+#   server's loopback, so nothing on the LAN reaches qBittorrent without
+#   Authentik.
+#
+# Audit: caddy.auditLog records who did what, with the Authentik user on each
+#   line of /var/log/caddy/access-torrent.<domain>.log: page loads and every
+#   action (adding, pausing, deleting a torrent, changing a setting), which the
+#   API takes as POST requests. See docs/operations.md.
+#
+# Homepage: its widget reads the torrent list from qBittorrent on the server's
+#   loopback (Homepage uses host networking), which qBittorrent answers without
+#   a login, so the widget needs no credentials and Caddy no exception.
 {
   config,
   pkgs,
@@ -52,8 +62,7 @@ in
     subdomain = "torrent";
     port = 8090;
     auth = "forward-auth";
-    # Homepage's qBittorrent widget calls /api/v2/* without an Authentik session.
-    caddy.authBypassPaths = [ "/api/v2/*" ];
+    caddy.auditLog = true;
     tier = "workload";
     state = [ "qbittorrent" ];
     units = [ "podman-qbittorrent" ];
@@ -74,10 +83,9 @@ in
       description = "Torrent client";
       widget = {
         type = "qbittorrent";
-        username = "admin";
-        password = {
-          _secret = "QBITTORRENT_PASSWORD";
-        };
+        # Straight to qBittorrent, which skips its login for loopback; through
+        # Caddy the widget would need an Authentik session.
+        url = "http://127.0.0.1:${toString config.lanbat.services.qbittorrent.port}";
         enableLeechProgress = true;
       };
     };

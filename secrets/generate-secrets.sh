@@ -124,8 +124,7 @@ encrypt homepage-widgets-env.age \
 IMMICH_API_KEY=
 HA_LONG_LIVED_TOKEN=
 AUTHENTIK_API_KEY=
-SYNCTHING_API_KEY=
-QBITTORRENT_PASSWORD="
+SYNCTHING_API_KEY="
 
 echo
 echo "Done. Secrets that still need manual input:"

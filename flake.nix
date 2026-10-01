@@ -152,6 +152,19 @@
         qbittorrent-userns = import ./tests/qbittorrent-userns.nix { inherit lib pkgs; };
         policy = import ./tests/policy.nix { inherit lib pkgs; };
         caddy-remote = import ./tests/caddy-remote.nix { inherit lib pkgs; };
+        caddy-audit = import ./tests/caddy-audit.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         overlay = import ./tests/overlay.nix { inherit lib pkgs; };
         on-demand-activator = import ./tests/on-demand-activator.nix { inherit pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
