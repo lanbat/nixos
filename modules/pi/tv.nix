@@ -205,7 +205,8 @@ in
         "video"
         "input"
         "render"
-        "private"
+        # Not "private": media/adult is for that group alone, and anyone at the
+        # TV is this account.
       ];
     };
 
