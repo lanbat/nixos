@@ -8,6 +8,8 @@ AUTH_DOMAIN="${AUTH_DOMAIN:?AUTH_DOMAIN is required}"
 OWNER_USERNAME="${OWNER_USERNAME:?OWNER_USERNAME is required}"
 OWNER_PASSWORD="${OWNER_PASSWORD:?OWNER_PASSWORD is required}"
 AUTHENTIK_JELLYFIN_CLIENT_SECRET="${AUTHENTIK_JELLYFIN_CLIENT_SECRET:?AUTHENTIK_JELLYFIN_CLIENT_SECRET is required}"
+# Music video metadata from IMVDb (optional; empty leaves the plugin out).
+IMVDB_API_KEY="${IMVDB_API_KEY:-}"
 STATE_DIR="${STATE_DIR:-/var/lib/jellyfin}"
 WIZARD_STATE_FILE="${WIZARD_STATE_FILE:-${STATE_DIR}/.lanbat-bootstrap-complete}"
 CONFIG_STATE_FILE="${CONFIG_STATE_FILE:-${STATE_DIR}/.lanbat-jellyfin-config-complete}"
@@ -264,7 +266,12 @@ install_plugin() {
     return 1
   fi
   log "installing plugin ${name}"
-  api_call -X POST "${JELLYFIN_URL}/Packages/Installed/$(uri_encode "$name")${query}" -o /dev/null
+  # Callers test the status for "newly installed", which would take a failed
+  # request for "already installed", so a failure ends the run here.
+  if ! api_call -X POST "${JELLYFIN_URL}/Packages/Installed/$(uri_encode "$name")${query}" -o /dev/null; then
+    log "installing plugin ${name} failed"
+    exit 1
+  fi
   return 0
 }
 
@@ -296,12 +303,31 @@ setup_plugin_repositories() {
     -o /dev/null
 }
 
+# Plugin GUIDs as the repository manifest lists them. A loaded plugin's id
+# under /Plugins can differ (IMVDb's does), so it is looked up by name.
+BOOKSHELF_GUID="9c4e63f1-031b-4f25-988b-4f7d78a8b53e"
+IMVDB_GUID="e29621a5-fa9e-4330-982e-ef6e54c0cad2"
+
+# Libraries whose items need their metadata fetched again once the plugins
+# are loaded: a newly installed provider only reaches items added after it.
+REFRESH_LIBRARIES=()
+
 setup_plugins() {
   local restarted=false
   setup_plugin_repositories
 
   install_plugin "Open Subtitles" "4b9ed42f518548b598036ff2989014c4" && restarted=true
   install_plugin "Trakt" "4fe3201ed6ae4f2e8917e12bda571281" && restarted=true
+
+  # Jellyfin itself fetches metadata only for movies, TV and music. Bookshelf
+  # adds Google Books and Comic Vine for books, and IMVDb adds music videos.
+  if install_plugin "Bookshelf" "$BOOKSHELF_GUID"; then
+    restarted=true
+    REFRESH_LIBRARIES+=("Books")
+  fi
+  if [[ -n "$IMVDB_API_KEY" ]] && install_plugin "IMVDb" "$IMVDB_GUID"; then
+    restarted=true
+  fi
 
   local version
   version="$(curl -fsS "${JELLYFIN_URL}/System/Info/Public" | jq -r .Version)"
@@ -325,6 +351,49 @@ setup_plugins() {
     log "Jellyfin API did not accept authentication after plugin restart"
     return 1
   fi
+}
+
+# IMVDb answers nothing without its API key. Setting or changing the key
+# fetches the Music Videos library's metadata again.
+configure_imvdb() {
+  [[ -n "$IMVDB_API_KEY" ]] || return 0
+  local id current
+  id="$(api_call "${JELLYFIN_URL}/Plugins" | jq -r '[.[] | select(.Name == "IMVDb") | .Id][0] // empty')"
+  if [[ -z "$id" ]]; then
+    log "IMVDb plugin not loaded yet"
+    return 1
+  fi
+  current="$(api_call "${JELLYFIN_URL}/Plugins/${id}/Configuration")"
+  if [[ "$(jq -r '.ApiKey // empty' <<<"$current")" == "$IMVDB_API_KEY" ]]; then
+    return 0
+  fi
+  log "setting the IMVDb API key"
+  api_call -X POST "${JELLYFIN_URL}/Plugins/${id}/Configuration" \
+    -H 'Content-Type: application/json' \
+    -d "$(jq --arg key "$IMVDB_API_KEY" '.ApiKey = $key' <<<"$current")" \
+    -o /dev/null
+  REFRESH_LIBRARIES+=("Music Videos")
+}
+
+# Fetch missing metadata and images for a whole library, as its "Refresh
+# metadata" menu does, keeping what items already have.
+refresh_library_metadata() {
+  local name="$1" id
+  id="$(api_call "${JELLYFIN_URL}/Library/VirtualFolders" | jq -r --arg name "$name" '
+    .[] | select(.Name == $name) | .ItemId
+  ')"
+  [[ -n "$id" ]] || return 0
+  log "fetching ${name} metadata from the new providers"
+  api_call -X POST \
+    "${JELLYFIN_URL}/Items/${id}/Refresh?metadataRefreshMode=FullRefresh&imageRefreshMode=FullRefresh&replaceAllMetadata=false&replaceAllImages=false" \
+    -o /dev/null
+}
+
+refresh_new_provider_libraries() {
+  local name
+  for name in "${REFRESH_LIBRARIES[@]}"; do
+    refresh_library_metadata "$name"
+  done
 }
 
 sso_configured() {
@@ -468,10 +537,12 @@ run_configuration() {
   configure_nfs_libraries
   configure_scheduled_scan
   setup_plugins
+  configure_imvdb
   setup_sso
   setup_branding
   api_auth
   refresh_all_libraries
+  refresh_new_provider_libraries
 }
 
 wait_for_jellyfin
@@ -484,7 +555,11 @@ if [[ -f "$CONFIG_STATE_FILE" ]] && wizard_complete && configuration_complete 2>
   setup_libraries
   configure_nfs_libraries
   configure_scheduled_scan
+  # Plugins added to this script after the server was first set up.
+  setup_plugins
+  configure_imvdb
   refresh_all_libraries
+  refresh_new_provider_libraries
   log "configuration already complete"
   exit 0
 fi
