@@ -202,8 +202,11 @@ in
     };
   };
 
-  # For folders owned by another service's group (settings.groups).
+  # For folders owned by another service's group (settings.groups). Set on the
+  # unit as well: a deploy only restarts a unit whose definition changed, and a
+  # running Syncthing does not pick up a group it was added to.
   users.users.syncthing.extraGroups = cfg.groups;
+  systemd.services.syncthing.serviceConfig.SupplementaryGroups = cfg.groups;
 
   # Allow sync traffic from LAN.
   # Open port 22000 on your router as well if you need external device sync.

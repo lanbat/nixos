@@ -88,6 +88,13 @@ let
         (evalSyncthing {
           groups = [ "media" ];
         }).users.users.syncthing.extraGroups;
+    # A deploy only restarts a unit whose definition changed; group membership
+    # alone would leave the running Syncthing without the new group.
+    "groups are on the syncthing unit, so a change restarts it" =
+      lib.elem "media"
+        (evalSyncthing {
+          groups = [ "media" ];
+        }).systemd.services.syncthing.serviceConfig.SupplementaryGroups;
     "undeclared device fails" = lib.any (lib.hasInfix "abcde-12345 → stranger") (
       failedAssertions (
         evalSyncthing (

@@ -127,6 +127,19 @@ let
       };
     }) svc.access.groups;
 
+  # The groups the services' bindings name, each created if it does not exist
+  # yet and left as it is if it does. A binding to a group Authentik cannot find
+  # would fail the whole blueprint, taking every other service's provider with
+  # it; this way a mistyped group only locks its own service.
+  groupEntries =
+    svcs:
+    map (name: {
+      model = "authentik_core.group";
+      state = "created";
+      identifiers = { inherit name; };
+      attrs = { inherit name; };
+    }) (lib.unique (lib.concatMap (svc: svc.access.groups) svcs));
+
   proxyEntries =
     svc:
     let
@@ -212,7 +225,8 @@ let
 in
 {
   proxy = blueprint "Homelab Proxy Providers" (
-    lib.concatMap proxyEntries proxied
+    groupEntries proxied
+    ++ lib.concatMap proxyEntries proxied
     ++ [
       # Only the providers (and the host the outpost redirects to) are set, so
       # the rest of the embedded outpost's configuration is left as it is.
@@ -229,5 +243,7 @@ in
     ]
   );
 
-  oidc = blueprint "Homelab OIDC Providers" (lib.concatMap oidcEntries oidcClients);
+  oidc = blueprint "Homelab OIDC Providers" (
+    groupEntries oidcClients ++ lib.concatMap oidcEntries oidcClients
+  );
 }

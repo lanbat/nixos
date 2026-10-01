@@ -91,6 +91,22 @@ let
       "family"
     ];
   });
+  # Two restricted services sharing a group.
+  restrictedTwice = withModule (
+    { lib, ... }:
+    lib.recursiveUpdate
+      (demo {
+        access.groups = [ "family" ];
+      })
+      {
+        lanbat.services.demo2 = {
+          subdomain = "demo2";
+          port = 18998;
+          auth = "forward-auth";
+          access.groups = [ "family" ];
+        };
+      }
+  );
   restrictedOidc = withModule (demo {
     auth = "app";
     oidc.redirectPaths = [ "/callback" ];
@@ -368,6 +384,23 @@ let
         ) null entries;
       in
       demoApp != null && firstBinding != null && demoApp < firstBinding
+    ))
+
+    (expect "a bound group is created if missing, once, before any binding names it" (
+      let
+        entries = restrictedTwice.proxy.entries;
+        isFamily = e: e.model == "authentik_core.group" && e.identifiers.name == "family";
+        families = lib.filter isFamily entries;
+        groupAt = lib.lists.findFirstIndex isFamily null entries;
+        bindingAt = lib.lists.findFirstIndex (
+          e: e.model == "authentik_policies.policybinding"
+        ) null entries;
+      in
+      lib.length families == 1
+      && (lib.head families).state == "created"
+      && groupAt != null
+      && bindingAt != null
+      && groupAt < bindingAt
     ))
 
     (expect "a restricted OIDC service binds its OIDC application" (

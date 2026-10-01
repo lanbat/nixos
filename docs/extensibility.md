@@ -133,7 +133,8 @@ overrides that like any other value:
 { lanbat.services.syncthing.access.groups = [ "authentik Admins" "family" ]; }
 ```
 
-The groups must exist in Authentik. Blueprints only add and update, so a group you
+A group Authentik does not have yet is created, empty, so a mistyped name locks the
+service rather than opening it. Blueprints only add and update, so a group you
 remove from the list keeps its binding until you delete it in Authentik's admin UI.
 
 ## Roles
