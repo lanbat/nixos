@@ -148,6 +148,7 @@
         pkgs-build = import ./tests/pkgs-build.nix { inherit pkgs; };
         plugins = import ./tests/plugins.nix { inherit lib pkgs; };
         endpoints-table = import ./tests/endpoints-table.nix { inherit lib pkgs; };
+        backup-server = import ./tests/backup-server.nix { inherit pkgs; };
         frigate-settings = import ./tests/frigate-settings.nix { inherit lib pkgs; };
         policy = import ./tests/policy.nix { inherit lib pkgs; };
         caddy-remote = import ./tests/caddy-remote.nix { inherit lib pkgs; };
