@@ -131,7 +131,7 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | InfluxDB | Token auth (not exposed publicly) | Accessed by Grafana only; no browser UI needed on LAN |
 | Syncthing | Caddy forward-auth (Authentik) | Sync clients use port 22000 directly, not Caddy |
 | Music Assistant | Caddy forward-auth (Authentik) | No native OIDC; stream port (8097) not exposed on firewall |
-| Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming port (1704) is LAN-open |
+| Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming and control ports (1704/1705) admit only declared clients (`services/snapcast.nix`) |
 | Wyoming satellites | No auth (Pi: firewall-restricted to server IP; server: localhost only) | Internal protocol; only HA connects |
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
 | Conversation LLM (`lanbat.haLlm`) | API key (agenix) | External OpenAI-compatible API; only HA calls it, outbound |
@@ -230,9 +230,11 @@ The Pi's own clients use the same edges. Its Telegraf consumes `influxdb` and it
 snapclient consumes `snapcast`, and each takes the provider's host from the
 profile-wide endpoint table rather than assuming the server, so either provider can
 move to another host. A service publishes one endpoint, and snapcast's is its web UI
-(1780, bound to loopback) rather than the streaming port snapclient uses (1704, open
-to the LAN for phones and TV boxes), so the edge admits the Pi to a port it does not
-connect to. That rule is inert; it is the cost of one endpoint per service.
+(1780, bound to loopback) rather than the streaming port snapclient uses (1704), so the
+edge admits the Pi to a port it does not connect to. That rule is inert; it is the cost
+of one endpoint per service. The streaming and control ports have their own allowlist in
+`services/snapcast.nix`, built from the same consumers plus Snapdroid boxes and listed
+clients.
 
 **The rules are IPv4 only.** `lanbat.hosts.<key>.networking.ip` is typed `ipv4`,
 so they are `iptables` rather than `ip6tables`. A service that also listens on

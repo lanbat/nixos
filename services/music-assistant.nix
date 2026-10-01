@@ -58,8 +58,23 @@ let
   # OAuth login against it. Without Home Assistant there is nothing to register
   # with, and Music Assistant still plays music.
   integrates = config.lanbat.hasService "home-assistant";
+
+  # Music Assistant reaches the snapserver over loopback (SNAPSERVER_HOST in
+  # pkgs/music-assistant-setup defaults to 127.0.0.1), and snapserver pulls each
+  # playback's audio back from it, so the two must share a host until #117.
+  snapcastHosts = (config.lanbat.endpoints.snapcast or { hosts = [ ]; }).hosts;
 in
 {
+  assertions = [
+    {
+      assertion = snapcastHosts == [ ] || lib.elem config.lanbat.hostKey snapcastHosts;
+      message =
+        "music-assistant runs on ${config.lanbat.hostKey}, but snapcast runs on "
+        + "${lib.concatStringsSep ", " snapcastHosts}: Music Assistant only works with the "
+        + "snapserver on its own host (lanbat/nixos#117).";
+    }
+  ];
+
   lanbat.services.music-assistant = {
     subdomain = "music";
     # music-assistant-setup signs in with Home Assistant's owner account.

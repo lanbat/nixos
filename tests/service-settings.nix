@@ -240,6 +240,41 @@ let
     }
   ];
 
+  # ── Snapcast ─────────────────────────────────────────────────────────────
+  fwStart = config: config.networking.firewall.extraCommands;
+  fwStop = config: config.networking.firewall.extraStopCommands;
+  admits =
+    address: config:
+    lib.all
+      (
+        port: lib.hasInfix "INPUT -p tcp --dport ${toString port} -s ${address} -j ACCEPT" (fwStart config)
+      )
+      [
+        1704
+        1705
+      ];
+  snapClients = serverWith [
+    { lanbat.services.snapcast.settings.clients.phone.host = "192.0.2.70"; }
+  ];
+  snapBadHost = serverWith [
+    { lanbat.services.snapcast.settings.clients.phone.host = "phone.lan"; }
+  ];
+  snapDuplicate = serverWith [
+    {
+      lanbat.services.snapcast.settings.clients = {
+        phone.host = "192.0.2.70";
+        tablet.host = "192.0.2.70";
+      };
+    }
+  ];
+  snapMac = serverWith [
+    { lanbat.services.snapcast.settings.clients.tv.mac = "2c:d8:ae:00:00:01"; }
+  ];
+  snapEmpty = serverWith [ { lanbat.services.snapcast.settings.clients.tv = { }; } ];
+  snapBadMac = serverWith [ { lanbat.services.snapcast.settings.clients.tv.mac = "2c-d8-ae"; } ];
+  # Music Assistant placed on a host without the snapserver.
+  maApart = serverWith [ { lanbat.endpoints.snapcast.hosts = lib.mkForce [ "pi-storage" ]; } ];
+
   # ── Immich ───────────────────────────────────────────────────────────────
   immichMoved = serverWith [
     {
@@ -612,6 +647,63 @@ let
       && absMoved.lanbat.services.audiobookshelf.nfs.drives == [ "a" ]
       && lib.elem "srv-storage-a.mount" absMoved.systemd.services.audiobookshelf.bindsTo
       && failedAssertions absMoved == [ ]
+    ))
+
+    (expect "snapcast: its ports are no longer open to the whole LAN" (
+      !lib.elem 1704 base.networking.firewall.allowedTCPPorts
+      && !lib.elem 1705 base.networking.firewall.allowedTCPPorts
+    ))
+
+    (expect "snapcast: the Pi's snapclient and the Snapdroid box are admitted on both ports" (
+      admits "192.0.2.11" base && admits "192.0.2.50" base
+    ))
+
+    (expect "snapcast: a listed client is admitted, and its rules are removed on stop" (
+      admits "192.0.2.70" snapClients
+      && lib.hasInfix "iptables -D INPUT -p tcp --dport 1705 -s 192.0.2.70 -j ACCEPT" (fwStop snapClients)
+      && !lib.hasInfix "192.0.2.70" (fwStart base)
+    ))
+
+    (expect "snapcast: a client listed by MAC is admitted over IPv4 and IPv6, and removed on stop" (
+      lib.all
+        (
+          cmd:
+          lib.all
+            (
+              port:
+              lib.hasInfix "${cmd} -I INPUT -p tcp --dport ${toString port} -m mac --mac-source 2c:d8:ae:00:00:01 -j ACCEPT" (
+                fwStart snapMac
+              )
+              && lib.hasInfix "${cmd} -D INPUT -p tcp --dport ${toString port} -m mac --mac-source 2c:d8:ae:00:00:01 -j ACCEPT" (
+                fwStop snapMac
+              )
+            )
+            [
+              1704
+              1705
+            ]
+        )
+        [
+          "iptables"
+          "ip6tables"
+        ]
+    ))
+
+    (expect "snapcast: a client needs a MAC or an IPv4 address, and a well-formed MAC" (
+      lib.any (lib.hasInfix "client tv") (failedAssertions snapEmpty)
+      && lib.any (lib.hasInfix "2c-d8-ae") (failedAssertions snapBadMac)
+    ))
+
+    (expect "snapcast: a client must be an IPv4 address" (
+      lib.any (lib.hasInfix "phone.lan") (failedAssertions snapBadHost)
+    ))
+
+    (expect "snapcast: two clients can't share an address" (
+      lib.any (lib.hasInfix "192.0.2.70") (failedAssertions snapDuplicate)
+    ))
+
+    (expect "music-assistant: a snapserver on another host is rejected" (
+      lib.any (lib.hasInfix "#117") (failedAssertions maApart)
     ))
 
     (expect "the example profile's server has no failed assertion" (failedAssertions base == [ ]))

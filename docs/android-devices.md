@@ -391,7 +391,12 @@ any `packages`/`github` entry missing from `apks.lock.json` (with a pointer to
 
 `de.badaix.snapcast` (Snapdroid) is the one app in the reference inventory that needs
 nothing from this module beyond being installed: it self-discovers the server over
-mDNS. `services/snapcast.nix` publishes `_snapcast._tcp`/`_snapcast-ctrl._tcp` over
+mDNS, and a box with it in `packages` is admitted to the snapserver's ports
+automatically (Snapcast has no authentication, so they admit only known clients; see
+`services/snapcast.nix`). Only over IPv4, though: Snapdroid on the reference box connects over
+IPv6, from Android's rotating privacy addresses, so list such a box by MAC in
+`lanbat.services.snapcast.settings.clients` (admitted over both families), as you
+would a box that got Snapdroid some other way, such as by hand. `services/snapcast.nix` publishes `_snapcast._tcp`/`_snapcast-ctrl._tcp` over
 Avahi and binds snapserver to `::` (dual-stack) because Android's mDNS resolver prefers
 a host's IPv6 addresses when Avahi publishes them — a v4-only bind gets "connection
 refused" from a client that tried the v6 address first. On this deployment Avahi's own
