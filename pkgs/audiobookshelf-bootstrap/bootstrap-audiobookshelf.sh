@@ -119,6 +119,11 @@ ensure_library() {
     -o /dev/null
 }
 
+# authOpenIDSubfolderForRedirectURLs prefixes the callback path; Audiobookshelf
+# leaves it undefined until set, and then sends Authentik a callback under
+# "/undefined/", which Authentik rejects. Its web form sets "" for a server at
+# the root of its domain, as this one is.
+#
 # Users sign in through Authentik (client "audiobookshelf"); an Authentik
 # user whose username matches an account gets that account, and anyone else
 # Authentik admits gets a new one. Password login stays as the fallback.
@@ -153,7 +158,8 @@ configure_oidc() {
       authOpenIDAutoLaunch: false,
       authOpenIDAutoRegister: true,
       authOpenIDMatchExistingBy: "username",
-      authOpenIDMobileRedirectURIs: ["audiobookshelf://oauth"]
+      authOpenIDMobileRedirectURIs: ["audiobookshelf://oauth"],
+      authOpenIDSubfolderForRedirectURLs: ""
     }')"
   current="$(api "${ABS_URL}/api/auth-settings")"
   if jq -e --argjson want "$desired" '
