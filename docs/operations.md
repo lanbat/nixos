@@ -387,6 +387,10 @@ Authentik is pinned to a specific version in `services/authentik/default.nix`
 
 ### Adding a user
 
+The full model — what Nix declares vs. what is manual, the two access mechanisms, and
+how each service maps the authentik identity to in-app permissions — is in
+[docs/auth.md](auth.md). The day-to-day flow:
+
 Go to **Directory → Users → Create**. Fill in username, name, email.
 Set a password via **Actions → Update Password**, or send an invitation email
 (requires email backend configuration in Authentik).

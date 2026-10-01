@@ -1,15 +1,48 @@
-# lanbat nixos
+# lanbat/nixos
 
+[![CI](https://github.com/lanbat/nixos/actions/workflows/check.yml/badge.svg)](https://github.com/lanbat/nixos/actions/workflows/check.yml)
 [![nightly](https://github.com/lanbat/nixos/actions/workflows/nightly.yml/badge.svg)](https://github.com/lanbat/nixos/actions/workflows/nightly.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Extensible NixOS configuration for homelab deployments. Each **deployment profile**
-is a site (home lab, cabin, staging, …) with its own domain, hosts, and plugins.
-Within a profile, hosts take **roles** (server, storage-pi, voice-pi) and enable
-**plugins** (services, TV frontend, voice satellite, or external flake inputs).
+**A complete, production-grade homelab written in Nix** — two machines, one identity
+provider, 20+ self-hosted services, and zero Kubernetes.
 
-See [docs/extensibility.md](docs/extensibility.md) for multi-site and multi-machine
-patterns, and flake apps for validation (`nix run .#validate-deploy`) and deploy
-queries (`nix run .#hosts`, `nix run .#deploy-query -- server-ip`).
+An `x86_64` server is the brain: single sign-on, media, photos, home automation and the
+reverse proxy. A Raspberry Pi 5 is the encrypted storage, the TV frontend and a voice
+satellite. Both are one NixOS flake — declarative, checked in CI, laid out with
+[disko](https://github.com/nix-community/disko), secrets encrypted with
+[agenix](https://github.com/ryantm/agenix) and deployed with
+[deploy-rs](https://github.com/serokell/deploy-rs).
+
+This repository is published as a **reference**. Read it to see how the pieces fit, fork
+it to make it yours, or borrow the patterns that save you weeks.
+
+## What you get
+
+- **One SSO for everything.** [Authentik](https://github.com/goauthentik/authentik) signs
+  users into every service, wired automatically from each service's one-line description
+  — not hand-configured per app. See [Authentication & access control](docs/auth.md).
+- **Two security tiers.** Always-on infrastructure boots without a key; personal data
+  (photos, passwords, cloud, media) sits on an encrypted LUKS layer you unlock on demand.
+  See [Secure layers](docs/secure-layers.md).
+- **Fail-safe by design.** NFS-backed services stop cleanly when the Pi's storage drops
+  and resume when it returns. See [Failure modes](docs/failure-modes.md).
+- **One file per service.** A `lanbat.services.<name>` block declares the subdomain,
+  port, auth, tier, storage, account and secrets; the wiring generates the Caddy vhost,
+  systemd ordering, accounts, agenix secrets and dashboard entry. Evaluation *rejects*
+  inconsistencies — clashing ports or UIDs, forward-auth on an API client — before you
+  deploy. See [Architecture](docs/architecture.md).
+- **Extensible.** A **profile** is a whole site (home, cabin, staging); hosts take
+  **roles** (server, storage-pi, voice-pi); **plugins** — built-in or external flakes —
+  add services and machines. Add a service or a site without rewriting config. See
+  [Extensibility](docs/extensibility.md).
+- **Provisions its own Android TVs** over ADB — device-owner policy, CA trust and APKs —
+  as a Nix-built package. See [Android device provisioning](docs/android-devices.md).
+- **Tested.** Every pull request runs the assertion and VM suite; a nightly job boots the
+  full server.
+
+You can also poke at any deployment straight from the flake: `nix run .#validate-deploy`,
+`nix run .#hosts`, and `nix run .#deploy-query -- <host>`.
 
 ## Quick links
 
@@ -27,6 +60,7 @@ queries (`nix run .#hosts`, `nix run .#deploy-query -- server-ip`).
 
 **How it works**
 - [Architecture](docs/architecture.md)
+- [Authentication & access control](docs/auth.md): users, groups and per-service entitlements
 - [Secure layers design](docs/secure-layers.md)
 - [Storage layout](docs/storage-layout.md)
 - [Security model](docs/security.md)
