@@ -4,16 +4,15 @@
 # Backup critical server-local state to Pi storage (Drive B, /backups).
 #
 # Backs up:
-#   - PostgreSQL, both instances (pg_dumpall + per-database dumps):
-#       always-on (port 5433): authentik, hass, grafana
-#       workload  (port 5432): nextcloud, immich, bitmagnet — only while unlocked
+#   - PostgreSQL, both instances (pg_dumpall + per-database dumps of the
+#     databases the profile declares on each, BACKUP_DATABASES_* from the unit);
+#     the workload instance only while unlocked
 #   - /var/lib/hass  (Home Assistant)
-#   - /var/lib/caddy (Caddy config + CA keys)
-#   - /var/lib/tang  (Tang private keys — CRITICAL; control layer only)
+#   - /var/lib/caddy (Caddy config + CA keys — required)
+#   - /var/lib/tang  (Tang private keys — required; control layer only)
 #   - /var/lib/authentik
 #   - /var/lib/nextcloud
 #   - /var/lib/immich/profile
-#   - /var/lib/frigate/config
 #   - /var/lib/music-assistant
 #   - /var/lib/qbittorrent
 #   - /var/lib/bitmagnet
@@ -21,6 +20,8 @@
 #   - /var/lib/vaultwarden (the database through SQLite's online backup)
 #   - Syncthing's config and identity (/var/lib/syncthing/.config/syncthing,
 #     without the index, which Syncthing rebuilds)
+# A directory the host does not have is skipped, except a required one: its
+# absence is reported and fails the run once everything else is copied.
 #
 # NOT backed up by this script:
 #   - /srv/storage/a (Pi storage — backs up in its own right)
@@ -69,6 +70,20 @@ copy_state() {
   fi
 }
 
+# copy_required_state <dir> <name> [rsync options...]: as copy_state, for state
+# whose loss is not recoverable. A missing one is reported and recorded, and the
+# run fails at the end, after the rest has been copied.
+missing_required=()
+copy_required_state() {
+  local src=$1
+  if [ -d "$src" ]; then
+    copy_state "$@"
+  else
+    echo "  ERROR: $src is missing; it should be backed up."
+    missing_required+=("$src")
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # PostgreSQL
 # ---------------------------------------------------------------------------
@@ -88,10 +103,13 @@ dump_instance() {
   done
 }
 
-dump_instance always-on "-h /run/postgresql-always-on -p 5433" authentik hass grafana
+# The databases come from the unit (lanbat.postgresql.databases in the profile).
+# shellcheck disable=SC2086
+dump_instance always-on "-h /run/postgresql-always-on -p 5433" ${BACKUP_DATABASES_ALWAYS_ON:-}
 
 if workload_online; then
-  dump_instance workload "-h /run/postgresql -p 5432" nextcloud immich bitmagnet
+  # shellcheck disable=SC2086
+  dump_instance workload "-h /run/postgresql -p 5432" ${BACKUP_DATABASES_WORKLOAD:-}
 else
   echo "  Skipping the PostgreSQL workload instance: the workload layer is locked."
 fi
@@ -102,13 +120,13 @@ fi
 echo "  Backing up always-on service state..."
 # Frigate's config is rendered from the profile (lanbat.services.frigate.settings).
 copy_state /var/lib/hass            hass
-copy_state /var/lib/caddy           caddy
+copy_required_state /var/lib/caddy  caddy
 copy_state /var/lib/authentik       authentik
 copy_state /var/lib/music-assistant music-assistant
 
 if control_online; then
   echo "  Backing up control-layer state..."
-  copy_state /var/lib/tang tang
+  copy_required_state /var/lib/tang tang
 else
   echo "  Skipping /var/lib/tang: the control layer is locked."
 fi
@@ -145,5 +163,10 @@ ls -1d "$BACKUP_DIR"/[0-9]* 2>/dev/null | sort | head -n -7 | while read old; do
   echo "  Removing old backup: $old"
   rm -rf "$old"
 done
+
+if [ ${#missing_required[@]} -gt 0 ]; then
+  echo "[$TIMESTAMP] Backup INCOMPLETE: missing ${missing_required[*]}" >&2
+  exit 1
+fi
 
 echo "[$TIMESTAMP] Backup complete: $DEST"

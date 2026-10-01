@@ -31,6 +31,25 @@ pkgs.runCommand "backup-server-check" { nativeBuildInputs = [ pkgs.rsync ]; } ''
   copy_state src/opts opts --exclude 'index-*' > out.txt
   [ -e "$DEST/opts/keep" ] && [ ! -e "$DEST/opts/index-x" ] || { echo "FAIL: rsync options are not passed through"; exit 1; }
 
+  # Critical state that is missing is reported and fails the run at the end,
+  # after everything else has been copied.
+  sed -n '/^copy_required_state() {$/,/^}$/p' ${../pkgs/scripts/backup-server.sh} > required.sh
+  grep -q 'copy_required_state()' required.sh || { echo "FAIL: backup-server.sh defines no copy_required_state"; exit 1; }
+  missing_required=()
+  source ./required.sh
+  copy_required_state src/present required-present > out.txt
+  [ -e "$DEST/required-present/file" ] || { echo "FAIL: present required state is not copied"; exit 1; }
+  [ ''${#missing_required[@]} -eq 0 ] || { echo "FAIL: present required state is reported missing"; exit 1; }
+  copy_required_state src/gone gone > out.txt
+  grep -q 'ERROR: src/gone' out.txt || { echo "FAIL: missing required state is not reported"; exit 1; }
+  [ ''${#missing_required[@]} -eq 1 ] || { echo "FAIL: missing required state is not recorded"; exit 1; }
+  for d in /var/lib/caddy /var/lib/tang; do
+    grep -qE "^\s*copy_required_state $d " ${../pkgs/scripts/backup-server.sh} \
+      || { echo "FAIL: $d is not required"; exit 1; }
+  done
+  grep -q 'missing_required\[@\]} -gt 0' ${../pkgs/scripts/backup-server.sh} \
+    || { echo "FAIL: the script does not fail when required state is missing"; exit 1; }
+
   # No state copy bypasses copy_state.
   if grep -nE '^\s*rsync ' ${../pkgs/scripts/backup-server.sh} | grep -v 'copy_state' | grep -vE '^[0-9]+:\s*rsync -a --delete "\$@"'; then
     echo "FAIL: a state copy calls rsync directly instead of copy_state"; exit 1

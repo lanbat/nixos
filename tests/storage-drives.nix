@@ -347,6 +347,27 @@ let
         && lib.hasInfix "runuser -u postgres --" script
         && lib.any (p: (p.pname or "") == "util-linux") unitPath
       ))
+      # Each instance dumps the databases the profile declares on it, not a list
+      # written into the script: a profile without one of them must still back up.
+      (expect "backup-server dumps the databases the profile declares" (
+        let
+          server = cfg "three-server";
+          env = server.systemd.services.backup-server.environment;
+          declaredOn =
+            instance:
+            lib.concatStringsSep " " (
+              lib.sort (x: y: x < y) (
+                lib.attrNames (lib.filterAttrs (_: d: d.instance == instance) server.lanbat.postgresql.databases)
+              )
+            );
+          script = builtins.readFile ../pkgs/scripts/backup-server.sh;
+        in
+        env.BACKUP_DATABASES_ALWAYS_ON == declaredOn "always-on"
+        && env.BACKUP_DATABASES_WORKLOAD == declaredOn "workload"
+        && lib.hasInfix "{BACKUP_DATABASES_ALWAYS_ON:-}" script
+        && lib.hasInfix "{BACKUP_DATABASES_WORKLOAD:-}" script
+        && !(lib.hasInfix "authentik hass grafana" script)
+      ))
       (expect "one drive: nothing refers to the absent a or b" (
         !(one.systemd.services ? "storage-a-unlock")
         && !(one.systemd.services ? "storage-b-init")
