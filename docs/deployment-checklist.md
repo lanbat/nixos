@@ -505,7 +505,8 @@ automatically and registers the Authentik provider.  No further steps needed.
 - Admin account from `hass-bootstrap-env.age` (same break-glass credentials as HA/Immich)
 - Media libraries for every Pi folder except `adult/` (Samba-only), `incomplete/`
   (active downloads), and `roms/` (RomM): Movies, TV, Music Videos, Music,
-  Documentaries, Audiobooks, Books, Gym, Games, Misc
+  Documentaries, Documentary Series (episodes, as `<show>/Season 01/`), Audiobooks,
+  Books, Gym, Games, Misc
 - Plugins: Open Subtitles, Trakt, SSO Authentication, and Bookshelf (Google Books
   and Comic Vine metadata for Books)
 - Authentik OIDC provider (`authentik`) from `authentik-oidc-secrets.age`

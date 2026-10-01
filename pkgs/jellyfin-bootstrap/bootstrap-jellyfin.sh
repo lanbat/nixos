@@ -147,6 +147,9 @@ LIBRARY_SPECS=(
   "musicvideos|Music Videos|/srv/storage/a/media/music-videos"
   "music|Music|/srv/storage/b/media/music"
   "movies|Documentaries|/srv/storage/b/media/documentaries"
+  # Documentaries in episodes, laid out as <show>/Season 01/<files>: in the
+  # movie library above they would each be matched as a film.
+  "tvshows|Documentary Series|/srv/storage/b/media/documentary-series"
   "books|Audiobooks|/srv/storage/b/media/audiobooks"
   "books|Books|/srv/storage/b/media/books"
   "tvshows|Gym|/srv/storage/b/media/gym"
@@ -495,6 +498,7 @@ repair_media_permissions() {
     /srv/storage/b/media
     /srv/storage/b/media/music
     /srv/storage/b/media/documentaries
+    /srv/storage/b/media/documentary-series
     /srv/storage/b/media/roms
     /srv/storage/b/media/audiobooks
     /srv/storage/b/media/books

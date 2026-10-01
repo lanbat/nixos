@@ -104,7 +104,7 @@ let
     b = lib.concatStringsSep "\n" [
       (forService "qbittorrent" ''
         # General media on drive B — group media (Jellyfin, qBittorrent, Samba).
-        for dir in media media/music media/documentaries media/roms \
+        for dir in media media/music media/documentaries media/documentary-series media/roms \
           media/audiobooks media/books media/gym media/games media/misc media/incomplete; do
           install -d -m 2775 -o ${uidOf "qbittorrent"} -g ${toString mediaGid} "$base/$dir"
         done
