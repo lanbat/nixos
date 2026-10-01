@@ -21,10 +21,13 @@ Raspberry Pi 5
     ├── /mnt/storage-b/media/              ← the rest of the media, as on drive A
     │   ├── music/  documentaries/  documentary-series/  adult/  roms/
     │   ├── audiobooks/  books/  gym/  games/  misc/
+    │   ├── music/albums/                      ← qBittorrent's music torrents, seeded in place; music/
+    │   │                                        can be a Syncthing folder (settings.folders, ignorePerms)
     │   └── roms-browser/mame/                 ← zip copies of the arcade sets, for RomM's browser player
     ├── /mnt/storage-b/nextcloud/          ← Nextcloud external storage
     ├── /mnt/storage-b/users/              ← per-user SMB home dirs
     │   ├── admin/
+    │   │   └── sync/<folder>/                 ← one directory per Syncthing folder
     │   └── ...
     ├── /mnt/storage-b/shared/             ← shared SMB space
     └── /mnt/storage-b/backups/            ← server backup target
@@ -167,7 +170,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Vaultwarden | server-local | server-local (SQLite) | — |
 | Grafana | server-local | always-on PostgreSQL | — |
 | InfluxDB | server-local | server-local | — |
-| Syncthing | server-local | server-local (SQLite index) | Pi/b/users/<user>/sync |
+| Syncthing | server-local | server-local (SQLite index) | Pi/b/users/<user>/sync/<folder>, and any folder a profile declares (e.g. Pi/b/media/music) |
 | Music Assistant | server-local | server-local (embedded) | Pi/b/media/music (NFS, read-only) |
 | Snapcast | — | — | — (streams created dynamically by MA) |
 | Wyoming (server) | — | — | — (models re-downloaded on first start) |
