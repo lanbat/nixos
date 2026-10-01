@@ -790,6 +790,26 @@ Music Assistant is the music controller; Snapcast remains the distribution layer
 Snapserver runs declaratively on the server (ports 1704/1705). Music Assistant
 feeds it via the control API — no manual FIFO wiring is needed.
 
+Snapcast has no authentication, so its ports admit only known clients: the Pi's
+snapclient and Android boxes with Snapdroid are found automatically; list anything else
+(a speaker, a phone app that talks to Snapcast directly) in the profile, by MAC address
+(admitted over IPv4 and IPv6) or IPv4 address:
+
+```nix
+hosts.server.modules = [
+  {
+    lanbat.services.snapcast.settings.clients = {
+      bedroom-tv.mac = "2c:d8:ae:00:00:01";       # an Android box: it connects over IPv6
+      kitchen-speaker.host = "192.168.1.60";
+    };
+  }
+];
+```
+
+Snapcast lists every client it has seen, with the address it came from:
+`echo '{"id":1,"jsonrpc":"2.0","method":"Server.GetStatus"}' | nc <server> 1705` (from the
+server). A client listed there with an IPv6 address needs its MAC.
+
 Verify Snapclient on the Pi: `systemctl status snapclient`. The client should
 appear in both the Snapcast web UI (`https://audio.<domain>`) and Music Assistant.
 
