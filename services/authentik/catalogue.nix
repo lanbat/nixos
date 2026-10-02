@@ -28,8 +28,9 @@
 #   forward-auth + OIDC  the OIDC objects keep the plain names above; the proxy
 #                        objects become "provider-<name>-proxy" named
 #                        "<Display> (proxy)" with slug "<name>-proxy". The OIDC
-#                        application gets a blank launch URL, so the service is
-#                        listed once in My applications, through the proxy.
+#                        application keeps the real launch URL but is hidden
+#                        (meta_hide), so the service is listed once in My
+#                        applications, through the proxy.
 #                        These proxy providers also carry internal_host, as they
 #                        always have (forward_single mode does not use it).
 #
@@ -208,8 +209,13 @@ let
         inherit svc;
         slug = svc.name;
         provider = oidcProviderId svc;
-        # Listed once in My applications, through its proxy application.
-        extraAttrs = lib.optionalAttrs (hasBoth svc) { meta_launch_url = "blank://blank"; };
+        # Listed once in My applications, through its proxy application. The
+        # launch URL stays real (Authentik's "Log back into <app>" link after
+        # sign-out uses it); meta_hide keeps the entry out of the library.
+        extraAttrs = lib.optionalAttrs (hasBoth svc) {
+          meta_launch_url = serviceUrl svc;
+          meta_hide = true;
+        };
       })
     ]
     ++ bindings svc svc.name;
