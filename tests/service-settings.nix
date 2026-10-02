@@ -506,6 +506,8 @@ let
         "/srv/storage/b/media/roms-browser/mame:/romm/library/roms/mame"
       ]
       && base.lanbat.services.romm.nfs.drives == [ "b" ]
+      && base.lanbat.services.romm.workloadDirs.romm.mode == "0711"
+      && base.lanbat.services.romm.workloadDirs."romm/resources".mode == "0711"
       &&
         base.systemd.services.romm-browser-romsets.environment.SOURCE_DIR
         == "/srv/storage/b/media/roms/mame"
