@@ -131,6 +131,19 @@
         android-devices = import ./tests/android-devices.nix { inherit lib pkgs; };
         android-provision = pkgs.callPackage ./pkgs/android-provision { };
         assertions = import ./tests/assertions.nix { inherit lib pkgs; };
+        private-media = import ./tests/private-media.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         authentik-catalogue = import ./tests/authentik-catalogue.nix {
           inherit
             lib
@@ -145,15 +158,28 @@
             ;
         };
         music-assistant = import ./tests/music-assistant.nix { inherit pkgs; };
-        qbittorrent = import ./tests/qbittorrent.nix {
-          inherit pkgs self;
-        };
         pkgs-build = import ./tests/pkgs-build.nix { inherit pkgs; };
         plugins = import ./tests/plugins.nix { inherit lib pkgs; };
         endpoints-table = import ./tests/endpoints-table.nix { inherit lib pkgs; };
+        backup-server = import ./tests/backup-server.nix { inherit pkgs; };
         frigate-settings = import ./tests/frigate-settings.nix { inherit lib pkgs; };
+        qbittorrent-userns = import ./tests/qbittorrent-userns.nix { inherit lib pkgs; };
+        syncthing-settings = import ./tests/syncthing-settings.nix { inherit lib pkgs; };
         policy = import ./tests/policy.nix { inherit lib pkgs; };
         caddy-remote = import ./tests/caddy-remote.nix { inherit lib pkgs; };
+        caddy-audit = import ./tests/caddy-audit.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         overlay = import ./tests/overlay.nix { inherit lib pkgs; };
         on-demand-activator = import ./tests/on-demand-activator.nix { inherit pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };

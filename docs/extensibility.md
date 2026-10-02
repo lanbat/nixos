@@ -103,6 +103,7 @@ layout, so a profile sets only what differs:
 | Immich | `drive` and `uploadPath`: where the originals and uploads live on Pi storage | drive `a`, `photos` |
 | Jellyfin | `imvdb`: music video metadata from IMVDb, with the key in `jellyfin-imvdb-env.age` | off |
 | Nextcloud | `storage.{drive,path}`: the directory created for the External Storage app's bulk user data | drive `b`, `nextcloud` |
+| Syncthing | `devices.<name>.id` (Syncthing device IDs), `folders.<id>` (label, absolute path, type, `ignorePerms`, the device names it is shared with) and `groups` (supplementary groups for the `syncthing` user, to write a folder another service owns). Reuse the folder IDs your other devices already use, so they pick the server up without re-pairing | no devices or folders: Syncthing runs unpaired |
 
 A default share is defined field by field at `lib.mkDefault`, so a profile changes
 one field of it, drops it with `enable = false`, or adds its own beside it:
@@ -118,6 +119,23 @@ one field of it, drops it with `enable = false`, or adds its own beside it:
 ```
 
 Samba's smbd binds to the NFS mounts of exactly the drives its enabled shares use.
+
+### Limiting a service to some users
+
+A service behind Authentik is open to every Authentik user unless its description
+lists the groups allowed in, `lanbat.services.<name>.access.groups`. The Authentik
+catalogue then binds those groups to the service's applications (forward auth and
+OIDC), and everyone else gets Authentik's "Permission denied". Syncthing sets it to
+`[ "authentik Admins" ]` (Authentik's built-in admin group) by default; a profile
+overrides that like any other value:
+
+```nix
+{ lanbat.services.syncthing.access.groups = [ "authentik Admins" "family" ]; }
+```
+
+A group Authentik does not have yet is created, empty, so a mistyped name locks the
+service rather than opening it. Blueprints only add and update, so a group you
+remove from the list keeps its binding until you delete it in Authentik's admin UI.
 
 ## Roles
 

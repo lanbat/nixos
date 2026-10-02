@@ -119,7 +119,7 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Immich | Caddy forward-auth (Authentik) + native OIDC | Bootstrap admin links to Authentik email; mobile apps use /api/* |
 | Jellyfin | OIDC (plugin) or local | Native OIDC plugin available |
 | Frigate | Caddy forward-auth (Authentik) | No native OIDC |
-| qBittorrent | Caddy forward-auth + local app auth | No OIDC |
+| qBittorrent | Caddy forward-auth (Authentik), web UI and API | No OIDC; VueTorrent web UI; who did what is in the audit log; Homepage reads it on loopback |
 | Bitmagnet | Caddy forward-auth (Authentik) | No native OIDC |
 | Audiobookshelf | Own accounts + native OIDC (Authentik) | Phone apps log in through the same OIDC; an Authentik user gets the account with their username, or a new one |
 | RomM | Own accounts + native OIDC (Authentik) | App clients (Argosy Launcher) pair by code; admin email must match the Authentik user |
@@ -129,7 +129,7 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Vaultwarden | Own account system + admin token | Bitwarden clients need direct API access; no forward auth |
 | Grafana | OIDC (Authentik) + local admin | Native generic_oauth support |
 | InfluxDB | Token auth (not exposed publicly) | Accessed by Grafana only; no browser UI needed on LAN |
-| Syncthing | Caddy forward-auth (Authentik) | Sync clients use port 22000 directly, not Caddy |
+| Syncthing | Caddy forward-auth (Authentik), admins only (`access.groups`) | Sync clients use port 22000 directly, not Caddy; only devices declared in the profile connect |
 | Music Assistant | Caddy forward-auth (Authentik) | No native OIDC; stream port (8097) not exposed on firewall |
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming and control ports (1704/1705) admit only declared clients (`services/snapcast.nix`) |
 | Wyoming satellites | No auth (Pi: firewall-restricted to server IP; server: localhost only) | Internal protocol; only HA connects |

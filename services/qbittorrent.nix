@@ -22,11 +22,21 @@
 #   If Pi storage disappears while a torrent is active, qBittorrent will
 #   write I/O errors.  We stop it immediately and restart when NFS returns.
 #
-# Auth: Authentik, through Caddy's forward auth, is the only login. After it,
-#   everyone shares the one instance: qBittorrent skips its own login for
-#   requests from the server's address, which is where the rootless port
-#   mapping delivers Caddy's requests. The port listens only on the server's
-#   loopback, so nothing on the LAN reaches qBittorrent without Authentik.
+# Auth: Authentik, through Caddy's forward auth, is the only login, for the web
+#   UI and the API alike. After it, everyone shares the one instance:
+#   qBittorrent skips its own login for requests from the server's address,
+#   which is where Caddy's requests come from. The port listens only on the
+#   server's loopback, so nothing on the LAN reaches qBittorrent without
+#   Authentik.
+#
+# Audit: caddy.auditLog records who did what, with the Authentik user on each
+#   line of /var/log/caddy/access-torrent.<domain>.log: page loads and every
+#   action (adding, pausing, deleting a torrent, changing a setting), which the
+#   API takes as POST requests. See docs/operations.md.
+#
+# Homepage: its widget reads the torrent list from qBittorrent on the server's
+#   loopback (Homepage uses host networking), which qBittorrent answers without
+#   a login, so the widget needs no credentials and Caddy no exception.
 {
   config,
   pkgs,
@@ -34,13 +44,25 @@
   ...
 }:
 
+let
+  puid = config.lanbat.services.qbittorrent.account.uid;
+  pgid = config.users.groups.media.gid;
+
+  # Podman ID map flags sending container ID `id` to namespace ID 0 (the user
+  # running Podman) and every other container ID 0..65535 to a sub-ID of its own.
+  idMap = flag: id: [
+    "${flag}=0:1:${toString id}"
+    "${flag}=${toString id}:0:1"
+    "${flag}=${toString (id + 1)}:${toString (id + 1)}:${toString (65535 - id)}"
+  ];
+in
+
 {
   lanbat.services.qbittorrent = {
     subdomain = "torrent";
     port = 8090;
     auth = "forward-auth";
-    # Homepage's qBittorrent widget calls /api/v2/* without an Authentik session.
-    caddy.authBypassPaths = [ "/api/v2/*" ];
+    caddy.auditLog = true;
     tier = "workload";
     state = [ "qbittorrent" ];
     units = [ "podman-qbittorrent" ];
@@ -61,10 +83,9 @@
       description = "Torrent client";
       widget = {
         type = "qbittorrent";
-        username = "admin";
-        password = {
-          _secret = "QBITTORRENT_PASSWORD";
-        };
+        # Straight to qBittorrent, which skips its login for loopback; through
+        # Caddy the widget would need an Authentik session.
+        url = "http://127.0.0.1:${toString config.lanbat.services.qbittorrent.port}";
         enableLeechProgress = true;
       };
     };
@@ -75,11 +96,10 @@
     image = "lscr.io/linuxserver/qbittorrent:5.2.3";
 
     environment = {
-      # Namespace root maps to the rootless Podman account (host qbt:qbt).
-      # Using the host IDs here would map them again through qbt's subordinate
-      # ID range, leaving the process unable to write qbt-owned NFS paths.
-      PUID = "0";
-      PGID = "0";
+      # Mapped to the host qbt account below, so NFS media dirs (qbt:media,
+      # mode 2775) are writable.
+      PUID = toString puid;
+      PGID = toString pgid;
       TZ = config.lanbat.deployment.timezone;
       WEBUI_PORT = "8090";
     };
@@ -94,7 +114,13 @@
     # Host networking avoids pasta's IPv4 fragment drops, which break BitTorrent
     # peer connections in rootless Podman. The web UI stays on loopback via
     # WebUI\Address set in ExecStartPre below.
-    extraOptions = [ "--network=host" ];
+    #
+    # The image runs qBittorrent as PUID:PGID. Rootless Podman would put those
+    # on sub-IDs of qbt's range, which own nothing on the media drives, so they
+    # are mapped to namespace ID 0 instead: the host qbt account and its group.
+    # The media folders are qbt:media with the setgid bit, so new files still
+    # join group media. Every other ID keeps a sub-ID of its own.
+    extraOptions = [ "--network=host" ] ++ idMap "--uidmap" puid ++ idMap "--gidmap" pgid;
 
     podman.user = "qbt";
     user = "0";
@@ -102,14 +128,15 @@
   };
 
   systemd.services."podman-qbittorrent".serviceConfig = {
-    # Set before every start, so the Authentik-only login and VueTorrent hold
-    # even if the settings are changed in the web UI. As root (+), because
-    # existing config files may still carry a subordinate ID from the old PUID
-    # mapping. The file is rewritten in place, so it keeps that owner.
+    # First, as root (+), hand the state to qbt, which PUID maps to: state
+    # written under an earlier mapping belongs to a sub-ID qBittorrent could no
+    # longer write. Then set the web UI preferences, before every start, so the
+    # Authentik-only login and VueTorrent hold even if the settings are changed
+    # in the web UI; the file is rewritten in place, so it keeps its owner.
     ExecStartPre = lib.mkBefore [
       "+${pkgs.coreutils}/bin/chown -R qbt:qbt /var/lib/qbittorrent"
       "+${pkgs.writeShellScript "qbittorrent-web-ui-prefs" ''
-        conf=''${1:-/var/lib/qbittorrent/qBittorrent/qBittorrent.conf}
+        conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
         [ -f "$conf" ] || exit 0
         tmp=$(${pkgs.coreutils}/bin/mktemp)
         trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT

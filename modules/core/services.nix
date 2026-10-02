@@ -254,6 +254,22 @@ let
           '';
         };
 
+        access.groups = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [ "authentik Admins" ];
+          description = ''
+            Authentik groups whose members may open the service; empty admits
+            every Authentik user. Enforced at the service's Authentik
+            applications (forward auth and OIDC), so it needs one of them.
+            A group Authentik does not have yet is created, empty, so a
+            mistyped name locks the service rather than opening it.
+            Blueprints only add and update, so a group removed from this list
+            keeps its binding until it is deleted in Authentik's admin UI
+            (Applications → the application → Policy / Group / User Bindings).
+          '';
+        };
+
         apiClients = mkOption {
           type = types.bool;
           default = false;
@@ -324,6 +340,20 @@ let
               URL paths that bypass Authentik forward-auth and reach the service
               directly. Used when the app must authenticate or discover itself
               (Music Assistant probes /info and /ws before its own login screen).
+            '';
+          };
+          auditLog = mkOption {
+            type = types.bool;
+            default = false;
+            description = ''
+              Record who does what on the subdomain. Each line of the vhost's
+              access log (/var/log/caddy/access-<subdomain>.<domain>.log, JSON,
+              kept 90 days) names the signed-in user in a `user` field, and the
+              log keeps page loads (GET /) and requests that change something
+              (any method but GET and HEAD), leaving out the reads a web UI
+              polls with. Needs auth = "forward-auth" and a provider that names
+              the user (lanbat.authProvider.userHeader). Requests to
+              authBypassPaths are logged without a user.
             '';
           };
         };

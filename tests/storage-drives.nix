@@ -322,6 +322,52 @@ let
       "c"
     ]
     ++ [
+      # backup-server.sh refuses to run unless its destination already exists,
+      # so the drive it writes to must create that directory, not only its parent.
+      (expect "the backup destination backup-server.sh checks for is created" (
+        let
+          script = builtins.readFile ../pkgs/scripts/backup-server.sh;
+          m = builtins.match ".*\nBACKUP_DIR=/srv/storage/([^/]+)/([^\n]+)\n.*" script;
+          drive = lib.elemAt m 0;
+          dir = lib.elemAt m 1;
+        in
+        m != null
+        &&
+          lib.hasInfix ''"$base/${dir}"''
+            (cfg "three-pi-storage").systemd.services."storage-${drive}-init".serviceConfig.ExecStart.text
+      ))
+      # The unit runs as root with only its own path; sudo is a setuid wrapper
+      # outside it, so the script drops to postgres with runuser instead.
+      (expect "backup-server drops privileges with a command its unit provides" (
+        let
+          script = builtins.readFile ../pkgs/scripts/backup-server.sh;
+          unitPath = (cfg "three-server").systemd.services.backup-server.path;
+        in
+        !(lib.hasInfix "sudo " script)
+        && lib.hasInfix "runuser -u postgres --" script
+        && lib.any (p: (p.pname or "") == "util-linux") unitPath
+      ))
+      # Each instance dumps the databases the profile declares on it, not a list
+      # written into the script: a profile without one of them must still back up.
+      (expect "backup-server dumps the databases the profile declares" (
+        let
+          server = cfg "three-server";
+          env = server.systemd.services.backup-server.environment;
+          declaredOn =
+            instance:
+            lib.concatStringsSep " " (
+              lib.sort (x: y: x < y) (
+                lib.attrNames (lib.filterAttrs (_: d: d.instance == instance) server.lanbat.postgresql.databases)
+              )
+            );
+          script = builtins.readFile ../pkgs/scripts/backup-server.sh;
+        in
+        env.BACKUP_DATABASES_ALWAYS_ON == declaredOn "always-on"
+        && env.BACKUP_DATABASES_WORKLOAD == declaredOn "workload"
+        && lib.hasInfix "{BACKUP_DATABASES_ALWAYS_ON:-}" script
+        && lib.hasInfix "{BACKUP_DATABASES_WORKLOAD:-}" script
+        && !(lib.hasInfix "authentik hass grafana" script)
+      ))
       (expect "one drive: nothing refers to the absent a or b" (
         !(one.systemd.services ? "storage-a-unlock")
         && !(one.systemd.services ? "storage-b-init")

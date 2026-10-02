@@ -126,7 +126,9 @@ Follow this checklist every time:
    | `subdomain`, `port`, `auth` | has a web UI |
    | `apiClients = true` | is called directly by apps or sync clients (rules out forward auth) |
 | `oidc` | logs users in through the identity provider over OpenID Connect |
+   | `access.groups` | should only be open to some Authentik groups, admins say (needs forward auth or `oidc`) |
    | `caddy.extraConfig`, `caddy.proxyOptions` | needs extra Caddy directives |
+   | `caddy.auditLog = true` | should record which user did what (forward auth only) |
    | `extraPorts` | listens on other ports |
    | `endpoint` | is reached over the network by another service |
    | `consumes` | reaches another service over the network |

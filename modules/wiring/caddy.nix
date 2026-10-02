@@ -5,6 +5,7 @@
 #   <subdomain>.<domain> {
 #     tls internal { on_demand }
 #     route {                     # auth = "forward-auth" only
+#       request_header -<authProvider.userHeader>
 #       <authProvider.outpostProxy>
 #       <authProvider.forwardAuth>
 #       <caddy.extraConfig>
@@ -28,6 +29,10 @@
 #
 # What the authentication check looks like comes from lanbat.authProvider, the
 # contract in modules/core/auth.nix, so nothing here names a provider.
+#
+# A service with caddy.auditLog gets an access log that says who did what: each
+# line carries the user from the provider's userHeader, and reads other than
+# page loads are skipped, so the polling of a web UI does not bury the actions.
 #
 # Caddy itself (global options, internal CA, CA landing page) is configured
 # in services/caddy.nix.
@@ -65,6 +70,25 @@ let
         }
       '';
 
+  # The provider sets the user header after its check; one sent by the client
+  # is removed first, so neither the application nor the audit log sees a name
+  # the client chose.
+  stripUserHeader =
+    svc:
+    let
+      header = (authProviderFor svc).userHeader;
+    in
+    lib.optionalString (header != null) "request_header -${header}";
+
+  auditLog = svc: ''
+    log_append user {http.request.header.${(authProviderFor svc).userHeader}}
+    @audit_skip {
+      method GET HEAD
+      not path /
+    }
+    log_skip @audit_skip
+  '';
+
   errorPage = svc: if svc.nfs.drives != [ ] then "storage.html" else "offline.html";
 
   handleErrors = svc: ''
@@ -101,6 +125,7 @@ let
     lib.concatStringsSep "\n" [
       ''
         route {
+          ${stripUserHeader svc}
           ${(authProviderFor svc).outpostProxy}
           @auth_bypass path ${pathMatcher}
           handle @auth_bypass {
@@ -120,6 +145,7 @@ let
     lib.concatStringsSep "\n" [
       ''
         route {
+          ${stripUserHeader svc}
           ${(authProviderFor svc).outpostProxy}
           ${(authProviderFor svc).forwardAuth}
           ${svc.caddy.extraConfig}
@@ -138,6 +164,7 @@ let
           }
         ''
         (handleErrors svc)
+        (lib.optionalString svc.caddy.auditLog (auditLog svc))
         (
           if svc.auth == "forward-auth" && authBypassPaths svc != [ ] then
             forwardAuthWithApiBypass svc
@@ -251,13 +278,44 @@ let
 in
 {
   services.caddy.virtualHosts = lib.mapAttrs' (
-    _: svc: lib.nameValuePair "${svc.subdomain}.${domain}" { extraConfig = vhost svc; }
+    _: svc:
+    let
+      hostName = "${svc.subdomain}.${domain}";
+    in
+    lib.nameValuePair hostName (
+      {
+        extraConfig = vhost svc;
+      }
+      # The module's default log file, with the retention stated rather than
+      # left to Caddy's default.
+      // lib.optionalAttrs svc.caddy.auditLog {
+        logFormat = ''
+          output file ${config.services.caddy.logDir}/access-${hostName}.log {
+            roll_keep_for 90d
+          }
+        '';
+      }
+    )
   ) exposed;
 
   # Local subdomain clashes are reported by modules/wiring/checks.nix; only a
   # clash involving a remote service is new here.
   assertions =
-    map (message: {
+    lib.mapAttrsToList (name: svc: {
+      assertion =
+        !svc.caddy.auditLog
+        || (
+          svc.auth == "forward-auth"
+          && config.lanbat.authProvider != null
+          && config.lanbat.authProvider.userHeader != null
+        );
+      message =
+        "lanbat: ${name} sets caddy.auditLog, which records the signed-in user, but"
+        + " it does not use forward auth through a provider that names the user"
+        + " (lanbat.authProvider.userHeader). Set auth = \"forward-auth\" on a host"
+        + " with such a provider, or drop caddy.auditLog.";
+    }) exposed
+    ++ map (message: {
       assertion = false;
       inherit message;
     }) remoteProblems

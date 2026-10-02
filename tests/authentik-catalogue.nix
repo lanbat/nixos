@@ -85,6 +85,33 @@ let
     auth = "app";
     oidc.redirectPaths = [ "/callback" ];
   });
+  restricted = withModule (demo {
+    access.groups = [
+      "authentik Admins"
+      "family"
+    ];
+  });
+  # Two restricted services sharing a group.
+  restrictedTwice = withModule (
+    { lib, ... }:
+    lib.recursiveUpdate
+      (demo {
+        access.groups = [ "family" ];
+      })
+      {
+        lanbat.services.demo2 = {
+          subdomain = "demo2";
+          port = 18998;
+          auth = "forward-auth";
+          access.groups = [ "family" ];
+        };
+      }
+  );
+  restrictedOidc = withModule (demo {
+    auth = "app";
+    oidc.redirectPaths = [ "/callback" ];
+    access.groups = [ "authentik Admins" ];
+  });
   # Only some services placed on the server.
   placed = blueprintsWith (
     host:
@@ -109,6 +136,24 @@ let
   proxyProviders = bp: entriesOf "authentik_providers_proxy.proxyprovider" bp.proxy;
   oidcProviders = bp: entriesOf "authentik_providers_oauth2.oauth2provider" bp.oidc;
   appsIn = bp: entriesOf "authentik_core.application" bp;
+  bindingsIn = bp: entriesOf "authentik_policies.policybinding" bp;
+  # [ { app = [ "slug" <slug> ]; group = [ "name" <group> ]; } ] for one blueprint.
+  bindingPairs =
+    bp:
+    map (e: {
+      app = lib.last (untag e.identifiers.target);
+      group = lib.last (untag e.identifiers.group);
+    }) (bindingsIn bp);
+  # Only the demo service's bindings (the example profile's Syncthing has its own).
+  demoPairs =
+    bp:
+    lib.filter (
+      p:
+      p.app == [
+        "slug"
+        "demo"
+      ]
+    ) (bindingPairs bp);
 
   outpostProviders =
     bp: map untag (lib.head (entriesOf "authentik_outposts.outpost" bp.proxy)).attrs.providers;
@@ -298,6 +343,97 @@ let
     ))
 
     (expect "without the demo service, nothing names it" (!hasDemo base))
+
+    (expect "a restricted forward-auth service binds each group to its application" (
+      demoPairs restricted.proxy == [
+        {
+          app = [
+            "slug"
+            "demo"
+          ];
+          group = [
+            "name"
+            "authentik Admins"
+          ];
+        }
+        {
+          app = [
+            "slug"
+            "demo"
+          ];
+          group = [
+            "name"
+            "family"
+          ];
+        }
+      ]
+    ))
+
+    (expect "bindings come after the application they target" (
+      let
+        entries = restricted.proxy.entries;
+        demoApp = lib.lists.findFirstIndex (e: (e.identifiers.slug or null) == "demo") null entries;
+        firstBinding = lib.lists.findFirstIndex (
+          e:
+          e.model == "authentik_policies.policybinding"
+          &&
+            lib.last (untag e.identifiers.target) == [
+              "slug"
+              "demo"
+            ]
+        ) null entries;
+      in
+      demoApp != null && firstBinding != null && demoApp < firstBinding
+    ))
+
+    (expect "a bound group is created if missing, once, before any binding names it" (
+      let
+        entries = restrictedTwice.proxy.entries;
+        isFamily = e: e.model == "authentik_core.group" && e.identifiers.name == "family";
+        families = lib.filter isFamily entries;
+        groupAt = lib.lists.findFirstIndex isFamily null entries;
+        bindingAt = lib.lists.findFirstIndex (
+          e: e.model == "authentik_policies.policybinding"
+        ) null entries;
+      in
+      lib.length families == 1
+      && (lib.head families).state == "created"
+      && groupAt != null
+      && bindingAt != null
+      && groupAt < bindingAt
+    ))
+
+    (expect "a restricted OIDC service binds its OIDC application" (
+      demoPairs restrictedOidc.oidc == [
+        {
+          app = [
+            "slug"
+            "demo"
+          ];
+          group = [
+            "name"
+            "authentik Admins"
+          ];
+        }
+      ]
+    ))
+
+    (expect "an unrestricted service gets no bindings" (
+      demoPairs added.proxy == [ ] && demoPairs addedWithSso.oidc == [ ]
+    ))
+
+    (expect "the example profile's Syncthing is admins only" (
+      lib.elem {
+        app = [
+          "slug"
+          "syncthing"
+        ];
+        group = [
+          "name"
+          "authentik Admins"
+        ];
+      } (bindingPairs base.proxy)
+    ))
 
     (expect "adding a forward-auth service adds its proxy provider" (
       let

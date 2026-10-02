@@ -217,7 +217,25 @@ in
       gzip
       postgresql
       sqlite
+      util-linux # runuser, to dump as postgres
     ];
+    # The databases each PostgreSQL instance holds, as the profile declares
+    # them (lanbat.postgresql.databases), each dumped on its own besides
+    # pg_dumpall.
+    environment =
+      let
+        on =
+          instance:
+          lib.concatStringsSep " " (
+            lib.sort (a: b: a < b) (
+              lib.attrNames (lib.filterAttrs (_: db: db.instance == instance) cfg.postgresql.databases)
+            )
+          );
+      in
+      {
+        BACKUP_DATABASES_ALWAYS_ON = on "always-on";
+        BACKUP_DATABASES_WORKLOAD = on "workload";
+      };
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "${

@@ -40,11 +40,6 @@
       <path pathversion="1">/mnt/storage-b/media/misc/</path>
       <allowsharing>true</allowsharing>
     </source>
-    <source>
-      <name>Private</name>
-      <path pathversion="1">/mnt/storage-b/media/adult/</path>
-      <allowsharing>false</allowsharing>
-    </source>
   </video>
   <music>
     <default pathversion="1"></default>
