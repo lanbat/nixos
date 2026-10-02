@@ -121,6 +121,7 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Frigate | Caddy forward-auth (Authentik) | No native OIDC |
 | qBittorrent | Caddy forward-auth (Authentik), web UI and API | No OIDC; VueTorrent web UI; who did what is in the audit log; Homepage reads it on loopback |
 | Bitmagnet | Caddy forward-auth (Authentik) | No native OIDC |
+| Jackett | Caddy forward-auth (Authentik), admins only (`access.groups`) | One shared Jackett login and no roles, so everyone let in can change indexers and read their credentials; qBittorrent reaches it on loopback with the API key, not through Caddy |
 | Audiobookshelf | Own accounts + native OIDC (Authentik) | Phone apps log in through the same OIDC; an Authentik user gets the account with their username, or a new one |
 | RomM | Own accounts + native OIDC (Authentik) | App clients (Argosy Launcher) pair by code; admin email must match the Authentik user |
 | SearXNG | None (intentional) | Public LAN search |
@@ -157,6 +158,7 @@ Caddy and Authentik on this one.
 | `nvr.<domain>` | Frigate NVR |
 | `torrent.<domain>` | qBittorrent |
 | `bitmagnet.<domain>` | Bitmagnet (on-demand) |
+| `jackett.<domain>` | Jackett (indexer manager for qBittorrent search; admins only) |
 | `romm.<domain>` | RomM (on-demand) |
 | `search.<domain>` | SearXNG |
 | `ca.<domain>` | CA cert distribution |
