@@ -86,6 +86,11 @@ let
 
   base = serverWith [ ];
 
+  # ── Jackett ──────────────────────────────────────────────────────────────
+  jackett = base.lanbat.services.jackett;
+  jackettService = base.services.jackett;
+  jackettUnit = base.systemd.services.jackett;
+
   # ── Samba ────────────────────────────────────────────────────────────────
   smb = config: config.services.samba.settings;
   sambaDrives = config: config.lanbat.services.samba.nfs.drives;
@@ -696,6 +701,19 @@ let
 
     (expect "snapcast: a client must be an IPv4 address" (
       lib.any (lib.hasInfix "phone.lan") (failedAssertions snapBadHost)
+    ))
+
+    (expect "jackett: workload-native service stays private behind admin forward auth" (
+      jackett.subdomain == "jackett"
+      && jackett.port == 9117
+      && jackett.auth == "forward-auth"
+      && jackett.access.groups == [ "authentik Admins" ]
+      && jackett.tier == "workload"
+      && jackett.state == [ "jackett" ]
+      && jackett.units == [ "jackett" ]
+      && jackettService.enable
+      && !jackettService.openFirewall
+      && lib.elem "workload-online.target" jackettUnit.wantedBy
     ))
 
     (expect "snapcast: two clients can't share an address" (
