@@ -18,6 +18,10 @@
 # Each category saves into its folder. The Pi creates the folders
 # (modules/pi/storage.nix), owned by qbt, group media.
 #
+# Categories: declared in `categories` below and written to categories.json
+#   before every start. Change them there; ones made in the web UI are dropped
+#   at the next restart.
+#
 # NFS dependency: strong.
 #   If Pi storage disappears while a torrent is active, qBittorrent will
 #   write I/O errors.  We stop it immediately and restart when NFS returns.
@@ -55,6 +59,52 @@ let
     "${flag}=${toString id}:0:1"
     "${flag}=${toString (id + 1)}:${toString (id + 1)}:${toString (65535 - id)}"
   ];
+
+  # Download categories: name -> save path, as the container sees it
+  # (/media/a, /media/b). A "/" in the name nests a subcategory under its
+  # parent. An empty path is a pure grouping category (children only), which
+  # saves to the default download folder. Nothing here has a share-limit
+  # override: all follow the global limits.
+  categories = {
+    "Audiobooks" = "/media/b/audiobooks";
+    "Books" = "/media/b/books";
+    "Games" = "/media/b/games";
+    "Gym" = "";
+    "Gym/Books" = "/media/b/gym/books";
+    "Gym/Videos" = "/media/b/gym/videos";
+    "Music" = "";
+    "Music/Albums" = "/media/b/music/albums";
+    "Porn" = "/media/b/adult";
+    "Porn/VR" = "/media/b/adult/vr";
+    "ROMs" = "/media/b/roms";
+    "ROMs/dreamcast" = "/media/b/roms/dreamcast";
+    "ROMs/gamecube" = "/media/b/roms/gc";
+    "ROMs/mame" = "/media/b/roms/mame";
+    "ROMs/ps2" = "/media/b/roms/ps2";
+    "VenusProject" = "";
+    "Video" = "/media/b/misc/video";
+    "Video/Documentaries" = "/media/b/documentaries";
+    "Video/Ideological" = "/media/b/documentaries/ideological";
+    "Video/Movies" = "/media/a/movies";
+    "Video/Music" = "/media/a/music-videos";
+    "Video/TV Shows" = "/media/a/tv/misc";
+    "Video/TV Shows/Home Renovation" = "/media/a/tv/home-renovation";
+  };
+
+  # categories.json with the same fields qBittorrent writes, so a restart that
+  # changes nothing leaves the categories exactly as they were.
+  categoriesFile = pkgs.writeText "qbittorrent-categories.json" (
+    builtins.toJSON (
+      lib.mapAttrs (_: path: {
+        download_path = null;
+        inactive_seeding_time_limit = -2;
+        ratio_limit = -2;
+        save_path = path;
+        seeding_time_limit = -2;
+        share_limit_action = "Default";
+      }) categories
+    )
+  );
 in
 
 {
@@ -135,6 +185,14 @@ in
     # in the web UI; the file is rewritten in place, so it keeps its owner.
     ExecStartPre = lib.mkBefore [
       "+${pkgs.coreutils}/bin/chown -R qbt:qbt /var/lib/qbittorrent"
+      # The categories come from `categories` above, not from the web UI:
+      # qBittorrent reads this file only at start, so a category added, edited
+      # or deleted in the UI lasts until the next restart, then reverts.
+      "+${pkgs.writeShellScript "qbittorrent-categories" ''
+        ${pkgs.coreutils}/bin/install -d -o qbt -g qbt -m 755 /var/lib/qbittorrent/qBittorrent
+        ${pkgs.coreutils}/bin/install -o qbt -g qbt -m 644 ${categoriesFile} \
+          /var/lib/qbittorrent/qBittorrent/categories.json
+      ''}"
       "+${pkgs.writeShellScript "qbittorrent-web-ui-prefs" ''
         conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
         [ -f "$conf" ] || exit 0
