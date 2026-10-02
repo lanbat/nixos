@@ -171,6 +171,15 @@ that off too. Disabling collection on a host that deploys often will fill the
 root filesystem, and a full root cannot build a rollback — prefer a longer
 `options` window to switching it off.
 
+The server role also reserves recovery headroom under memory and I/O pressure:
+
+- zram can hold up to 8 GiB (or 25% of RAM, whichever is smaller); disk-backed
+  swap is deliberately avoided because the host root is unencrypted;
+- systemd-coredump keeps at most 2 GiB and stops collecting while less than
+  15 GiB remains free; and
+- Immich machine learning is limited to 2 CPUs, 8 GiB RAM and 2 GiB additional
+  swap, preventing an ML retry storm from starving SSH and Authentik.
+
 ## Checking service health
 
 ```bash
@@ -194,8 +203,9 @@ systemctl status nfs-server storage-a-unlock storage-b-unlock
 
 ## Updating container images
 
-Pin image tags in the service files and bump them deliberately, then deploy. Containers
-run rootless, so each account has its own image store. To refresh a floating tag such as
+Pin image tags and immutable manifest digests in the service files, and bump both
+deliberately before deploying. A tag alone can move to different content. Containers run
+rootless, so each account has its own image store. To refresh a floating tag such as
 `:latest` by hand:
 
 ```bash

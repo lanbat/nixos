@@ -194,6 +194,9 @@ let
   redisClash = serverWith [ { lanbat.redis.databases.other.index = 1; } ];
 
   envOf = config: container: config.virtualisation.oci-containers.containers.${container}.environment;
+  imageOf = config: container: config.virtualisation.oci-containers.containers.${container}.image;
+  optionsOf =
+    config: container: config.virtualisation.oci-containers.containers.${container}.extraOptions;
 
   # ── Telegraf ─────────────────────────────────────────────────────────────
   telegrafConf = config: config.services.telegraf.extraConfig;
@@ -556,6 +559,38 @@ let
       && (envOf base "immich-server").REDIS_PORT == "6379"
       && lib.hasInfix ''IMMICH_URL="http://127.0.0.1:2283"'' base.systemd.services.immich-bootstrap.script
       && lib.hasInfix ''"https://photos.home.example.com"'' base.systemd.services.podman-immich-server.preStart
+    ))
+
+    (expect "immich: images are pinned to the deployed v3.2.1 digests" (
+      imageOf base "immich-server"
+      == "ghcr.io/immich-app/immich-server:v3.2.1@sha256:87bb1b208434a8503e1a2465edd84f3cf94bd72c66feb7ca474629015b8dbfd6"
+      &&
+        imageOf base "immich-machine-learning"
+        == "ghcr.io/immich-app/immich-machine-learning:v3.2.1@sha256:49a53dbf5fbea5c785075667056fb010498969b9143005df5434868035bf5654"
+    ))
+
+    (expect "immich: machine learning cannot exhaust the host" (
+      optionsOf base "immich-machine-learning" == [
+        "--network=host"
+        "--memory=8g"
+        "--memory-reservation=6g"
+        "--memory-swap=10g"
+        "--cpus=2"
+      ]
+    ))
+
+    (expect "server: compressed swap and bounded core dumps preserve recovery headroom" (
+      base.zramSwap.enable
+      && base.zramSwap.memoryPercent == 25
+      && base.zramSwap.memoryMax == 8 * 1024 * 1024 * 1024
+      && base.zramSwap.priority == 100
+      && lib.all (line: lib.hasInfix line base.environment.etc."systemd/coredump.conf".text) [
+        "Storage=external"
+        "ProcessSizeMax=1G"
+        "ExternalSizeMax=1G"
+        "MaxUse=2G"
+        "KeepFree=15G"
+      ]
     ))
 
     (expect "immich: a profile moves the uploads, and the ports follow the services" (
