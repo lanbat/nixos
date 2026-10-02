@@ -9,6 +9,7 @@ local.nix
 
 # Agent session scratch (not part of the flake)
 .superpowers/
+.worktrees/
 
 # Per-deployment agenix recipients (see secrets/secrets.nix.example)
 secrets/secrets.nix

@@ -7,7 +7,7 @@
    Authentik, HA, Grafana, InfluxDB, Mosquitto, Frigate, Music Assistant, Snapcast, Wyoming, SearXNG, Telegraf.
 3. Admin SSHes in and runs `sudo unlock-control` → Tang starts on port 7500.
 4. Admin runs `sudo unlock-workload` → the PostgreSQL workload instance, Nextcloud, Immich,
-   Jellyfin, Audiobookshelf, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM come up.
+   Jellyfin, Audiobookshelf, Vaultwarden, Syncthing, Samba, qBittorrent, Jackett, Bitmagnet, RomM come up.
 5. Pi boots from SD card. After network is up, `storage-a-unlock` and `storage-b-unlock`
    contact Tang, unlock both NVMe drives (retries every 5 min until Tang is reachable).
 6. `/mnt/storage-a` and `/mnt/storage-b` mount on the Pi. NFS server starts.
@@ -199,3 +199,19 @@ Torrents resume from where they were; partial downloads on NFS are intact.
 **Worst case**: up to 60 seconds of torrent data may need to be re-downloaded.
 No torrent data is permanently lost because the files are on NFS (Pi drives),
 which never had a write error — NFS just became unavailable.
+
+## Jackett and qBittorrent search
+
+Jackett is workload-gated with no NFS dependency: it pauses while the workload layer is
+locked and starts with it, and a Pi reboot does not touch it.
+
+qBittorrent `Requires=` `jackett-qbittorrent-plugin`, which `Requires=` Jackett and
+waits up to a minute for Jackett's first `ServerConfig.json`:
+- If Jackett never writes an API key, the initializer fails and qBittorrent does not
+  start. Read `journalctl -u jackett -u jackett-qbittorrent-plugin`.
+- If Jackett restarts (deploy or crash), qBittorrent keeps running and searches fail only
+  while Jackett is down. The initializer is not rerun, so it learns a changed key at its
+  next start.
+- If Jackett's state is lost, restore `/var/lib/jackett` from the backup, or add the
+  indexers again, then `sudo systemctl restart podman-qbittorrent`: the new API key is
+  written on that start, with nothing to edit.

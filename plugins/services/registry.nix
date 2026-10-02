@@ -22,6 +22,7 @@
   homepage = ../../services/homepage.nix;
   immich = ../../services/immich.nix;
   influxdb = ../../services/influxdb.nix;
+  jackett = ../../services/jackett.nix;
   jellyfin = ../../services/jellyfin.nix;
   mosquitto = ../../services/mosquitto.nix;
   music-assistant = ../../services/music-assistant.nix;

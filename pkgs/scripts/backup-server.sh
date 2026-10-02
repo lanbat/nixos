@@ -15,6 +15,7 @@
 #   - /var/lib/immich/profile
 #   - /var/lib/music-assistant
 #   - /var/lib/qbittorrent
+#   - /var/lib/jackett (indexers with their credentials, and the API key)
 #   - /var/lib/bitmagnet
 #   - /var/lib/audiobookshelf/config (accounts and listening progress)
 #   - /var/lib/vaultwarden (the database through SQLite's online backup)
@@ -135,6 +136,7 @@ if workload_online; then
   echo "  Backing up workload-layer state..."
   copy_state /var/lib/nextcloud             nextcloud
   copy_state /var/lib/qbittorrent           qbittorrent
+  copy_state /var/lib/jackett               jackett
   copy_state /var/lib/bitmagnet             bitmagnet
   copy_state /var/lib/immich/profile        immich-profile
   copy_state /var/lib/audiobookshelf/config audiobookshelf-config

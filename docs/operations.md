@@ -171,6 +171,15 @@ that off too. Disabling collection on a host that deploys often will fill the
 root filesystem, and a full root cannot build a rollback — prefer a longer
 `options` window to switching it off.
 
+The server role also reserves recovery headroom under memory and I/O pressure:
+
+- zram can hold up to 8 GiB (or 25% of RAM, whichever is smaller); disk-backed
+  swap is deliberately avoided because the host root is unencrypted;
+- systemd-coredump keeps at most 2 GiB and stops collecting while less than
+  15 GiB remains free; and
+- Immich machine learning is limited to 2 CPUs, 8 GiB RAM and 2 GiB additional
+  swap, preventing an ML retry storm from starving SSH and Authentik.
+
 ## Checking service health
 
 ```bash
@@ -194,8 +203,9 @@ systemctl status nfs-server storage-a-unlock storage-b-unlock
 
 ## Updating container images
 
-Pin image tags in the service files and bump them deliberately, then deploy. Containers
-run rootless, so each account has its own image store. To refresh a floating tag such as
+Pin image tags and immutable manifest digests in the service files, and bump both
+deliberately before deploying. A tag alone can move to different content. Containers run
+rootless, so each account has its own image store. To refresh a floating tag such as
 `:latest` by hand:
 
 ```bash
@@ -278,6 +288,32 @@ To start/stop manually:
 sudo systemctl start podman-bitmagnet
 sudo systemctl stop podman-bitmagnet
 ```
+
+## Jackett (qBittorrent search)
+
+Jackett is at `https://jackett.<domain>`, for `authentik Admins` only. It has one
+shared login and no roles, so anyone admitted can change indexers and read their
+credentials; to give someone search without that, they use qBittorrent's search
+tab, which reaches Jackett on loopback.
+
+qBittorrent's Jackett plugin gets its URL and API key from
+`jackett-qbittorrent-plugin`, which rewrites
+`/var/lib/qbittorrent/qBittorrent/nova3/engines/jackett.json` from Jackett's
+`ServerConfig.json` before every qBittorrent start. A hand-edited key is
+overwritten. qBittorrent `Requires=` it, so qBittorrent does not start if the key can't
+be read. The unit is inactive between runs (that is normal), and restarting Jackett
+does not restart qBittorrent.
+
+```bash
+systemctl status jackett jackett-qbittorrent-plugin
+journalctl -u jackett -u jackett-qbittorrent-plugin
+
+# Pick up a regenerated or restored API key (qBittorrent re-reads it when it starts)
+sudo systemctl restart podman-qbittorrent
+```
+
+Jackett listens on `127.0.0.1:9117` only (`--ListenPrivate`, and the firewall keeps the
+port closed): `ss -tlnp | grep 9117` should show nothing but loopback.
 
 ## Viewing logs
 

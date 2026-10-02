@@ -68,6 +68,7 @@ let
 
   torrent = vhostOf "qbittorrent";
   frigate = vhostOf "frigate";
+  jackett = vhostOf "jackett";
   widget = base.lanbat.services.qbittorrent.dashboard.widget;
 
   auditOnApp = serverWith [ { lanbat.services.jellyfin.caddy.auditLog = true; } ];
@@ -84,6 +85,12 @@ let
 
     (expect "qbittorrent: no part of the vhost bypasses Authentik" (
       !(lib.hasInfix "@auth_bypass" torrent.extraConfig)
+    ))
+
+    (expect "jackett: the management UI has no auth bypass and strips user headers" (
+      !(lib.hasInfix "@auth_bypass" jackett.extraConfig)
+      && lib.hasInfix "forward_auth" jackett.extraConfig
+      && lib.hasInfix "request_header -X-Authentik-Username" jackett.extraConfig
     ))
 
     (expect "qbittorrent: the access log names the user and skips polling reads" (

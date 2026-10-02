@@ -865,6 +865,30 @@ Declare each box under `androidDevices` in the profile, enable
 debugging?" dialog on the TV, check the plan, take a baseline
 `android-capture-<box>`, then run `android-provision-<box>`.
 
+### 3r. Jackett (qBittorrent search)
+
+Jackett aggregates torrent indexers for qBittorrent's search tab. It starts with the
+workload layer (step 1i) and has no secret to create: its API key is generated on
+the first start, and `jackett-qbittorrent-plugin` writes it into qBittorrent's
+plugin configuration before every qBittorrent start.
+
+1. Check the units came up. `jackett-qbittorrent-plugin` runs once before qBittorrent
+   starts and then shows `inactive (dead)` with `status=0/SUCCESS`; that is normal:
+   ```bash
+   systemctl status jackett jackett-qbittorrent-plugin podman-qbittorrent
+   ss -tlnp | grep 9117        # loopback only
+   ```
+2. Sign in to Authentik as a member of `authentik Admins`, then open
+   `https://jackett.<domain>`. Nobody else gets in, and Jackett has no
+   non-admin role: anyone admitted can change indexers and read their credentials.
+3. Add the indexers you are entitled to use, and use each one's **Test** button.
+4. In qBittorrent (VueTorrent: Search), install the Jackett plugin once if it is
+   not listed: Search plugins → Install new → `jackett.py` from
+   <https://github.com/qbittorrent/search-plugins>. Don't edit its `jackett.json`:
+   it is rewritten from Jackett's key on every start.
+5. Search from qBittorrent. "Jackett: api key error" means the plugin file was not
+   rewritten; read `journalctl -u jackett-qbittorrent-plugin`.
+
 ## Phase 4 — Ongoing
 
 - Deploy changes immediately: `deploy --skip-checks path:.#homelab-server` / `deploy --skip-checks path:.#homelab-pi-storage`.

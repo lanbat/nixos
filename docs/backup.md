@@ -31,6 +31,7 @@
 | Kodi library | `/var/lib/kodi/.kodi/` | manual rsync |
 | Nextcloud user data | `/srv/storage/b/nextcloud/` | Already on Pi LUKS storage |
 | qBittorrent config | `/var/lib/qbittorrent/` | `backup-server.sh` |
+| Jackett indexers, credentials and API key | `/var/lib/jackett/` | `backup-server.sh` (it holds private-indexer logins: treat the backup as a secret). qBittorrent's `jackett.json` is rewritten from this key on every start, so it needs no backup of its own |
 | Music Assistant state | `/var/lib/music-assistant/` | `backup-server.sh` |
 
 ### Regenerable (do not need to back up)

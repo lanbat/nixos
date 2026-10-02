@@ -136,6 +136,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 ├── jellyfin/          Jellyfin metadata and configuration
 ├── audiobookshelf/    Audiobookshelf SQLite DB (accounts, progress), book details and covers
 ├── qbittorrent/       qBittorrent config + fast-resume data
+├── jackett/           Jackett indexers, their credentials and cookies, and the API key (BACK THIS UP)
 ├── bitmagnet/         Bitmagnet config
 ├── romm/              RomM config, artwork, saves and states
 ├── vaultwarden/       Vaultwarden SQLite DB + attachments (BACK THIS UP)
@@ -160,6 +161,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Jellyfin | server-local | server-local | Pi/a/media + Pi/b/media |
 | Audiobookshelf | server-local | server-local (SQLite) | Pi/b/media/audiobooks (read in place) |
 | qBittorrent | server-local | — | Pi/a/media + Pi/b/media (by category) |
+| Jackett | server-local | — | — (searches remote indexers; keeps only its configuration) |
 | Frigate | server-local | server-local (SQLite) | Pi/a/surveillance |
 | Bitmagnet | server-local | workload PostgreSQL | — |
 | RomM | server-local | workload PostgreSQL | Pi/b/media/roms (ROM library), Pi/b/media/roms-browser (arcade zips) |

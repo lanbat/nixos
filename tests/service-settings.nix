@@ -86,6 +86,13 @@ let
 
   base = serverWith [ ];
 
+  # ── Jackett ──────────────────────────────────────────────────────────────
+  jackett = base.lanbat.services.jackett;
+  jackettService = base.services.jackett;
+  jackettUnit = base.systemd.services.jackett;
+  jackettPluginUnit = base.systemd.services.jackett-qbittorrent-plugin;
+  qbittorrentUnit = base.systemd.services.podman-qbittorrent;
+
   # ── Samba ────────────────────────────────────────────────────────────────
   smb = config: config.services.samba.settings;
   sambaDrives = config: config.lanbat.services.samba.nfs.drives;
@@ -194,6 +201,9 @@ let
   redisClash = serverWith [ { lanbat.redis.databases.other.index = 1; } ];
 
   envOf = config: container: config.virtualisation.oci-containers.containers.${container}.environment;
+  imageOf = config: container: config.virtualisation.oci-containers.containers.${container}.image;
+  optionsOf =
+    config: container: config.virtualisation.oci-containers.containers.${container}.extraOptions;
 
   # ── Telegraf ─────────────────────────────────────────────────────────────
   telegrafConf = config: config.services.telegraf.extraConfig;
@@ -560,6 +570,38 @@ let
       && lib.hasInfix ''"https://photos.home.example.com"'' base.systemd.services.podman-immich-server.preStart
     ))
 
+    (expect "immich: images are pinned to the deployed v3.2.1 digests" (
+      imageOf base "immich-server"
+      == "ghcr.io/immich-app/immich-server:v3.2.1@sha256:87bb1b208434a8503e1a2465edd84f3cf94bd72c66feb7ca474629015b8dbfd6"
+      &&
+        imageOf base "immich-machine-learning"
+        == "ghcr.io/immich-app/immich-machine-learning:v3.2.1@sha256:49a53dbf5fbea5c785075667056fb010498969b9143005df5434868035bf5654"
+    ))
+
+    (expect "immich: machine learning cannot exhaust the host" (
+      optionsOf base "immich-machine-learning" == [
+        "--network=host"
+        "--memory=8g"
+        "--memory-reservation=6g"
+        "--memory-swap=10g"
+        "--cpus=2"
+      ]
+    ))
+
+    (expect "server: compressed swap and bounded core dumps preserve recovery headroom" (
+      base.zramSwap.enable
+      && base.zramSwap.memoryPercent == 25
+      && base.zramSwap.memoryMax == 8 * 1024 * 1024 * 1024
+      && base.zramSwap.priority == 100
+      && lib.all (line: lib.hasInfix line base.environment.etc."systemd/coredump.conf".text) [
+        "Storage=external"
+        "ProcessSizeMax=1G"
+        "ExternalSizeMax=1G"
+        "MaxUse=2G"
+        "KeepFree=15G"
+      ]
+    ))
+
     (expect "immich: a profile moves the uploads, and the ports follow the services" (
       immichUpload immichMoved == "/srv/storage/b/media/photos:/usr/src/app/upload"
       && immichMoved.lanbat.services.immich.nfs.drives == [ "b" ]
@@ -698,6 +740,67 @@ let
 
     (expect "snapcast: a client must be an IPv4 address" (
       lib.any (lib.hasInfix "phone.lan") (failedAssertions snapBadHost)
+    ))
+
+    (expect "jackett: workload-native service stays private behind admin forward auth" (
+      jackett.subdomain == "jackett"
+      && jackett.port == 9117
+      && jackett.auth == "forward-auth"
+      && jackett.access.groups == [ "authentik Admins" ]
+      && jackett.tier == "workload"
+      && jackett.state == [ "jackett" ]
+      &&
+        jackett.units == [
+          "jackett"
+          "jackett-qbittorrent-plugin"
+        ]
+      && jackettService.enable
+      && !jackettService.openFirewall
+      && lib.elem "workload-online.target" jackettUnit.wantedBy
+    ))
+
+    (expect "jackett: it listens only on loopback, and no firewall rule admits 9117" (
+      lib.hasInfix " --ListenPrivate" jackettUnit.serviceConfig.ExecStart
+      && !lib.hasInfix "--ListenPublic" jackettUnit.serviceConfig.ExecStart
+      && lib.hasInfix "--Port 9117" jackettUnit.serviceConfig.ExecStart
+      && !lib.elem 9117 base.networking.firewall.allowedTCPPorts
+      && !lib.elem 9117 base.networking.firewall.allowedUDPPorts
+    ))
+
+    (expect "jackett: the plugin unit runs again before every qBittorrent start" (
+      jackettPluginUnit.serviceConfig.Type == "oneshot"
+      && !(jackettPluginUnit.serviceConfig.RemainAfterExit or false)
+    ))
+
+    (expect "jackett: its data directory is created for the jackett user on the workload layer" (
+      lib.attrNames jackett.workloadDirs == [
+        "jackett"
+        "jackett/.config"
+        "jackett/.config/Jackett"
+      ]
+      && lib.all (dir: dir.user == "jackett" && dir.group == "jackett" && dir.mode == "0700") (
+        lib.attrValues jackett.workloadDirs
+      )
+    ))
+
+    (expect "jackett: qBittorrent's plugin is configured from Jackett's generated API key" (
+      lib.elem "workload-online.target" jackettPluginUnit.wantedBy
+      && lib.elem "jackett.service" jackettPluginUnit.requires
+      && lib.elem "jackett.service" jackettPluginUnit.after
+      && lib.all (text: lib.hasInfix text jackettPluginUnit.script) [
+        "/var/lib/jackett/.config/Jackett/ServerConfig.json"
+        "/var/lib/qbittorrent/qBittorrent/nova3/engines"
+        "http://127.0.0.1:9117"
+        "YOUR_API_KEY_HERE"
+        "chown qbt:qbt"
+        "chmod 0600"
+      ]
+      && !lib.hasInfix "--ListenPublic" jackettUnit.serviceConfig.ExecStart
+    ))
+
+    (expect "jackett: qBittorrent starts only after its plugin is configured" (
+      lib.elem "jackett-qbittorrent-plugin.service" qbittorrentUnit.requires
+      && lib.elem "jackett-qbittorrent-plugin.service" qbittorrentUnit.after
     ))
 
     (expect "snapcast: two clients can't share an address" (

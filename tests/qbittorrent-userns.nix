@@ -16,6 +16,7 @@ let
         ../modules/core/services.nix
         ../modules/wiring/accounts.nix
         ../services/qbittorrent.nix
+        ../services/jackett.nix
         (
           { lib, ... }:
           {
@@ -81,6 +82,14 @@ let
     "state is handed to qbt before every start" = lib.any (
       cmd: lib.hasInfix "chown -R qbt:qbt /var/lib/qbittorrent" (cmd.text or (builtins.toString cmd))
     ) (lib.toList config.systemd.services.podman-qbittorrent.serviceConfig.ExecStartPre);
+    # The Jackett search plugin's configuration is written for the account
+    # PUID maps to, and readable by nobody else: it holds Jackett's API key.
+    "the Jackett plugin file is owned by qbt and private" =
+      lib.hasInfix "chown qbt:qbt \"$tmp\"" config.systemd.services.jackett-qbittorrent-plugin.script
+      && lib.hasInfix "chmod 0600 \"$tmp\"" config.systemd.services.jackett-qbittorrent-plugin.script;
+    "qBittorrent starts after the Jackett plugin is configured" =
+      lib.elem "jackett-qbittorrent-plugin.service" config.systemd.services.podman-qbittorrent.requires
+      && lib.elem "jackett-qbittorrent-plugin.service" config.systemd.services.podman-qbittorrent.after;
   };
 
   failed = lib.attrNames (lib.filterAttrs (_: ok: !ok) checks);

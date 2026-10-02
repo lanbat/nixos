@@ -44,7 +44,11 @@
 }:
 
 let
-  immichVersion = "v1.136.8";
+  immichVersion = "v3.2.1";
+  immichDigests = {
+    server = "sha256:87bb1b208434a8503e1a2465edd84f3cf94bd72c66feb7ca474629015b8dbfd6";
+    machineLearning = "sha256:49a53dbf5fbea5c785075667056fb010498969b9143005df5434868035bf5654";
+  };
   domain = config.lanbat.deployment.domain;
   bootstrap = pkgs.callPackage ../pkgs/immich-bootstrap { };
 
@@ -182,7 +186,7 @@ in
     # Immich server container
     # ---------------------------------------------------------------------------
     virtualisation.oci-containers.containers."immich-server" = {
-      image = "ghcr.io/immich-app/immich-server:${immichVersion}";
+      image = "ghcr.io/immich-app/immich-server:${immichVersion}@${immichDigests.server}";
       extraOptions = [ "--network=host" ];
       podman.user = "immich";
       user = "0";
@@ -224,8 +228,14 @@ in
     # Immich machine learning container
     # ---------------------------------------------------------------------------
     virtualisation.oci-containers.containers."immich-machine-learning" = {
-      image = "ghcr.io/immich-app/immich-machine-learning:${immichVersion}";
-      extraOptions = [ "--network=host" ];
+      image = "ghcr.io/immich-app/immich-machine-learning:${immichVersion}@${immichDigests.machineLearning}";
+      extraOptions = [
+        "--network=host"
+        "--memory=8g"
+        "--memory-reservation=6g"
+        "--memory-swap=10g"
+        "--cpus=2"
+      ];
       podman.user = "immich";
       user = "0";
       environment = {
