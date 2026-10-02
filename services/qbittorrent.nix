@@ -2,6 +2,11 @@
 #
 # qBittorrent — torrent client with web UI.
 #
+# Web UI: VueTorrent (pkgs.vuetorrent), which works on phones as well as
+#   desktop browsers, unlike qBittorrent's own. qBittorrent serves it as its
+#   alternative web UI from the package, mounted read-only into the container,
+#   so it updates with nixpkgs and the API (Homepage's widget) is unchanged.
+#
 # Storage split
 # -------------
 # Server-local:
@@ -65,8 +70,7 @@
     };
   };
 
-  # Run qBittorrent as an OCI container to simplify volume mounts and
-  # to use the linuxserver.io image which ships a clean web UI.
+  # Run qBittorrent as an OCI container to simplify volume mounts.
   virtualisation.oci-containers.containers."qbittorrent" = {
     image = "lscr.io/linuxserver/qbittorrent:5.2.3";
 
@@ -84,6 +88,7 @@
       "/var/lib/qbittorrent:/config"
       "/srv/storage/a/media:/media/a"
       "/srv/storage/b/media:/media/b"
+      "${pkgs.vuetorrent}/share/vuetorrent:/vuetorrent:ro"
     ];
 
     # Host networking avoids pasta's IPv4 fragment drops, which break BitTorrent
@@ -97,14 +102,14 @@
   };
 
   systemd.services."podman-qbittorrent".serviceConfig = {
-    # Set before every start, so the Authentik-only login holds even if the
-    # setting is changed in the web UI. As root (+), because existing config
-    # files may still carry a subordinate ID from the old PUID mapping. The
-    # file is rewritten in place, so it keeps that owner.
+    # Set before every start, so the Authentik-only login and VueTorrent hold
+    # even if the settings are changed in the web UI. As root (+), because
+    # existing config files may still carry a subordinate ID from the old PUID
+    # mapping. The file is rewritten in place, so it keeps that owner.
     ExecStartPre = lib.mkBefore [
       "+${pkgs.coreutils}/bin/chown -R qbt:qbt /var/lib/qbittorrent"
-      "+${pkgs.writeShellScript "qbittorrent-web-ui-whitelist" ''
-        conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
+      "+${pkgs.writeShellScript "qbittorrent-web-ui-prefs" ''
+        conf=''${1:-/var/lib/qbittorrent/qBittorrent/qBittorrent.conf}
         [ -f "$conf" ] || exit 0
         tmp=$(${pkgs.coreutils}/bin/mktemp)
         trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
@@ -118,6 +123,8 @@
           ' "$conf" > "$tmp" && ${pkgs.coreutils}/bin/cat "$tmp" > "$conf"
         }
         set_pref 'WebUI\Address' 127.0.0.1
+        set_pref 'WebUI\AlternativeUIEnabled' true
+        set_pref 'WebUI\RootFolder' /vuetorrent
         set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
         # Host networking: Caddy connects via loopback (127.0.0.1). Bridge/pasta
         # used to rewrite the source to the server IP — keep both.
