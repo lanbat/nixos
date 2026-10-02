@@ -86,6 +86,13 @@ let
 
   base = serverWith [ ];
 
+  # ── Jackett ──────────────────────────────────────────────────────────────
+  jackett = base.lanbat.services.jackett;
+  jackettService = base.services.jackett;
+  jackettUnit = base.systemd.services.jackett;
+  jackettPluginUnit = base.systemd.services.jackett-qbittorrent-plugin;
+  qbittorrentUnit = base.systemd.services.podman-qbittorrent;
+
   # ── Samba ────────────────────────────────────────────────────────────────
   smb = config: config.services.samba.settings;
   sambaDrives = config: config.lanbat.services.samba.nfs.drives;
@@ -731,6 +738,67 @@ let
 
     (expect "snapcast: a client must be an IPv4 address" (
       lib.any (lib.hasInfix "phone.lan") (failedAssertions snapBadHost)
+    ))
+
+    (expect "jackett: workload-native service stays private behind admin forward auth" (
+      jackett.subdomain == "jackett"
+      && jackett.port == 9117
+      && jackett.auth == "forward-auth"
+      && jackett.access.groups == [ "authentik Admins" ]
+      && jackett.tier == "workload"
+      && jackett.state == [ "jackett" ]
+      &&
+        jackett.units == [
+          "jackett"
+          "jackett-qbittorrent-plugin"
+        ]
+      && jackettService.enable
+      && !jackettService.openFirewall
+      && lib.elem "workload-online.target" jackettUnit.wantedBy
+    ))
+
+    (expect "jackett: it listens only on loopback, and no firewall rule admits 9117" (
+      lib.hasInfix " --ListenPrivate" jackettUnit.serviceConfig.ExecStart
+      && !lib.hasInfix "--ListenPublic" jackettUnit.serviceConfig.ExecStart
+      && lib.hasInfix "--Port 9117" jackettUnit.serviceConfig.ExecStart
+      && !lib.elem 9117 base.networking.firewall.allowedTCPPorts
+      && !lib.elem 9117 base.networking.firewall.allowedUDPPorts
+    ))
+
+    (expect "jackett: the plugin unit runs again before every qBittorrent start" (
+      jackettPluginUnit.serviceConfig.Type == "oneshot"
+      && !(jackettPluginUnit.serviceConfig.RemainAfterExit or false)
+    ))
+
+    (expect "jackett: its data directory is created for the jackett user on the workload layer" (
+      lib.attrNames jackett.workloadDirs == [
+        "jackett"
+        "jackett/.config"
+        "jackett/.config/Jackett"
+      ]
+      && lib.all (dir: dir.user == "jackett" && dir.group == "jackett" && dir.mode == "0700") (
+        lib.attrValues jackett.workloadDirs
+      )
+    ))
+
+    (expect "jackett: qBittorrent's plugin is configured from Jackett's generated API key" (
+      lib.elem "workload-online.target" jackettPluginUnit.wantedBy
+      && lib.elem "jackett.service" jackettPluginUnit.requires
+      && lib.elem "jackett.service" jackettPluginUnit.after
+      && lib.all (text: lib.hasInfix text jackettPluginUnit.script) [
+        "/var/lib/jackett/.config/Jackett/ServerConfig.json"
+        "/var/lib/qbittorrent/qBittorrent/nova3/engines"
+        "http://127.0.0.1:9117"
+        "YOUR_API_KEY_HERE"
+        "chown qbt:qbt"
+        "chmod 0600"
+      ]
+      && !lib.hasInfix "--ListenPublic" jackettUnit.serviceConfig.ExecStart
+    ))
+
+    (expect "jackett: qBittorrent starts only after its plugin is configured" (
+      lib.elem "jackett-qbittorrent-plugin.service" qbittorrentUnit.requires
+      && lib.elem "jackett-qbittorrent-plugin.service" qbittorrentUnit.after
     ))
 
     (expect "snapcast: two clients can't share an address" (

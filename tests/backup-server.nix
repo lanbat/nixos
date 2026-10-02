@@ -50,6 +50,12 @@ pkgs.runCommand "backup-server-check" { nativeBuildInputs = [ pkgs.rsync ]; } ''
   grep -q 'missing_required\[@\]} -gt 0' ${../pkgs/scripts/backup-server.sh} \
     || { echo "FAIL: the script does not fail when required state is missing"; exit 1; }
 
+  # Jackett's indexer credentials and API key are workload state: copied while
+  # the layer is unlocked, not attempted (and not reported missing) while locked.
+  sed -n '/^if workload_online; then$/,/^else$/p' ${../pkgs/scripts/backup-server.sh} \
+    | grep -qE '^\s*copy_state /var/lib/jackett +jackett\s*$' \
+    || { echo "FAIL: /var/lib/jackett is not backed up with the workload state"; exit 1; }
+
   # No state copy bypasses copy_state.
   if grep -nE '^\s*rsync ' ${../pkgs/scripts/backup-server.sh} | grep -v 'copy_state' | grep -vE '^[0-9]+:\s*rsync -a --delete "\$@"'; then
     echo "FAIL: a state copy calls rsync directly instead of copy_state"; exit 1

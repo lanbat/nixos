@@ -26,7 +26,7 @@ SERVER — one disk (hosts/server/disk.nix)
   always-on service data (always-on PostgreSQL, Authentik, HA, Grafana, InfluxDB, Mosquitto,
   Frigate, Caddy TLS certs, container images)
 - **Does NOT contain**: Tang keys, workload-gated service data (Nextcloud, Immich,
-  Jellyfin, Audiobookshelf, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM)
+  Jellyfin, Audiobookshelf, Vaultwarden, Syncthing, Samba, qBittorrent, Jackett, Bitmagnet, RomM)
 
 After a reboot, this layer is immediately accessible. SSH works. Admin tools
 work. Nothing sensitive is exposed.
@@ -51,7 +51,7 @@ will not start until that target is active.
 - **Mount**: `/mnt/workload` (manual, not at boot)
 - **Unlocked by**: admin passphrase (`unlock-workload`)
 - **Contains**: workload-gated service data (Nextcloud, Immich, Jellyfin,
-  Audiobookshelf, Vaultwarden, Syncthing, Samba, qBittorrent, Bitmagnet, RomM), including the workload
+  Audiobookshelf, Vaultwarden, Syncthing, Samba, qBittorrent, Jackett, Bitmagnet, RomM), including the workload
   PostgreSQL instance that holds the Nextcloud, Immich, Bitmagnet and RomM databases
 
 Bind mounts overlay `/var/lib/<service>` paths with subdirectories of
@@ -99,6 +99,7 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
   vaultwarden/    — Vaultwarden vault database and attachments
   syncthing/      — Syncthing configuration and block index
   qbittorrent/    — qBittorrent config and session state
+  jackett/        — Jackett indexers (with their credentials and cookies) and its API key
   bitmagnet/      — Bitmagnet torrent index
   romm/           — RomM config, artwork, saves and states
   samba/          — Samba configuration and state
@@ -157,7 +158,7 @@ boot
                           └── gated services start
                                (Nextcloud, Immich, Jellyfin, Audiobookshelf,
                                 Vaultwarden, Syncthing, Samba, qBittorrent,
-                                Bitmagnet, RomM)
+                                Jackett, Bitmagnet, RomM)
 ```
 
 ## Raspberry Pi unlock model

@@ -191,6 +191,7 @@ let
   proxied = [
     "bitmagnet"
     "frigate"
+    "jackett"
     "music-assistant"
     "qbittorrent"
     "snapcast"
@@ -200,6 +201,7 @@ let
   names = {
     bitmagnet = "Bitmagnet";
     frigate = "Frigate";
+    jackett = "Jackett";
     music-assistant = "Music Assistant";
     qbittorrent = "qBittorrent";
     snapcast = "Snapcast";
@@ -433,6 +435,27 @@ let
           "authentik Admins"
         ];
       } (bindingPairs base.proxy)
+    ))
+
+    (expect "the example profile's Jackett is admins only, and no other group is bound to it" (
+      lib.filter (
+        p:
+        p.app == [
+          "slug"
+          "jackett"
+        ]
+      ) (bindingPairs base.proxy) == [
+        {
+          app = [
+            "slug"
+            "jackett"
+          ];
+          group = [
+            "name"
+            "authentik Admins"
+          ];
+        }
+      ]
     ))
 
     (expect "adding a forward-auth service adds its proxy provider" (
