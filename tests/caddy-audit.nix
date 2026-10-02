@@ -89,6 +89,7 @@ let
 
     (expect "jackett: the management UI has no auth bypass and strips user headers" (
       !(lib.hasInfix "@auth_bypass" jackett.extraConfig)
+      && lib.hasInfix "forward_auth" jackett.extraConfig
       && lib.hasInfix "request_header -X-Authentik-Username" jackett.extraConfig
     ))
 

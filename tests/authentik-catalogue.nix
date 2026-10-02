@@ -437,6 +437,27 @@ let
       } (bindingPairs base.proxy)
     ))
 
+    (expect "the example profile's Jackett is admins only, and no other group is bound to it" (
+      lib.filter (
+        p:
+        p.app == [
+          "slug"
+          "jackett"
+        ]
+      ) (bindingPairs base.proxy) == [
+        {
+          app = [
+            "slug"
+            "jackett"
+          ];
+          group = [
+            "name"
+            "authentik Admins"
+          ];
+        }
+      ]
+    ))
+
     (expect "adding a forward-auth service adds its proxy provider" (
       let
         p = byId "provider-demo" (proxyProviders added);

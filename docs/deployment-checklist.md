@@ -872,9 +872,11 @@ workload layer (step 1i) and has no secret to create: its API key is generated o
 the first start, and `jackett-qbittorrent-plugin` writes it into qBittorrent's
 plugin configuration before every qBittorrent start.
 
-1. Check both units came up:
+1. Check the units came up. `jackett-qbittorrent-plugin` runs once before qBittorrent
+   starts and then shows `inactive (dead)` with `status=0/SUCCESS`; that is normal:
    ```bash
    systemctl status jackett jackett-qbittorrent-plugin podman-qbittorrent
+   ss -tlnp | grep 9117        # loopback only
    ```
 2. Sign in to Authentik as a member of `authentik Admins`, then open
    `https://jackett.<domain>`. Nobody else gets in, and Jackett has no

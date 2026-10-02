@@ -209,7 +209,9 @@ qBittorrent `Requires=` `jackett-qbittorrent-plugin`, which `Requires=` Jackett 
 waits up to a minute for Jackett's first `ServerConfig.json`:
 - If Jackett never writes an API key, the initializer fails and qBittorrent does not
   start. Read `journalctl -u jackett -u jackett-qbittorrent-plugin`.
-- If Jackett restarts (deploy or crash), the initializer reruns and qBittorrent restarts
-  with it; active transfers resume from resume data, as after any qBittorrent restart.
+- If Jackett restarts (deploy or crash), qBittorrent keeps running and searches fail only
+  while Jackett is down. The initializer is not rerun, so it learns a changed key at its
+  next start.
 - If Jackett's state is lost, restore `/var/lib/jackett` from the backup, or add the
-  indexers again: the new API key reaches qBittorrent on the next start, with nothing to edit.
+  indexers again, then `sudo systemctl restart podman-qbittorrent`: the new API key is
+  written on that start, with nothing to edit.

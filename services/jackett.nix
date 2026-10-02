@@ -18,6 +18,8 @@
 # the container). jackett-qbittorrent-plugin writes it from the API key Jackett
 # generated, before every qBittorrent start, so the key is never typed in or
 # kept in the Nix store and a regenerated key is picked up on the next start.
+# A Jackett restart leaves qBittorrent running; it learns a new key when it
+# next starts.
 {
   config,
   lib,
@@ -70,8 +72,17 @@ in
     dataDir = "/var/lib/jackett/.config/Jackett";
   };
 
-  systemd.services = lib.mkIf withQbittorrent {
-    jackett-qbittorrent-plugin = {
+  # The module's command line plus --ListenPrivate, so Jackett binds loopback
+  # whatever AllowExternal says in its ServerConfig.json (on Linux Jackett
+  # otherwise defaults to listening on every interface). The firewall already
+  # keeps 9117 closed; this keeps the UI and API off the LAN even if it opens.
+  systemd.services = {
+    jackett.serviceConfig.ExecStart = lib.mkForce (
+      "${config.services.jackett.package}/bin/Jackett --NoUpdates --ListenPrivate"
+      + " --Port ${toString port} --DataFolder '${dataDir}'"
+    );
+
+    jackett-qbittorrent-plugin = lib.mkIf withQbittorrent {
       description = "Point qBittorrent's Jackett search plugin at Jackett";
       requires = [ "jackett.service" ];
       after = [ "jackett.service" ];
@@ -80,8 +91,10 @@ in
         pkgs.jq
       ];
       serviceConfig = {
+        # Not RemainAfterExit: the unit is inactive between runs, so starting
+        # qBittorrent (which Requires it) runs it again, every time. It is
+        # also not restarted when Jackett restarts, so neither is qBittorrent.
         Type = "oneshot";
-        RemainAfterExit = true;
         # Root writes into qBittorrent's state and reads Jackett's private
         # data directory; nothing else is writable.
         ProtectSystem = "strict";
@@ -130,7 +143,7 @@ in
 
     # Never start with the plugin unconfigured: the plugin writes the
     # placeholder key and fails every search with "api key error".
-    podman-qbittorrent = {
+    podman-qbittorrent = lib.mkIf withQbittorrent {
       requires = [ "jackett-qbittorrent-plugin.service" ];
       after = [ "jackett-qbittorrent-plugin.service" ];
     };

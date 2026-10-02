@@ -722,6 +722,19 @@ let
       && lib.elem "workload-online.target" jackettUnit.wantedBy
     ))
 
+    (expect "jackett: it listens only on loopback, and no firewall rule admits 9117" (
+      lib.hasInfix " --ListenPrivate" jackettUnit.serviceConfig.ExecStart
+      && !lib.hasInfix "--ListenPublic" jackettUnit.serviceConfig.ExecStart
+      && lib.hasInfix "--Port 9117" jackettUnit.serviceConfig.ExecStart
+      && !lib.elem 9117 base.networking.firewall.allowedTCPPorts
+      && !lib.elem 9117 base.networking.firewall.allowedUDPPorts
+    ))
+
+    (expect "jackett: the plugin unit runs again before every qBittorrent start" (
+      jackettPluginUnit.serviceConfig.Type == "oneshot"
+      && !(jackettPluginUnit.serviceConfig.RemainAfterExit or false)
+    ))
+
     (expect "jackett: its data directory is created for the jackett user on the workload layer" (
       lib.attrNames jackett.workloadDirs == [
         "jackett"
