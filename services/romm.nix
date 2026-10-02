@@ -155,9 +155,22 @@ in
     tier = "workload";
     state = [ "romm" ];
     units = [ "podman-romm" ] ++ lib.optional syncsAdminEmail "romm-admin-email";
-    workloadDirs = lib.genAttrs [ "romm" "romm/config" "romm/resources" "romm/assets" ] (_: {
-      user = "romm";
-    });
+    workloadDirs =
+      lib.genAttrs [ "romm/config" "romm/assets" ] (_: {
+        user = "romm";
+      })
+      // {
+        # The image's nginx has a distinct in-container UID. It needs to
+        # traverse these host-backed directories to serve scraped artwork.
+        "romm" = {
+          user = "romm";
+          mode = "0711";
+        };
+        "romm/resources" = {
+          user = "romm";
+          mode = "0711";
+        };
+      };
     nfs = {
       drives = [ cfg.drive ];
       units = [
