@@ -189,6 +189,26 @@ in
     port = 1780;
     extraPorts = ports;
     auth = "forward-auth";
+    # snapweb immediately opens two WebSocket connections after the page loads:
+    #   /jsonrpc  — JSON-RPC control (volume, groups, streams)
+    #   /stream   — browser-side audio playback
+    # Caddy's forward_auth cannot complete a WebSocket upgrade: the auth
+    # sub-request succeeds but the redirect in its response is forwarded as the
+    # WebSocket handshake reply, so the browser sees a failed upgrade and
+    # snapweb shows "Connection lost, trying to reconnect".  The page itself
+    # and all static assets still go through Authentik; only these two paths
+    # bypass it.  (Same fix as Music Assistant's /ws — see music-assistant.nix.)
+    caddy.authBypassPaths = [
+      "/jsonrpc"
+      "/stream"
+    ];
+    # Keep the backend connection alive for the duration of the WebSocket
+    # session (same pattern as Home Assistant and Music Assistant).
+    caddy.proxyOptions = ''
+      transport http {
+        keepalive 24h
+      }
+    '';
     dashboard = {
       group = "Utilities";
       name = "Snapcast";
