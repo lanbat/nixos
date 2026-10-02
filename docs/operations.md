@@ -305,6 +305,33 @@ sudo systemctl restart podman-qbittorrent
 Jackett listens on `127.0.0.1:9117` only (`--ListenPrivate`, and the firewall keeps the
 port closed): `ss -tlnp | grep 9117` should show nothing but loopback.
 
+### Indexers
+
+`jackett-indexers` adds every **public** indexer Jackett knows (they need no account),
+tests each one, and removes the ones whose test fails: dead sites, or sites behind
+Cloudflare that Jackett can't pass. A failing indexer left configured makes every
+qBittorrent search wait for its timeout. It runs after every Jackett start, so a
+dropped indexer is tried again later and new ones from a Jackett upgrade are picked up.
+It only considers indexers that are not configured yet, so indexers you add by hand
+(including private ones, which need your credentials) are never touched.
+
+```bash
+journalctl -u jackett-indexers          # "added …" / "dropped … its test failed" per indexer
+sudo systemctl restart jackett-indexers # run it again without restarting Jackett
+```
+
+It runs for a few minutes and doesn't block a deploy. If Jackett has an admin password
+set, it can't list indexers and fails with a message saying so: Jackett has no
+account system worth using behind Authentik, so leave the password unset.
+
+### Jackett version
+
+Indexer definitions ship inside Jackett, and Jackett warns when it is "very old" because
+many indexers then fail. The package is `pkgs/jackett`, newer than the one the locked
+nixpkgs carries. To update it, change `version` and `hash` in `pkgs/jackett/default.nix`
+and regenerate `deps.json` as that file's header describes. Delete the directory once
+the locked nixpkgs catches up.
+
 ## Viewing logs
 
 ```bash

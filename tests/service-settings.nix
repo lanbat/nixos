@@ -91,6 +91,7 @@ let
   jackettService = base.services.jackett;
   jackettUnit = base.systemd.services.jackett;
   jackettPluginUnit = base.systemd.services.jackett-qbittorrent-plugin;
+  jackettIndexersUnit = base.systemd.services.jackett-indexers;
   qbittorrentUnit = base.systemd.services.podman-qbittorrent;
 
   # ── Samba ────────────────────────────────────────────────────────────────
@@ -715,6 +716,7 @@ let
       &&
         jackett.units == [
           "jackett"
+          "jackett-indexers"
           "jackett-qbittorrent-plugin"
         ]
       && jackettService.enable
@@ -728,6 +730,32 @@ let
       && lib.hasInfix "--Port 9117" jackettUnit.serviceConfig.ExecStart
       && !lib.elem 9117 base.networking.firewall.allowedTCPPorts
       && !lib.elem 9117 base.networking.firewall.allowedUDPPorts
+    ))
+
+    (expect "jackett: it runs the package from this repository, not nixpkgs' older one" (
+      lib.versionAtLeast jackettService.package.version "0.24.2756"
+      && lib.hasInfix "-jackett-${jackettService.package.version}/bin/Jackett " jackettUnit.serviceConfig.ExecStart
+    ))
+
+    (expect "jackett: public indexers are added after Jackett starts, without holding up a deploy" (
+      lib.elem "jackett.service" jackettIndexersUnit.requires
+      && lib.elem "jackett.service" jackettIndexersUnit.after
+      && lib.elem "workload-online.target" jackettIndexersUnit.wantedBy
+      && jackettIndexersUnit.serviceConfig.Type == "simple"
+      && jackettIndexersUnit.serviceConfig.User == "jackett"
+    ))
+
+    (expect "jackett: it adds only public indexers, tests each one and drops the failures" (
+      lib.all (text: lib.hasInfix text jackettIndexersUnit.script) [
+        "?configured=false"
+        "select(.type == \"public\")"
+        "/config\""
+        "/test\""
+        "-X DELETE"
+        "http://127.0.0.1:9117"
+      ]
+      && !lib.hasInfix "semi-private" jackettIndexersUnit.script
+      && !lib.hasInfix "private\"" jackettIndexersUnit.script
     ))
 
     (expect "jackett: the plugin unit runs again before every qBittorrent start" (

@@ -20,6 +20,12 @@
 # kept in the Nix store and a regenerated key is picked up on the next start.
 # A Jackett restart leaves qBittorrent running; it learns a new key when it
 # next starts.
+#
+# Indexers: jackett-indexers adds every public indexer Jackett knows, which
+# need no account, and drops the ones whose test fails (dead sites, Cloudflare)
+# so they do not slow every search. Private and semi-private indexers need
+# credentials and are left to the UI. It only adds indexers that are not
+# configured yet, so it never touches ones set up by hand.
 {
   config,
   lib,
@@ -46,7 +52,11 @@ in
     access.groups = lib.mkDefault [ "authentik Admins" ];
     tier = "workload";
     state = [ "jackett" ];
-    units = [ "jackett" ] ++ lib.optional withQbittorrent "jackett-qbittorrent-plugin";
+    units = [
+      "jackett"
+      "jackett-indexers"
+    ]
+    ++ lib.optional withQbittorrent "jackett-qbittorrent-plugin";
     workloadDirs =
       lib.genAttrs
         [
@@ -68,6 +78,9 @@ in
   services.jackett = {
     enable = true;
     inherit port;
+    # Newer than the locked nixpkgs': indexer definitions ship in the build,
+    # and an old build fails more of them. See pkgs/jackett.
+    package = pkgs.callPackage ../pkgs/jackett { };
     openFirewall = false;
     dataDir = "/var/lib/jackett/.config/Jackett";
   };
@@ -77,6 +90,84 @@ in
   # otherwise defaults to listening on every interface). The firewall already
   # keeps 9117 closed; this keeps the UI and API off the LAN even if it opens.
   systemd.services = {
+    # Type=simple, not oneshot: testing ~100 indexers takes minutes, and a
+    # oneshot would hold up switch-to-configuration (and so a deploy) until it
+    # finished. Requires= reruns it whenever Jackett restarts.
+    jackett-indexers = {
+      description = "Add Jackett's public indexers and drop the ones that fail";
+      requires = [ "jackett.service" ];
+      after = [ "jackett.service" ];
+      path = [
+        pkgs.bash
+        pkgs.coreutils
+        pkgs.curl
+        pkgs.findutils
+        pkgs.jq
+      ];
+      serviceConfig = {
+        Type = "simple";
+        User = "jackett";
+        PrivateTmp = true;
+        ProtectSystem = "strict";
+        ProtectHome = true;
+        NoNewPrivileges = true;
+      };
+      script = ''
+        base=http://127.0.0.1:${toString port}
+        export api=$base/api/v2.0/indexers
+        jar=$(mktemp)
+        trap 'rm -f "$jar"' EXIT
+        export jar
+
+        # With no admin password Jackett signs the first visitor in; the
+        # session cookie is what the admin API checks.
+        up=
+        for _ in $(seq 1 120); do
+          if curl -fsSL -m 10 -c "$jar" -b "$jar" -o /dev/null "$base/UI/Dashboard"; then
+            up=1
+            break
+          fi
+          sleep 1
+        done
+        if [ -z "$up" ]; then
+          echo "Jackett did not answer on $base" >&2
+          exit 1
+        fi
+
+        list=$(mktemp)
+        trap 'rm -f "$jar" "$list"' EXIT
+        curl -sS -m 120 -b "$jar" -o "$list" "$api?configured=false" || true
+        if ! jq -e 'type == "array"' "$list" >/dev/null 2>&1; then
+          echo "Jackett's indexer list is not available; is an admin password set?" >&2
+          exit 1
+        fi
+
+        # Public indexers only: they need no account. The id goes into a URL,
+        # so anything but a plain slug is skipped.
+        ids=$(jq -r '.[] | select(.type == "public") | .id' "$list" | grep -E '^[A-Za-z0-9_-]+$' || true)
+
+        add_one() {
+          id=$1
+          if ! curl -fsS -m 60 -b "$jar" -X POST -H 'Content-Type: application/json' \
+              -d '[]' -o /dev/null "$api/$id/config" 2>/dev/null; then
+            echo "skipped $id: could not add it"
+            return 0
+          fi
+          if curl -fsS -m 150 -b "$jar" -X POST -o /dev/null "$api/$id/test" 2>/dev/null; then
+            echo "added $id"
+          else
+            curl -fsS -m 60 -b "$jar" -X DELETE -o /dev/null "$api/$id" 2>/dev/null || true
+            echo "dropped $id: its test failed"
+          fi
+        }
+        export -f add_one
+
+        printf '%s\n' $ids | xargs -r -P 6 -I{} bash -c 'add_one "$1"' _ {}
+
+        echo "configured indexers: $(curl -sS -m 60 -b "$jar" "$api?configured=true" | jq length)"
+      '';
+    };
+
     jackett.serviceConfig.ExecStart = lib.mkForce (
       "${config.services.jackett.package}/bin/Jackett --NoUpdates --ListenPrivate"
       + " --Port ${toString port} --DataFolder '${dataDir}'"
