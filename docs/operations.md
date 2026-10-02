@@ -348,6 +348,15 @@ The times are UTC. An action is the API endpoint it called, such as
 in qBittorrent's execution log (VueTorrent's logs page) at the same
 time.
 
+### qBittorrent categories
+
+The categories and their save paths are declared in `services/qbittorrent.nix`
+(`categories`) and written to `categories.json` before every start. Edit them
+there. One added, changed or deleted in the web UI works until the next restart
+(or deploy that restarts qBittorrent), then reverts. Deleting a category in the
+web UI also clears it from its torrents, and the restart does not put it back,
+so reassign those by hand.
+
 ## Backup status
 
 ```bash
