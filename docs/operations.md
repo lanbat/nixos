@@ -314,8 +314,9 @@ sudo systemctl restart podman-qbittorrent
 
 ### Keeping the indexers current
 
-Indexer sites move domains and change markup all the time, and Jackett from nixpkgs runs
-with `--NoUpdates` and lags upstream by weeks, so a stale definition is the usual cause of
+Indexer sites move domains and change markup all the time, and Jackett runs with
+`--NoUpdates` (its store path is read-only), so its bundled definitions go stale
+between bumps and a stale definition is the usual cause of
 "connection error for indexer: X". `jackett-definitions` fixes that without a rebuild: at
 every unlock (before Jackett starts) and every six hours (`jackett-definitions.timer`) it
 asks GitHub for the newest commit touching `src/Jackett.Common/Definitions` in
@@ -333,10 +334,21 @@ sudo systemctl start jackett-definitions                # update now
 cat /var/lib/jackett/xdg/cardigann/.commit              # what is installed
 ```
 
-If GitHub can't be reached the unit fails and Jackett keeps what it has. The binary
-itself moves with `nix flake update nixpkgs`; a definition newer than the binary can use
-a feature it lacks, which breaks only that indexer (its error is in
-`journalctl -u jackett`), so update the flake from time to time too.
+If GitHub can't be reached the unit fails and Jackett keeps what it has.
+
+The binary is `pkgs/jackett`, pinned to a recent upstream release rather than the older
+one nixpkgs carries, because the definitions bundled in a build are what the sync falls
+back on and what an unsynced Jackett would use. A definition newer than the binary can
+use a feature it lacks, which breaks only that indexer (its error is in
+`journalctl -u jackett`), so move the binary from time to time too:
+
+```bash
+pkgs/jackett/update.sh        # newest release: rewrites version, hash and deps.json
+git diff pkgs/jackett         # review, build, then commit and deploy
+```
+
+A check fails if the locked nixpkgs ever carries a newer Jackett than this pin; then run
+the script, or delete `pkgs/jackett` and the `package =` line in `services/jackett.nix`.
 
 Jackett listens on `127.0.0.1:9117` only (`--ListenPrivate`, and the firewall keeps the
 port closed): `ss -tlnp | grep 9117` should show nothing but loopback.
