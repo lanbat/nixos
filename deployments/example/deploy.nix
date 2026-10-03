@@ -93,6 +93,22 @@
             };
           };
         }
+        # qBittorrent's categories and qBittorrent.conf (services/qbittorrent.nix).
+        # Both are rewritten on every start, so nothing is set in the web UI.
+        {
+          lanbat.services.qbittorrent.settings = {
+            categories = {
+              "Music" = "";
+              "Music/Albums" = "/media/b/music/albums";
+              "Video" = "";
+              "Video/Movies" = "/media/a/movies";
+            };
+            preferences.BitTorrent = {
+              "Session\\MaxActiveDownloads" = 8;
+              "Session\\Port" = 6881;
+            };
+          };
+        }
       ];
     };
 

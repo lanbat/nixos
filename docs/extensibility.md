@@ -104,6 +104,7 @@ layout, so a profile sets only what differs:
 | Jellyfin | `imvdb`: music video metadata from IMVDb, with the key in `jellyfin-imvdb-env.age` | off |
 | Nextcloud | `storage.{drive,path}`: the directory created for the External Storage app's bulk user data | drive `b`, `nextcloud` |
 | Syncthing | `devices.<name>.id` (Syncthing device IDs), `folders.<id>` (label, absolute path, type, `ignorePerms`, the device names it is shared with) and `groups` (supplementary groups for the `syncthing` user, to write a folder another service owns). Reuse the folder IDs your other devices already use, so they pick the server up without re-pairing | no devices or folders: Syncthing runs unpaired |
+| qBittorrent | `categories`: category name to save path (a `/` nests a subcategory, whose parent must be declared; an empty path is a grouping category); `preferences`: `qBittorrent.conf` as section, key (with the backslash qBittorrent writes), value. Both are rewritten on every start, so a change in the web UI lasts until the next restart. The web UI keys that make Authentik the only login are fixed | no categories; loopback web UI, VueTorrent, `/media/b/misc` and `/media/b/incomplete`, no UPnP |
 
 A default share is defined field by field at `lib.mkDefault`, so a profile changes
 one field of it, drops it with `enable = false`, or adds its own beside it:
