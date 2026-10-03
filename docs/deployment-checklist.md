@@ -781,6 +781,55 @@ Music Assistant is the music controller; Snapcast remains the distribution layer
    - Keep HA's legacy **slimproto** (Squeezebox) integration disabled.
 6. Verify the Pi snapclient appears as a Snapcast player in MA, then play a
    test track. Confirm sync at `https://audio.<domain>` (Snapcast web UI).
+7. **Audio sources** — nothing to click: `music-assistant-sources` adds them (see
+   `services/music-assistant.nix`). Check **Settings → Music Providers** for
+   RadioBrowser, Radio Paradise, BBC Sounds, iTunes Podcast Search and (once the
+   workload layer is unlocked) Audiobookshelf. Radio stations, podcast RSS feeds and
+   video channels come from the profile (`lanbat.services.music-assistant.settings`,
+   in a module listed in `hosts.server.modules`):
+
+   ```nix
+   {
+     lanbat.services.music-assistant.settings = {
+       podcastCountry = "bg";   # iTunes podcast charts and search
+       # Looked up by exact name in RadioBrowser, TuneIn and BBC Sounds, the most
+       # popular match winning. Many names are shared between countries ("BNR
+       # Horizont" has a namesake in Afghanistan): add `country` to pick one, or
+       # give the stream's `url`.
+       stations = [
+         { name = "BG Radio"; country = "BG"; }
+         { name = "Darik"; country = "BG"; }
+         { name = "BBC Radio 4"; }
+         { name = "bgradio.bg"; url = "https://playerservices.streamtheworld.com/api/livestream-redirect/BG_RADIOAAC_L.aac"; }
+       ];
+       podcasts = [ "https://podcasts.files.bbci.co.uk/p02nq0gn.rss" ];
+       # YouTube, PeerTube, LBRY/Odysee, Vimeo ...: anything yt-dlp can list,
+       # played as an audio podcast through media-feed-bridge.
+       channels = {
+         computerphile.url = "https://www.youtube.com/@Computerphile/videos";
+         peertube.url = "https://<instance>/c/<channel>/videos";
+         odysee.url = "https://odysee.com/@Odysee:8";
+       };
+     };
+   }
+   ```
+
+   Not automated, because they need your own login: **YouTube Music** (a cookie),
+   **Podcast Index** (an API key and secret), **Spotify** and the like; add those in
+   the UI. `channels` rely on yt-dlp, which sites break every few weeks, so a daily timer
+   (`media-feed-bridge-update-yt-dlp`) fetches the newest yt-dlp release from GitHub
+   and checks its SHA2-256SUMS. It adopts the release only if it is an improvement,
+   judged by trying it and the yt-dlp in use again on your channels: list the
+   channel, resolve its newest video's audio, then download the first 64 KB of that
+   audio like a player (an HLS playlist down to its first segment; an error page or
+   a stub counts as a failure). The new release must play every channel the one in
+   use plays and at least one more, so a tie, or a swap of one channel for another,
+   changes nothing. In practice a working yt-dlp stays until a site breaks it and a
+   later release fixes that. A download that fails, does not match its checksum or
+   does not start is dropped too. Whenever the old yt-dlp stays the unit fails, with
+   both results in its journal (`journalctl -u media-feed-bridge-update-yt-dlp`).
+   `updateYtDlp = false` keeps the nixpkgs build instead. Vimeo in particular often
+   asks yt-dlp to log in and may not play at all.
 
 > The `music.<domain>` subdomain may be consolidated to `audio.<domain>` when
 > Snapcast's own web UI is retired in a later change.

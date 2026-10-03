@@ -19,7 +19,9 @@
 #     media/roms and media/roms-browser/mame, a profile moves them, and the
 #     NFS dependency follows the drive.
 #   - Music Assistant: its setup reaches Music Assistant and Home Assistant at
-#     the ports and subdomains of their descriptions.
+#     the ports and subdomains of their descriptions. Its audio sources (radio,
+#     podcasts, video channels through media-feed-bridge, Audiobookshelf) come
+#     from the settings, and Audiobookshelf's provider runs with that service.
 #   - Immich: the originals default to drive a's photos, a profile moves them
 #     and the NFS dependency follows; PostgreSQL, Redis and its own API are
 #     reached at the ports of their descriptions.
@@ -250,6 +252,62 @@ let
         };
       };
     }
+  ];
+
+  # What music-assistant-sources and the audiobookshelf link are told to set up.
+  maSources =
+    config:
+    builtins.fromJSON (
+      builtins.readFile config.systemd.services.music-assistant-sources.environment.MA_SOURCES_CONFIG
+    );
+  maBridge =
+    config:
+    builtins.fromJSON (
+      builtins.readFile (
+        lib.last (lib.splitString " " config.systemd.services.media-feed-bridge.serviceConfig.ExecStart)
+      )
+    );
+
+  maSourcesSet = serverWith [
+    {
+      lanbat.services.music-assistant.settings = {
+        podcastCountry = "bg";
+        tuneinUsername = "alice";
+        podcasts = [ "https://example.org/feed.xml" ];
+        channels = {
+          news.url = "https://www.youtube.com/@news/videos";
+          pt.url = "https://peertube.example.org/c/pt/videos";
+        };
+        channelEpisodes = 20;
+        stations = [
+          {
+            name = "BNR Horizont";
+            country = "bg";
+          }
+          {
+            name = "Direct";
+            url = "https://stream.example.org/live.aac";
+          }
+        ];
+      };
+    }
+  ];
+
+  maBadChannel = serverWith [
+    { lanbat.services.music-assistant.settings.channels."Bad Name".url = "https://example.org/c"; }
+  ];
+
+  maNoUpdate = serverWith [
+    {
+      lanbat.services.music-assistant.settings = {
+        channels.news.url = "https://www.youtube.com/@news/videos";
+        updateYtDlp = false;
+      };
+    }
+  ];
+
+  maNoBbc = serverWith [
+    { lanbat.services.music-assistant.settings.bbcSounds = false; }
   ];
 
   # ── Snapcast ─────────────────────────────────────────────────────────────
@@ -560,6 +618,103 @@ let
         ''export HA_INTERNAL_URL="http://127.0.0.1:18123"''
         ''export HA_PUBLIC_URL="https://hass.home.example.com"''
       ]
+    ))
+
+    (expect
+      "music-assistant: by default it gets the radio and podcast providers, no bridge and no stations"
+      (
+        let
+          sources = maSources base;
+        in
+        lib.attrNames sources.providers == [
+          "bbc_sounds"
+          "itunes_podcasts"
+          "radiobrowser"
+          "radioparadise"
+        ]
+        && sources.providers.itunes_podcasts.locale == "us"
+        && sources.stations == [ ]
+        && sources.podcasts == [ ]
+        && sources.bridge.feeds == [ ]
+        && !(base.systemd.services ? media-feed-bridge)
+        && lib.all (p: lib.elem p base.services.music-assistant.providers) [
+          "radiobrowser"
+          "podcastfeed"
+          "itunes_podcasts"
+          "bbc_sounds"
+          "audiobookshelf"
+        ]
+      )
+    )
+
+    (expect "music-assistant: the settings reach the sources step and the bridge" (
+      let
+        sources = maSources maSourcesSet;
+        bridge = maBridge maSourcesSet;
+        unit = maSourcesSet.systemd.services.music-assistant-sources;
+      in
+      sources.providers.itunes_podcasts.locale == "bg"
+      && sources.providers.tunein.username == "alice"
+      && sources.podcasts == [ "https://example.org/feed.xml" ]
+      &&
+        sources.stations == [
+          {
+            name = "BNR Horizont";
+            country = "bg";
+            url = null;
+          }
+          {
+            name = "Direct";
+            country = null;
+            url = "https://stream.example.org/live.aac";
+          }
+        ]
+      &&
+        sources.bridge.feeds == [
+          "news"
+          "pt"
+        ]
+      && sources.bridge.prefix == "http://127.0.0.1:8101/feed/"
+      && bridge.port == 8101
+      && bridge.limit == 20
+      && bridge.feeds.news == "https://www.youtube.com/@news/videos"
+      && lib.elem "media-feed-bridge.service" unit.after
+      && lib.elem "music-assistant-setup.service" unit.requires
+      && failedAssertions maSourcesSet == [ ]
+    ))
+
+    (expect "music-assistant: a channel name that cannot be part of a feed URL is rejected" (
+      lib.any (lib.hasInfix "Bad Name") (failedAssertions maBadChannel)
+    ))
+
+    (expect "music-assistant: yt-dlp is updated daily, on the configured channels, unless turned off" (
+      let
+        update = maSourcesSet.systemd.services.media-feed-bridge-update-yt-dlp;
+        bridgeUnit = maSourcesSet.systemd.services.media-feed-bridge;
+      in
+      lib.hasInfix "media-feed-bridge-update-yt-dlp" update.serviceConfig.ExecStart
+      && lib.hasSuffix ".json" update.serviceConfig.ExecStart
+      && update.serviceConfig.Type == "oneshot"
+      # Same dynamic user, so the same state directory.
+      && update.serviceConfig.User == bridgeUnit.serviceConfig.User
+      && update.serviceConfig.StateDirectory == bridgeUnit.serviceConfig.StateDirectory
+      && maSourcesSet.systemd.timers.media-feed-bridge-update-yt-dlp.timerConfig.OnUnitInactiveSec == "1d"
+      && !(maNoUpdate.systemd.services ? media-feed-bridge-update-yt-dlp)
+      && !(maNoUpdate.systemd.timers ? media-feed-bridge-update-yt-dlp)
+      && maNoUpdate.systemd.services ? media-feed-bridge
+      && !(base.systemd.timers ? media-feed-bridge-update-yt-dlp)
+    ))
+
+    (expect "music-assistant: the BBC Sounds provider can be left out" (
+      !(lib.elem "bbc_sounds" maNoBbc.services.music-assistant.providers)
+      && !(maSources maNoBbc).providers ? bbc_sounds
+    ))
+
+    (expect "music-assistant: the Audiobookshelf link is one of Audiobookshelf's gated units" (
+      lib.elem "music-assistant-audiobookshelf" base.lanbat.services.audiobookshelf.units
+      && base.systemd.services.music-assistant-audiobookshelf.wantedBy == [ "workload-online.target" ]
+      && lib.elem "audiobookshelf-bootstrap.service" base.systemd.services.music-assistant-audiobookshelf.after
+      && (maSources base).audiobookshelf.url == "http://127.0.0.1:13378"
     ))
 
     (expect "immich: the defaults keep today's upload directory and ports" (

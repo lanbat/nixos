@@ -147,7 +147,12 @@ in
     ++ lib.optionals integrates [
       "audiobookshelf-bootstrap"
       "audiobookshelf-match"
-    ];
+    ]
+    # Music Assistant's Audiobookshelf provider (services/music-assistant.nix)
+    # can only be added while this server is up, so it runs with the layer.
+    ++ lib.optional (
+      integrates && config.lanbat.hasService "music-assistant"
+    ) "music-assistant-audiobookshelf";
     consumes = lib.optionals integrates [
       "home-assistant"
       "authentik"

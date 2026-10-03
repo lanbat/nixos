@@ -90,7 +90,7 @@ Services that stay up during Pi reboot (always-on tier):
 - Mosquitto ✓
 - Frigate ✓ (local DB; live stream from cameras unaffected)
 - SearXNG ✓
-- Music Assistant ✓ (library scans fail while Pi NFS is down; service stays up)
+- Music Assistant ✓ (library scans fail while Pi NFS is down; service stays up). Radio, podcasts and the video-channel bridge (`media-feed-bridge`) need only the internet (if GitHub is unreachable, or a new yt-dlp is no improvement on the channels, the bridge keeps the yt-dlp it has); its Audiobookshelf provider works only while Audiobookshelf does
 - Snapserver ✓
 - Wyoming pipeline (STT/TTS/wake word) and the server's voice satellite ✓
 - Telegraf (server) ✓
@@ -99,7 +99,7 @@ Services that stay up during Pi reboot (always-on tier):
 
 Workload-gated services that pause and restart (NFS-dependent):
 - Jellyfin ⏸→▶
-- Audiobookshelf ⏸→▶
+- Audiobookshelf ⏸→▶ (Music Assistant's Audiobookshelf provider is reconnected by `music-assistant-audiobookshelf` at each unlock)
 - qBittorrent ⏸→▶
 - Frigate ⏸→▶
 - Samba ⏸→▶

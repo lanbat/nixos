@@ -116,6 +116,15 @@
       #       };
       #     };
       #   }
+      #
+      # Music Assistant's radio stations, podcasts and video channels
+      # (lanbat.services.music-assistant.settings, docs/deployment-checklist.md#3m-music-assistant):
+      #   {
+      #     lanbat.services.music-assistant.settings = {
+      #       stations = [ { name = "BBC Radio 4"; } { name = "Darik"; } ];
+      #       channels.computerphile.url = "https://www.youtube.com/@Computerphile/videos";
+      #     };
+      #   }
       modules = [ ./frigate.nix ];
     };
 

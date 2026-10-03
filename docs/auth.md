@@ -216,7 +216,9 @@ There is one identity that everything else hangs off: the **owner**, `akadmin`
   - Music Assistant, Jellyfin and Audiobookshelf read `HA_LONG_LIVED_TOKEN` and
     `OWNER_USERNAME`/`OWNER_PASSWORD` from the shared `hass-bootstrap-env` secret
     (declared by HA, consumed via `readsSecrets`) and log in to HA as the owner to
-    complete their own setup.
+    complete their own setup. Music Assistant also signs in to Audiobookshelf as that
+    owner (the root account `audiobookshelf-bootstrap` creates) for its Audiobookshelf
+    provider.
   - The Immich and Jellyfin admin emails are derived from the owner's identity.
 
 In practice: create `akadmin` in authentik, put it in the groups for the services the

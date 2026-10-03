@@ -131,7 +131,7 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Grafana | OIDC (Authentik) + local admin | Native generic_oauth support |
 | InfluxDB | Token auth (not exposed publicly) | Accessed by Grafana only; no browser UI needed on LAN |
 | Syncthing | Caddy forward-auth (Authentik), admins only (`access.groups`) | Sync clients use port 22000 directly, not Caddy; only devices declared in the profile connect |
-| Music Assistant | Caddy forward-auth (Authentik) | No native OIDC; stream port (8097) not exposed on firewall |
+| Music Assistant | Caddy forward-auth (Authentik) | No native OIDC; stream port (8097) not exposed on firewall. Its video-channel feeds (`media-feed-bridge`, 8101) listen on loopback only and resolve only the channels the profile lists |
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming and control ports (1704/1705) admit only declared clients (`services/snapcast.nix`) |
 | Wyoming satellites | No auth (Pi: firewall-restricted to server IP; server: localhost only) | Internal protocol; only HA connects |
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
