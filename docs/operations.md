@@ -312,6 +312,32 @@ journalctl -u jackett -u jackett-qbittorrent-plugin
 sudo systemctl restart podman-qbittorrent
 ```
 
+### Keeping the indexers current
+
+Indexer sites move domains and change markup all the time, and Jackett from nixpkgs runs
+with `--NoUpdates` and lags upstream by weeks, so a stale definition is the usual cause of
+"connection error for indexer: X". `jackett-definitions` fixes that without a rebuild: at
+every unlock (before Jackett starts) and every six hours (`jackett-definitions.timer`) it
+asks GitHub for the newest commit touching `src/Jackett.Common/Definitions` in
+`Jackett/Jackett`. If that differs from the last one it installs, it downloads those
+definitions into `/var/lib/jackett/xdg/cardigann/definitions` (replacing the directory as
+a whole) and restarts Jackett, which only reads definitions at startup. Where an indexer
+is in both places, Jackett takes this copy and logs `Ignoring definition ID …: The indexer
+already exists` for the bundled one, which is normal. Configured indexers, their
+credentials and the API key are untouched.
+
+```bash
+systemctl list-timers jackett-definitions
+journalctl -u jackett-definitions                       # "Installed N definitions from <sha>"
+sudo systemctl start jackett-definitions                # update now
+cat /var/lib/jackett/xdg/cardigann/.commit              # what is installed
+```
+
+If GitHub can't be reached the unit fails and Jackett keeps what it has. The binary
+itself moves with `nix flake update nixpkgs`; a definition newer than the binary can use
+a feature it lacks, which breaks only that indexer (its error is in
+`journalctl -u jackett`), so update the flake from time to time too.
+
 Jackett listens on `127.0.0.1:9117` only (`--ListenPrivate`, and the firewall keeps the
 port closed): `ss -tlnp | grep 9117` should show nothing but loopback.
 

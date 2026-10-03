@@ -99,7 +99,8 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
   vaultwarden/    — Vaultwarden vault database and attachments
   syncthing/      — Syncthing configuration and block index
   qbittorrent/    — qBittorrent config and session state
-  jackett/        — Jackett indexers (with their credentials and cookies) and its API key
+  jackett/        — Jackett indexers (with their credentials and cookies), its API key, and the
+                    synced indexer definitions (xdg/cardigann/definitions)
   bitmagnet/      — Bitmagnet torrent index
   romm/           — RomM config, artwork, saves and states
   samba/          — Samba configuration and state
