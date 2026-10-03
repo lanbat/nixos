@@ -176,6 +176,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Music Assistant | server-local | server-local (embedded) | Pi/b/media/music (NFS, read-only) |
 | Snapcast | — | — | — (streams created dynamically by MA) |
 | Wyoming (server) | — | — | — (models re-downloaded on first start) |
+| llama.cpp (server) | — | — | — (the model is pinned in the Nix store) |
 | Wyoming satellite (Pi) | — | — | — (stateless) |
 | Telegraf (server + Pi) | — | → InfluxDB | — |
 

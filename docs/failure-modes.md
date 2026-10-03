@@ -92,7 +92,7 @@ Services that stay up during Pi reboot (always-on tier):
 - SearXNG ✓
 - Music Assistant ✓ (library scans fail while Pi NFS is down; service stays up). Radio, podcasts and the video-channel bridge (`media-feed-bridge`) need only the internet (if GitHub is unreachable, or a new yt-dlp is no improvement on the channels, the bridge keeps the yt-dlp it has); its Audiobookshelf provider works only while Audiobookshelf does
 - Snapserver ✓
-- Wyoming pipeline (STT/TTS/wake word) and the server's voice satellite ✓
+- Wyoming pipeline (STT/TTS/wake word), the local conversation model (`llama-cpp`, when `haLlm` is on the loopback) and the server's voice satellite ✓
 - Telegraf (server) ✓
 - Redis (Immich) ✓
 - Homepage ✓
@@ -111,10 +111,14 @@ voice commands to it will be unavailable until the Pi is back up.
 The server-side Wyoming pipeline (STT/TTS/wake word) and the server's own
 satellite stay running throughout.
 
-The conversation agent's LLM (`lanbat.haLlm`) runs outside the homelab. While
-it is unreachable, or starting after scaling to zero, commands that Home
-Assistant's local intents understand ("turn on the kitchen light") still work;
-anything else fails or waits for the endpoint.
+The conversation agent's LLM (`lanbat.haLlm`) is the `llama-cpp` service on the
+server when its address is on the loopback, and an external API otherwise. The
+local model needs neither the Pi nor the internet, but it is slow right after a
+start, or after the exposed entities change, because it has to read Home
+Assistant's whole prompt once (about 20 seconds for `qwen3-1.7b`). While the
+model is unavailable, or an external endpoint is unreachable or scaling up from
+zero, commands that Home Assistant's local intents understand ("turn on the
+kitchen light") still work; anything else fails or waits for the endpoint.
 
 Pi Telegraf also goes down during a Pi reboot, causing a gap in Pi metrics.
 Server metrics continue uninterrupted.
