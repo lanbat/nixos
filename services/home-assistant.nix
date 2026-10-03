@@ -84,6 +84,9 @@ let
   bootstrap = pkgs.callPackage ../pkgs/home-assistant-bootstrap { };
   postSetup = pkgs.callPackage ../pkgs/home-assistant-post-setup { };
   llm = config.lanbat.deployment.haLlm;
+  # An LLM on this host's loopback (services/llama-cpp.nix) needs no API key,
+  # and no keepalive to hold off a scale-to-zero cold start.
+  llmLocal = (import ../lib/host.nix { inherit lib; }).haLlmIsLocal llm;
   llmComponent = pkgs.callPackage ../pkgs/home-assistant-extended-openai-conversation { };
   satellite = config.lanbat.voiceSatellite;
   piper = config.services.wyoming.piper.servers.main;
@@ -192,6 +195,16 @@ in
   };
 
   config = {
+    # The loopback is this host's own: an LLM there is a service on this host.
+    assertions = [
+      {
+        assertion = !llmLocal || config.lanbat.hasService "llama-cpp";
+        message = "lanbat: lanbat.deployment.haLlm.baseUrl is on the loopback (${
+          if llm == null then "" else llm.baseUrl
+        }), but this host has no llama-cpp service; add it to the server's services, or point haLlm at another endpoint.";
+      }
+    ];
+
     # The schema is merged into lanbat.services.home-assistant.settings;
     # checks.nix rejects any key it does not declare.
     lanbat.settingsSchema.home-assistant = homeAssistantSettings;
@@ -225,7 +238,7 @@ in
         hass-bootstrap-env.owner = "hass";
         # The API key of the conversation agent's LLM.
         ha-llm-api-key = {
-          enable = llm != null;
+          enable = llm != null && !llmLocal;
           owner = "hass";
         };
         # The record of the voice satellites' token, for home-assistant-post-setup.
@@ -356,7 +369,9 @@ in
         ${lib.optionalString (llm != null) ''
           export LLM_BASE_URL="${llm.baseUrl}"
           export LLM_MODEL="${llm.model}"
-          export LLM_API_KEY_FILE="${config.lanbat.secrets.ha-llm-api-key.path}"
+          ${lib.optionalString (!llmLocal) ''
+            export LLM_API_KEY_FILE="${config.lanbat.secrets.ha-llm-api-key.path}"
+          ''}
           export LLM_MAX_TOKENS="150"
           export LLM_USE_TOOLS="false"
         ''}
@@ -556,7 +571,7 @@ in
       };
     };
 
-    systemd.services.runpod-ha-llm-keepalive = lib.mkIf (llm != null) {
+    systemd.services.runpod-ha-llm-keepalive = lib.mkIf (llm != null && !llmLocal) {
       description = "Ping RunPod HA LLM to avoid scale-to-zero cold starts";
       serviceConfig = {
         Type = "oneshot";
@@ -576,7 +591,7 @@ in
       '';
     };
 
-    systemd.timers.runpod-ha-llm-keepalive = lib.mkIf (llm != null) {
+    systemd.timers.runpod-ha-llm-keepalive = lib.mkIf (llm != null && !llmLocal) {
       description = "Keep RunPod HA LLM worker warm between voice commands";
       wantedBy = [ "timers.target" ];
       timerConfig = {

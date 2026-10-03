@@ -201,32 +201,92 @@ ensure_wyoming() {
 }
 
 llm_enabled() {
-  [[ -n "$LLM_BASE_URL" && -n "$LLM_MODEL" && -s "$LLM_API_KEY_FILE" ]]
+  [[ -n "$LLM_BASE_URL" && -n "$LLM_MODEL" ]] || return 1
+  # An endpoint on the loopback needs no key, so none is configured.
+  [[ -z "$LLM_API_KEY_FILE" || -s "$LLM_API_KEY_FILE" ]]
+}
+
+# The key sent to the API. The component insists on one, and a local server
+# (LLM_API_KEY_FILE unset) ignores it.
+llm_api_key() {
+  if [[ -n "$LLM_API_KEY_FILE" ]]; then
+    tr -d '\n' < "$LLM_API_KEY_FILE"
+  else
+    printf 'local'
+  fi
 }
 
 # The agent's replies are spoken: short, plain, and acting on requests without
 # asking for confirmation first.
+#
+# The prompt never changes between requests, because the local model keeps the
+# tokens of the previous request and only reads what follows the first one that
+# differs (services/llama-cpp.nix): no clock and no device states. Anything
+# per-request in this text costs the model the whole prompt again, many seconds
+# on the server's CPU. The model has one function, so it cannot pick the wrong
+# one (the small local model did, calling a read function for a command);
+# questions about a device's state are answered by Home Assistant's own
+# intents before a request ever reaches it (prefer_local_intents).
 llm_prompt() {
   cat <<'PROMPT'
 You are the voice assistant of this home, running in Home Assistant. Your answers are spoken aloud: reply in one or two short, plain sentences, without lists, markdown or emoji.
 
-Current time: {{ now() }}
-
 Devices you can see and control:
 ```csv
-entity_id,name,state,aliases
+entity_id,name,aliases
 {% for entity in exposed_entities -%}
-{{ entity.entity_id }},{{ entity.name }},{{ entity.state }},{{ entity.aliases | join('/') }}
+{{ entity.entity_id }},{{ entity.name }},{{ entity.aliases | join('/') }}
 {% endfor -%}
 ```
 
-Answer questions about the home from the device states above. When asked to change something, call execute_services straight away, without asking for confirmation, then say briefly what you did. If a request is ambiguous, ask one short question.
+To turn a device on or off, toggle it, open it or close it, use the control_device function straight away, without asking for confirmation, then say briefly what you did. You can do nothing else to devices: if asked to, say so. You cannot read the current state of a device: if asked about one, say so briefly. If a request is ambiguous, ask one short question.
 PROMPT
+}
+
+# The functions the model may call, as the component stores them (YAML text):
+# control_device and nothing else. It takes one entity and one action, not the
+# component's default execute_services (a list of domain, service and service
+# data): the small local model needs about half the tokens to write that call,
+# which is two to three seconds of every command. One device per call is
+# enough, since a request for several is several calls. The wording "use the
+# control_device function" matters: with "call control_device" the model wrote
+# the call as plain text, which would be spoken instead of run, in 4 of 12
+# requests; with it, 0 of 12. The low temperature keeps the model on the format.
+llm_functions() {
+  cat <<'FUNCTIONS'
+- spec:
+    name: control_device
+    description: Control one device in Home Assistant, such as turning a light on or off or opening a cover.
+    parameters:
+      type: object
+      properties:
+        entity_id:
+          type: string
+          description: The entity_id of the device, from the list of devices.
+        action:
+          type: string
+          enum:
+          - turn_on
+          - turn_off
+          - toggle
+          - open
+          - close
+          description: What to do to the device.
+      required:
+      - entity_id
+      - action
+  function:
+    type: script
+    sequence:
+    - action: "{% set domain = entity_id.split('.')[0] %}{% if action == 'open' %}{{ domain }}.open_cover{% elif action == 'close' %}{{ domain }}.close_cover{% else %}homeassistant.{{ action }}{% endif %}"
+      target:
+        entity_id: "{{ entity_id }}"
+FUNCTIONS
 }
 
 llm_conversation_json() {
   jq -n --arg id "$(new_entry_id)" --arg title "$LLM_TITLE" \
-    --arg model "$LLM_MODEL" --arg prompt "$(llm_prompt)" \
+    --arg model "$LLM_MODEL" --arg prompt "$(llm_prompt)" --arg functions "$(llm_functions)" \
     --argjson max_tokens "$LLM_MAX_TOKENS" --argjson use_tools "$LLM_USE_TOOLS" '[{
       subentry_id: $id,
       subentry_type: "conversation",
@@ -237,8 +297,9 @@ llm_conversation_json() {
         chat_model: $model,
         max_tokens: $max_tokens,
         top_p: 1,
-        temperature: 0.5,
-        max_function_calls_per_conversation: 1,
+        temperature: 0.2,
+        functions: $functions,
+        max_function_calls_per_conversation: 2,
         attach_username: false,
         use_tools: $use_tools,
         context_threshold: 13000,
@@ -250,10 +311,10 @@ llm_conversation_json() {
 # True when the agent's entry is missing, or its key, URL or model is out of date.
 llm_needed() {
   llm_enabled || return 1
-  jq -e --rawfile key "$LLM_API_KEY_FILE" --arg url "$LLM_BASE_URL" --arg model "$LLM_MODEL" \
+  jq -e --arg key "$(llm_api_key)" --arg url "$LLM_BASE_URL" --arg model "$LLM_MODEL" \
     --arg domain "$LLM_DOMAIN" --arg title "$LLM_TITLE" \
     --argjson max_tokens "$LLM_MAX_TOKENS" --argjson use_tools "$LLM_USE_TOOLS" \
-    --arg prompt "$(llm_prompt)" '
+    --arg prompt "$(llm_prompt)" --arg functions "$(llm_functions)" '
     [.data.entries[] | select(.domain == $domain and .title == $title)] as $entries
     | ($entries | length) == 1
       and $entries[0].data.api_key == ($key | rtrimstr("\n"))
@@ -263,6 +324,7 @@ llm_needed() {
           and .data.chat_model == $model
           and .data.max_tokens == $max_tokens
           and .data.use_tools == $use_tools
+          and .data.functions == $functions
           and .data.prompt == $prompt)
   ' "$CONFIG_ENTRIES" >/dev/null && return 1
   return 0
@@ -275,9 +337,10 @@ ensure_llm() {
     '.data.entries[] | select(.domain == $domain and .title == $title)' "$CONFIG_ENTRIES" >/dev/null; then
     log "updating the conversation agent (${LLM_BASE_URL}, ${LLM_MODEL})"
     tmp="$(mktemp)"
-    jq --rawfile key "$LLM_API_KEY_FILE" --arg url "$LLM_BASE_URL" --arg model "$LLM_MODEL" \
+    jq --arg key "$(llm_api_key)" --arg url "$LLM_BASE_URL" --arg model "$LLM_MODEL" \
       --arg domain "$LLM_DOMAIN" --arg title "$LLM_TITLE" --arg now "$(now_utc)" \
-      --arg prompt "$(llm_prompt)" --argjson max_tokens "$LLM_MAX_TOKENS" \
+      --arg prompt "$(llm_prompt)" --arg functions "$(llm_functions)" \
+      --argjson max_tokens "$LLM_MAX_TOKENS" \
       --argjson use_tools "$LLM_USE_TOOLS" '
       .data.entries |= map(
         if .domain == $domain and .title == $title then
@@ -288,6 +351,8 @@ ensure_llm() {
               if .subentry_type == "conversation" then
                 .data.chat_model = $model
                 | .data.prompt = $prompt
+                | .data.functions = $functions
+                | .data.max_function_calls_per_conversation = 2
                 | .data.max_tokens = $max_tokens
                 | .data.use_tools = $use_tools
               else . end)
@@ -300,7 +365,7 @@ ensure_llm() {
   log "adding the conversation agent (${LLM_BASE_URL}, ${LLM_MODEL})"
   # skip_authentication: otherwise the component lists the API's models while
   # Home Assistant starts, which waits on an endpoint that scales to zero.
-  add_entry "$LLM_DOMAIN" "$LLM_TITLE" "$(jq -n --rawfile key "$LLM_API_KEY_FILE" \
+  add_entry "$LLM_DOMAIN" "$LLM_TITLE" "$(jq -n --arg key "$(llm_api_key)" \
     --arg url "$LLM_BASE_URL" --arg title "$LLM_TITLE" '{
       name: $title,
       api_key: ($key | rtrimstr("\n")),

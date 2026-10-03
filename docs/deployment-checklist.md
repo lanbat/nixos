@@ -716,10 +716,20 @@ Visit `https://sync.<domain>` (protected by Authentik forward auth).
 > turns down while the assistant listens and answers (`modules/pi/audio.nix`).
 
 `home-assistant-post-setup` adds the Wyoming services and both satellites to
-Home Assistant, the conversation agent for `lanbat.haLlm` (API key from
-`ha-llm-api-key.age`), and a preferred **Voice** pipeline: wake word
-`okay_nabu`, faster-whisper, piper, Home Assistant's local intents first, then
-the LLM.
+Home Assistant, the conversation agent for `lanbat.haLlm`, and a preferred
+**Voice** pipeline: wake word `okay_nabu`, faster-whisper, piper, Home
+Assistant's local intents first, then the LLM.
+
+The LLM is one of two kinds, chosen by `haLlm.baseUrl` in `deploy.nix`:
+
+- **On the server** (`baseUrl = "http://127.0.0.1:8091/v1"`): `services/llama-cpp.nix`
+  runs llama.cpp there and needs no secret. `haLlm.model` is `qwen3-1.7b` (the
+  default; answers in a few seconds) or `qwen3-4b` (more capable, several times
+  slower on the server's CPU), and must match
+  `lanbat.services.llama-cpp.settings.model`. The first deploy compiles
+  llama.cpp with AVX2, which takes about ten minutes on the server.
+- **External** (any other URL): an OpenAI-compatible API, with its key in
+  `ha-llm-api-key.age`.
 
 With `lanbat.voiceRooms` set, a satellite hands each reply to Home Assistant,
 which speaks it as an announcement on the Music Assistant players in the
@@ -732,6 +742,7 @@ Assistant to the snapserver, so every Snapcast client becomes a player.
 1. Verify the services on the server and the Pi:
    ```bash
    systemctl status wyoming-openwakeword wyoming-faster-whisper-main wyoming-piper-main wyoming-satellite
+   systemctl status llama-cpp   # only with a local haLlm
    journalctl -u home-assistant-post-setup
    ssh admin@<pi-ip> systemctl status wyoming-satellite
    ```
@@ -755,7 +766,15 @@ Assistant to the snapserver, so every Snapcast client becomes a player.
 
 > **Tip:** faster-whisper and piper download their models on first start, and
 > an LLM endpoint that scales to zero is slow to answer its first request after
-> being idle. Commands Home Assistant understands itself don't wait for the LLM.
+> being idle. The local model is slow once after it starts, or after the
+> exposed entities change: it keeps the previous request's prompt and rereads
+> only what changed, so the first request pays for the whole prompt (about 20
+> seconds for `qwen3-1.7b`), and later ones a second or two. The agent's prompt
+> therefore holds no clock and no device states, and the agent cannot read a
+> state: Home Assistant's own intents answer "is the light on" and similar
+> before the LLM is asked. Keep **Expose** short: each exposed entity adds
+> about 20 tokens to that first read. Commands Home Assistant understands
+> itself don't wait for the LLM.
 > `home-assistant-post-setup` sets each satellite's **Finished speaking
 > detection** to **Aggressive** (0.25 s silence after a command). If a satellite
 > still feels slow to react, check that setting under **Settings → Devices &

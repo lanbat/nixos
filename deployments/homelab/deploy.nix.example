@@ -15,6 +15,10 @@
     haLatitude = "51.5074";
     haLongitude = "-0.1278";
     haElevation = 11;
+    # The conversation agent's LLM. An address on the loopback runs the model on
+    # the server (services/llama-cpp.nix; model qwen3-1.7b or qwen3-4b):
+    #   baseUrl = "http://127.0.0.1:8091/v1"; model = "qwen3-1.7b";
+    # Any other URL is an OpenAI-compatible API, with its key in ha-llm-api-key.
     haLlm = {
       baseUrl = "CHANGE_ME";
       model = "CHANGE_ME";

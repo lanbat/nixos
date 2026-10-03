@@ -24,7 +24,9 @@
 #     and a bare preset name inside an output_args list is not expanded;
 #   - retention is record.motion.days and record.{detections,alerts}.retain.days;
 #   - semantic search stays off: its CLIP embeddings cost more CPU than the
-#     detector itself.
+#     detector itself. Licence plate recognition, where a profile enables it,
+#     starts the same embeddings process and is the largest Frigate CPU user
+#     (about one core on the server, more than the detector's half core).
 #
 # Temporary UI tuning
 # -------------------
@@ -456,8 +458,9 @@ let
 
     notifications.enabled = true;
 
-    # The CLIP embeddings manager was the container's biggest CPU user (about
-    # 1.5 cores, more than the detector). Detection, LPR and zones are unaffected.
+    # The CLIP embeddings were the container's biggest CPU user (about 1.5
+    # cores, more than the detector). Detection, LPR and zones are unaffected.
+    # With LPR on, the embeddings process still runs for it: about one core.
     semantic_search = {
       enabled = false;
       model_size = "small";

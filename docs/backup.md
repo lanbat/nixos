@@ -46,6 +46,7 @@
 | Frigate ML models | Re-download from source |
 | SearXNG config | Checked into this repo |
 | Wyoming STT/TTS/wake word models | Re-downloaded on first service start |
+| Local conversation model (`llama-cpp`) | Pinned by hash in the Nix store; fetched again by a rebuild |
 
 ## Backup schedule
 

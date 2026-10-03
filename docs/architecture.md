@@ -96,8 +96,9 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 - MQTT broker
 - Tang trust anchor
 - Voice assistant pipeline (Wyoming: wake word, STT, TTS; Home Assistant's
-  conversation agent, backed by an external OpenAI-compatible LLM) and a voice
-  satellite (microphone + internal speaker)
+  conversation agent, backed by a small local LLM served by llama.cpp, or an
+  external OpenAI-compatible API) and a voice satellite (microphone + internal
+  speaker)
 - Metrics storage (InfluxDB) and dashboards (Grafana)
 - Metrics collection from both machines (Telegraf)
 
@@ -135,7 +136,7 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming and control ports (1704/1705) admit only declared clients (`services/snapcast.nix`) |
 | Wyoming satellites | No auth (Pi: firewall-restricted to server IP; server: localhost only) | Internal protocol; only HA connects |
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
-| Conversation LLM (`lanbat.haLlm`) | API key (agenix) | External OpenAI-compatible API; only HA calls it, outbound |
+| Conversation LLM (`lanbat.haLlm`) | None for the local model (`services/llama-cpp.nix`, loopback only, port 8091); API key (agenix) for an external API | A `haLlm` on the loopback runs llama.cpp on the server; only HA calls it. Any other URL is an external OpenAI-compatible API, called outbound |
 
 The Authentik side of this matrix is generated: every `forward-auth` service gets a
 proxy provider, an application and a place on the embedded outpost, and every service

@@ -24,6 +24,7 @@
   influxdb = ../../services/influxdb.nix;
   jackett = ../../services/jackett.nix;
   jellyfin = ../../services/jellyfin.nix;
+  llama-cpp = ../../services/llama-cpp.nix;
   mosquitto = ../../services/mosquitto.nix;
   music-assistant = ../../services/music-assistant.nix;
   nextcloud = ../../services/nextcloud.nix;
