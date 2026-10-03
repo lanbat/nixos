@@ -28,8 +28,9 @@
 # $XDG_CONFIG_HOME/cardigann/definitions, and the second one wins for an
 # indexer present in both. jackett-definitions (a timer, and once at every
 # unlock before Jackett starts) copies upstream's definitions there and
-# restarts Jackett only when they changed. The binary itself still moves with
-# the flake's nixpkgs.
+# restarts Jackett only when they changed. The binary is pkgs/jackett, pinned
+# to a recent release (update it with pkgs/jackett/update.sh), so the bundled
+# definitions the sync overrides are recent too.
 {
   config,
   lib,
@@ -94,6 +95,10 @@ in
   services.jackett = {
     enable = true;
     inherit port;
+    # Newer than the locked nixpkgs': the definitions bundled in a build go
+    # stale as the sites change, and the sync above only replaces them between
+    # bumps. See pkgs/jackett.
+    package = pkgs.callPackage ../pkgs/jackett { };
     openFirewall = false;
     dataDir = "/var/lib/jackett/.config/Jackett";
   };

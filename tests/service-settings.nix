@@ -817,6 +817,13 @@ let
       && !lib.hasInfix "--ListenPublic" jackettUnit.serviceConfig.ExecStart
     ))
 
+    # pkgs/jackett exists to be newer than nixpkgs'. If nixpkgs overtakes it,
+    # the pin has become a downgrade: bump it (pkgs/jackett/update.sh) or drop it.
+    (expect "jackett: the pinned build is not older than the locked nixpkgs'" (
+      jackettService.package.pname == "jackett"
+      && lib.versionAtLeast jackettService.package.version pkgs.jackett.version
+    ))
+
     (expect
       "jackett: upstream's indexer definitions are synced on the workload layer, before Jackett starts"
       (
