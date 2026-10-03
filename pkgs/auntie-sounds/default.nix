@@ -29,6 +29,13 @@ python3Packages.buildPythonPackage rec {
     yarl
   ];
 
+  # Importing it creates its cache directory under $HOME, which the build
+  # sandbox does not have (HOME=/homeless-shelter); the import check runs later
+  # in this same shell.
+  postInstall = ''
+    export HOME=$(mktemp -d)
+  '';
+
   # Imports only: its tests are not in the wheel.
   pythonImportsCheck = [ "sounds" ];
 
