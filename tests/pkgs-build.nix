@@ -13,6 +13,9 @@ let
   kodiBootstrap = pkgs.callPackage ../pkgs/kodi-bootstrap { };
   androidProvision = pkgs.callPackage ../pkgs/android-provision { };
   xiaomiClockSync = pkgs.callPackage ../pkgs/xiaomi-clock-sync { };
+  feedBridge = pkgs.callPackage ../pkgs/media-feed-bridge { };
+  maSources = pkgs.callPackage ../pkgs/music-assistant-sources { };
+  auntieSounds = pkgs.callPackage ../pkgs/auntie-sounds { };
 in
 pkgs.runCommand "pkgs-build-smoke"
   {
@@ -24,6 +27,8 @@ pkgs.runCommand "pkgs-build-smoke"
       kodiBootstrap
       androidProvision
       xiaomiClockSync
+      feedBridge
+      maSources
     ];
   }
   ''
@@ -31,6 +36,9 @@ pkgs.runCommand "pkgs-build-smoke"
     command -v quota-setup
     command -v kodi-bootstrap
     command -v android-provision
+    command -v media-feed-bridge
+    command -v music-assistant-sources
+    test -d ${auntieSounds}/${pkgs.python3.sitePackages}/sounds
     XIAOMI_CLOCK_DEVICES= xiaomi-clock-sync
     test -f ${pages}/offline.html
     test -f ${caPage}/index.html

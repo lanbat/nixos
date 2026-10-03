@@ -80,6 +80,7 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
 | Frigate | `/var/lib/frigate` | NVR event database — surveillance must not wait for unlock |
 | Music Assistant | `/var/lib/music-assistant` | Music controller — provider config, playlists, player state |
 | Snapcast | — | Audio distribution — streams created dynamically by MA |
+| Media feed bridge | `/var/lib/media-feed-bridge` | Video channels as audio podcast feeds for MA — loopback only; state is just the downloaded yt-dlp release (updated daily by a timer after a trial on the channels), safe to delete |
 | Wyoming pipeline | — | STT/TTS/wake word — model files managed by NixOS module |
 | SearXNG | — | Search proxy — stateless |
 | Telegraf | — | Metrics collector — stateless |

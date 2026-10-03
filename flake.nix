@@ -158,6 +158,7 @@
             ;
         };
         music-assistant = import ./tests/music-assistant.nix { inherit pkgs; };
+        media-feed-bridge = import ./tests/media-feed-bridge.nix { inherit pkgs; };
         pkgs-build = import ./tests/pkgs-build.nix { inherit pkgs; };
         plugins = import ./tests/plugins.nix { inherit lib pkgs; };
         endpoints-table = import ./tests/endpoints-table.nix { inherit lib pkgs; };
@@ -185,6 +186,19 @@
         on-demand-activator = import ./tests/on-demand-activator.nix { inherit pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
         secrets = import ./tests/secrets.nix { inherit lib pkgs; };
+        music-assistant-sources = import ./tests/music-assistant-sources.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         service-settings = import ./tests/service-settings.nix {
           inherit
             lib
