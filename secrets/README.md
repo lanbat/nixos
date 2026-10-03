@@ -298,6 +298,7 @@ Put the internal CA's public certificate (`caddy-ca-root.crt`) there too, or set
 | `caddy-ca-root.crt` | PEM root certificate (public) | Caddy internal CA — committed plaintext; `deployment.secrets.caCertificate` defaults to it |
 | `caddy-ca-root-key.age` | PEM EC private key | Caddy internal CA — agenix, owner `caddy` |
 | `jellyfin-imvdb-env.age` | `IMVDB_API_KEY=<value>`, a free key from [imvdb.com](https://imvdb.com/developers/api) | `jellyfin-bootstrap`, which gives it to the IMVDb plugin for music video metadata; only with `lanbat.services.jellyfin.settings.imvdb` set |
+| `ma-fanarttv-key.age` | plaintext Fanart.tv VIP API key | `music-assistant-setup`, which gives it to the fanart.tv metadata provider so it is not rate-limited; only with `lanbat.services.music-assistant.settings.fanartTvVip` set |
 | `romm-db-pass.age` | `POSTGRES_PASSWORD=<value>` and `DB_PASSWD=<same value>` | RomM database password (PostgreSQL setup and the container) |
 | `romm-env.age` | `ROMM_AUTH_SECRET_KEY=<openssl rand -hex 32>` and metadata provider keys (`IGDB_CLIENT_ID=`, `SCREENSCRAPER_USER=`, …) | RomM container |
 | `romm-oidc-env.age` | `OIDC_CLIENT_SECRET=<value>`, the same value as `AUTHENTIK_ROMM_CLIENT_SECRET` | RomM container, Authentik OIDC login |

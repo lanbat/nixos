@@ -19,7 +19,9 @@
 #     media/roms and media/roms-browser/mame, a profile moves them, and the
 #     NFS dependency follows the drive.
 #   - Music Assistant: its setup reaches Music Assistant and Home Assistant at
-#     the ports and subdomains of their descriptions.
+#     the ports and subdomains of their descriptions. The fanart.tv VIP key is
+#     off and needs no key by default; settings.fanartTvVip requires
+#     ma-fanarttv-key and hands it to the setup.
 #   - Immich: the originals default to drive a's photos, a profile moves them
 #     and the NFS dependency follows; PostgreSQL, Redis and its own API are
 #     reached at the ports of their descriptions.
@@ -250,6 +252,10 @@ let
         };
       };
     }
+  ];
+
+  maFanartVip = serverWith [
+    { lanbat.services.music-assistant.settings.fanartTvVip = true; }
   ];
 
   # ── Snapcast ─────────────────────────────────────────────────────────────
@@ -560,6 +566,16 @@ let
         ''export HA_INTERNAL_URL="http://127.0.0.1:18123"''
         ''export HA_PUBLIC_URL="https://hass.home.example.com"''
       ]
+    ))
+
+    (expect "music-assistant: the fanart.tv VIP key is off by default and needs no key" (
+      !(base.lanbat.secrets ? ma-fanarttv-key) && !lib.hasInfix "MA_FANARTTV_KEY" (maScript base)
+    ))
+
+    (expect "music-assistant: settings.fanartTvVip requires the key and hands it to the setup" (
+      maFanartVip.lanbat.secrets ? ma-fanarttv-key
+      && lib.hasInfix maFanartVip.lanbat.secrets.ma-fanarttv-key.path (maScript maFanartVip)
+      && failedAssertions maFanartVip == [ ]
     ))
 
     (expect "immich: the defaults keep today's upload directory and ports" (
