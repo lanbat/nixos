@@ -186,6 +186,19 @@
         on-demand-activator = import ./tests/on-demand-activator.nix { inherit pkgs; };
         postgresql = import ./tests/postgresql.nix { inherit pkgs; };
         secrets = import ./tests/secrets.nix { inherit lib pkgs; };
+        music-assistant-sources = import ./tests/music-assistant-sources.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         service-settings = import ./tests/service-settings.nix {
           inherit
             lib
