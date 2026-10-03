@@ -178,7 +178,7 @@ let
     oidcApps = map (e: {
       slug = e.identifiers.slug;
       provider = untag e.attrs.provider;
-      hidden = e.attrs ? meta_launch_url;
+      hidden = e.attrs.meta_hide or false;
     }) (appsIn bp.oidc);
   };
 
@@ -502,6 +502,7 @@ let
       && lib.hasSuffix "/callback" (lib.head p.attrs.redirect_uris).url
       && a != null
       && !(a.attrs ? meta_launch_url)
+      && !(a.attrs ? meta_hide)
     ))
 
     (expect "a forward-auth service with OIDC gets -proxy objects beside the OIDC ones" (
@@ -514,7 +515,8 @@ let
       && bySlug "demo-proxy" (appsIn addedWithSso.proxy) != null
       && lib.elem "provider-demo-proxy" (outpostProviders addedWithSso)
       && byId "provider-demo" (oidcProviders addedWithSso) != null
-      && (bySlug "demo" (appsIn addedWithSso.oidc)).attrs.meta_launch_url == "blank://blank"
+      && (bySlug "demo" (appsIn addedWithSso.oidc)).attrs.meta_hide
+      && lib.hasPrefix "https://" (bySlug "demo" (appsIn addedWithSso.oidc)).attrs.meta_launch_url
     ))
 
     (expect "RomM's OIDC redirect URI is its API OAuth callback" (

@@ -121,7 +121,8 @@ re-apply, don't delete).
 
 When a service is **both** forward-auth and an OIDC client (Immich), the OIDC objects
 keep the plain names and the **proxy** side takes the `-proxy` suffix (`provider-<name>-proxy`,
-slug `<name>-proxy`); the OIDC application gets a blank launch URL so the service shows
+slug `<name>-proxy`); the OIDC application keeps the real launch URL (Authentik's "Log back into
+<app>" link after sign-out uses it) but is hidden (`meta_hide`), so the service shows
 once in "My applications", through the proxy.
 
 The application is created with `policy_engine_mode = "any"` and **no policy bound**,
