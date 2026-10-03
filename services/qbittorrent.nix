@@ -18,9 +18,16 @@
 # Each category saves into its folder. The Pi creates the folders
 # (modules/pi/storage.nix), owned by qbt, group media.
 #
-# Categories: declared in `categories` below and written to categories.json
-#   before every start. Change them there; ones made in the web UI are dropped
-#   at the next restart.
+# Settings: qBittorrent's configuration is declared, not edited in the web UI.
+#   lanbat.services.qbittorrent.settings holds
+#     categories   — category name -> save path (a "/" nests a subcategory)
+#     preferences  — qBittorrent.conf as section -> key -> value
+#   and both are written to categories.json and qBittorrent.conf before every
+#   start. qBittorrent reads them only at start, so a change made in the web UI
+#   lasts until the next restart, then reverts. This module sets the keys the
+#   deployment depends on (the loopback-only, Authentik-only web UI and
+#   VueTorrent) and a few defaults; a profile sets the rest (see
+#   docs/extensibility.md#service-settings).
 #
 # NFS dependency: strong.
 #   If Pi storage disappears while a torrent is active, qBittorrent will
@@ -60,35 +67,51 @@ let
     "${flag}=${toString (id + 1)}:${toString (id + 1)}:${toString (65535 - id)}"
   ];
 
-  # Download categories: name -> save path, as the container sees it
-  # (/media/a, /media/b). A "/" in the name nests a subcategory under its
-  # parent. An empty path is a pure grouping category (children only), which
-  # saves to the default download folder. Nothing here has a share-limit
-  # override: all follow the global limits.
-  categories = {
-    "Audiobooks" = "/media/b/audiobooks";
-    "Books" = "/media/b/books";
-    "Games" = "/media/b/games";
-    "Gym" = "";
-    "Gym/Books" = "/media/b/gym/books";
-    "Gym/Videos" = "/media/b/gym/videos";
-    "Music" = "";
-    "Music/Albums" = "/media/b/music/albums";
-    "Porn" = "/media/b/adult";
-    "Porn/VR" = "/media/b/adult/vr";
-    "ROMs" = "/media/b/roms";
-    "ROMs/dreamcast" = "/media/b/roms/dreamcast";
-    "ROMs/gamecube" = "/media/b/roms/gc";
-    "ROMs/mame" = "/media/b/roms/mame";
-    "ROMs/ps2" = "/media/b/roms/ps2";
-    "VenusProject" = "";
-    "Video" = "/media/b/misc/video";
-    "Video/Documentaries" = "/media/b/documentaries";
-    "Video/Ideological" = "/media/b/documentaries/ideological";
-    "Video/Movies" = "/media/a/movies";
-    "Video/Music" = "/media/a/music-videos";
-    "Video/TV Shows" = "/media/a/tv/misc";
-    "Video/TV Shows/Home Renovation" = "/media/a/tv/home-renovation";
+  cfg = config.lanbat.services.qbittorrent.settings;
+
+  # What a profile may declare. Nothing is a UI-only setting: whatever is not
+  # here or in `preferences` goes back to qBittorrent's own default at the
+  # next restart.
+  qbittorrentSettings = {
+    options = {
+      categories = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.strMatching "(/.*)?");
+        default = { };
+        example = {
+          "Music" = "";
+          "Music/Albums" = "/media/b/music/albums";
+        };
+        description = ''
+          Download categories by name, with the folder each saves into as the
+          container sees it (/media/a, /media/b). A "/" in the name nests a
+          subcategory under its parent, which must be declared too. An empty
+          path is a grouping category: its torrents save to the default folder.
+          None sets a share limit: all follow the global ones.
+        '';
+      };
+      preferences = lib.mkOption {
+        type = lib.types.attrsOf (
+          lib.types.attrsOf (
+            lib.types.oneOf [
+              lib.types.bool
+              lib.types.int
+              lib.types.str
+            ]
+          )
+        );
+        default = { };
+        example = {
+          BitTorrent."Session\\MaxActiveDownloads" = 8;
+          Preferences."WebUI\\Port" = 8090;
+        };
+        description = ''
+          qBittorrent.conf: section name, then key (a backslash is part of the
+          key, as qBittorrent writes it), then value. Booleans render as
+          true/false. The keys the web UI depends on are fixed by this module;
+          setting one of them differently is a conflict.
+        '';
+      };
+    };
   };
 
   # categories.json with the same fields qBittorrent writes, so a restart that
@@ -102,12 +125,88 @@ let
         save_path = path;
         seeding_time_limit = -2;
         share_limit_action = "Default";
-      }) categories
+      }) cfg.categories
+    )
+  );
+
+  renderValue =
+    v:
+    if builtins.isBool v then
+      lib.boolToString v
+    else if builtins.isInt v then
+      toString v
+    else
+      v;
+
+  # qBittorrent.conf, less the [Meta] section, which is qBittorrent's own
+  # bookkeeping (the settings migration it has run) and is kept as it is.
+  confFile = pkgs.writeText "qBittorrent.conf" (
+    lib.concatStringsSep "\n" (
+      lib.mapAttrsToList (
+        section: keys:
+        lib.concatStringsSep "\n" (
+          [ "[${section}]" ] ++ lib.mapAttrsToList (key: value: "${key}=${renderValue value}") keys
+        )
+        + "\n"
+      ) cfg.preferences
     )
   );
 in
 
 {
+  # The schema is merged into lanbat.services.qbittorrent.settings; checks.nix
+  # rejects any key it does not declare.
+  lanbat.settingsSchema.qbittorrent = qbittorrentSettings;
+
+  lanbat.services.qbittorrent.settings.preferences = {
+    # Fixed: these make the Authentik forward auth the only login (see Auth
+    # above). A profile that sets one differently gets a conflict, not a
+    # quietly open web UI.
+    Preferences = {
+      "WebUI\\Address" = "127.0.0.1";
+      "WebUI\\AlternativeUIEnabled" = true;
+      "WebUI\\RootFolder" = "/vuetorrent";
+      "WebUI\\AuthSubnetWhitelistEnabled" = true;
+      # Host networking: Caddy connects via loopback (127.0.0.1). Bridge/pasta
+      # used to rewrite the source to the server IP — keep both.
+      "WebUI\\AuthSubnetWhitelist" =
+        "127.0.0.1/32, ::1/128, ${config.lanbat.deployment.serverIp}/32, ::ffff:${config.lanbat.deployment.serverIp}/128";
+      "WebUI\\Port" = config.lanbat.services.qbittorrent.port;
+    };
+
+    # Defaults a profile may change.
+    AutoRun = {
+      enabled = lib.mkDefault false;
+      program = lib.mkDefault "";
+    };
+    LegalNotice.Accepted = lib.mkDefault true;
+    BitTorrent = {
+      "Session\\SubcategoriesEnabled" = lib.mkDefault true;
+      "Session\\DefaultSavePath" = lib.mkDefault "/media/b/misc/";
+      "Session\\TempPath" = lib.mkDefault "/media/b/incomplete/";
+    };
+    # No UPnP/NAT-PMP: it would open a port on the router unasked.
+    Network.PortForwardingEnabled = lib.mkDefault false;
+  };
+
+  assertions = [
+    {
+      assertion = !(cfg.preferences ? Meta);
+      message = ''
+        lanbat.services.qbittorrent.settings.preferences.Meta is qBittorrent's
+        own record of the settings migrations it has run, and is kept as it is.
+      '';
+    }
+    {
+      assertion = lib.all (
+        name:
+        lib.hasInfix "/" name
+        -> cfg.categories ? ${lib.concatStringsSep "/" (lib.init (lib.splitString "/" name))}
+      ) (lib.attrNames cfg.categories);
+      message = "lanbat.services.qbittorrent.settings.categories: a subcategory needs its parent declared too (Music/Albums needs Music).";
+    }
+  ];
+
   lanbat.services.qbittorrent = {
     subdomain = "torrent";
     port = 8090;
@@ -163,7 +262,7 @@ in
 
     # Host networking avoids pasta's IPv4 fragment drops, which break BitTorrent
     # peer connections in rootless Podman. The web UI stays on loopback via
-    # WebUI\Address set in ExecStartPre below.
+    # WebUI\Address in the settings above.
     #
     # The image runs qBittorrent as PUID:PGID. Rootless Podman would put those
     # on sub-IDs of qbt's range, which own nothing on the media drives, so they
@@ -180,40 +279,31 @@ in
   systemd.services."podman-qbittorrent".serviceConfig = {
     # First, as root (+), hand the state to qbt, which PUID maps to: state
     # written under an earlier mapping belongs to a sub-ID qBittorrent could no
-    # longer write. Then set the web UI preferences, before every start, so the
-    # Authentik-only login and VueTorrent hold even if the settings are changed
-    # in the web UI; the file is rewritten in place, so it keeps its owner.
+    # longer write. Then write the settings (see Settings above) before every
+    # start, so what the web UI changed does not outlive a restart. Both files
+    # are written in place, so they keep qbt as their owner.
     ExecStartPre = lib.mkBefore [
       "+${pkgs.coreutils}/bin/chown -R qbt:qbt /var/lib/qbittorrent"
-      # The categories come from `categories` above, not from the web UI:
-      # qBittorrent reads this file only at start, so a category added, edited
-      # or deleted in the UI lasts until the next restart, then reverts.
-      "+${pkgs.writeShellScript "qbittorrent-categories" ''
-        ${pkgs.coreutils}/bin/install -d -o qbt -g qbt -m 755 /var/lib/qbittorrent/qBittorrent
-        ${pkgs.coreutils}/bin/install -o qbt -g qbt -m 644 ${categoriesFile} \
-          /var/lib/qbittorrent/qBittorrent/categories.json
-      ''}"
-      "+${pkgs.writeShellScript "qbittorrent-web-ui-prefs" ''
-        conf=/var/lib/qbittorrent/qBittorrent/qBittorrent.conf
+      "+${pkgs.writeShellScript "qbittorrent-settings" ''
+        dir=/var/lib/qbittorrent/qBittorrent
+        ${pkgs.coreutils}/bin/install -d -o qbt -g qbt -m 755 "$dir"
+        ${pkgs.coreutils}/bin/install -o qbt -g qbt -m 644 ${categoriesFile} "$dir/categories.json"
+
+        # The first start has no qBittorrent.conf, and without its [Meta]
+        # section qBittorrent would run every settings migration over ours.
+        # It writes one on that start, and the declared settings apply from
+        # the next.
+        conf="$dir/qBittorrent.conf"
         [ -f "$conf" ] || exit 0
         tmp=$(${pkgs.coreutils}/bin/mktemp)
         trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
-        set_pref() {
-          K="$1" V="$2" ${pkgs.gawk}/bin/awk '
-            BEGIN { key = ENVIRON["K"] "="; line = key ENVIRON["V"] }
-            index($0, key) == 1 { if (!done) print line; done = 1; next }
-            { print }
-            $0 == "[Preferences]" && !done { print line; done = 1 }
-            END { if (!done) { print "[Preferences]"; print line } }
-          ' "$conf" > "$tmp" && ${pkgs.coreutils}/bin/cat "$tmp" > "$conf"
-        }
-        set_pref 'WebUI\Address' 127.0.0.1
-        set_pref 'WebUI\AlternativeUIEnabled' true
-        set_pref 'WebUI\RootFolder' /vuetorrent
-        set_pref 'WebUI\AuthSubnetWhitelistEnabled' true
-        # Host networking: Caddy connects via loopback (127.0.0.1). Bridge/pasta
-        # used to rewrite the source to the server IP — keep both.
-        set_pref 'WebUI\AuthSubnetWhitelist' '127.0.0.1/32, ::1/128, ${config.lanbat.deployment.serverIp}/32, ::ffff:${config.lanbat.deployment.serverIp}/128'
+        ${pkgs.coreutils}/bin/cat ${confFile} > "$tmp"
+        ${pkgs.gawk}/bin/awk '
+          $0 == "[Meta]" { keep = 1; print ""; print; next }
+          /^\[/ { keep = 0 }
+          keep && NF
+        ' "$conf" >> "$tmp"
+        ${pkgs.coreutils}/bin/cat "$tmp" > "$conf"
       ''}"
     ];
     Restart = lib.mkForce "on-failure";

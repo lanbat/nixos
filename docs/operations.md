@@ -348,14 +348,26 @@ The times are UTC. An action is the API endpoint it called, such as
 in qBittorrent's execution log (VueTorrent's logs page) at the same
 time.
 
-### qBittorrent categories
+### qBittorrent settings
 
-The categories and their save paths are declared in `services/qbittorrent.nix`
-(`categories`) and written to `categories.json` before every start. Edit them
-there. One added, changed or deleted in the web UI works until the next restart
-(or deploy that restarts qBittorrent), then reverts. Deleting a category in the
-web UI also clears it from its torrents, and the restart does not put it back,
-so reassign those by hand.
+qBittorrent's categories and `qBittorrent.conf` are declared in the profile, under
+`lanbat.services.qbittorrent.settings` (`categories` and `preferences`; see
+[extensibility.md](extensibility.md#service-settings)), and written to the server
+before every start. Edit them there. qBittorrent reads them only at start, so a
+setting changed in the web UI works until the next restart (or deploy that
+restarts qBittorrent), then reverts. Deleting a category in the web UI also
+clears it from its torrents, and the restart does not put it back, so reassign
+those by hand.
+
+To see what the web UI holds now, against what is declared:
+
+```bash
+sudo cat /var/lib/qbittorrent/qBittorrent/qBittorrent.conf
+sudo cat /var/lib/qbittorrent/qBittorrent/categories.json
+```
+
+The first start of a new install has no `qBittorrent.conf` yet, so the declared
+preferences apply from the second start. Categories apply from the first.
 
 ## Backup status
 

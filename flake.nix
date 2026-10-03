@@ -164,6 +164,7 @@
         backup-server = import ./tests/backup-server.nix { inherit pkgs; };
         frigate-settings = import ./tests/frigate-settings.nix { inherit lib pkgs; };
         qbittorrent-userns = import ./tests/qbittorrent-userns.nix { inherit lib pkgs; };
+        qbittorrent-settings = import ./tests/qbittorrent-settings.nix { inherit lib pkgs; };
         syncthing-settings = import ./tests/syncthing-settings.nix { inherit lib pkgs; };
         policy = import ./tests/policy.nix { inherit lib pkgs; };
         caddy-remote = import ./tests/caddy-remote.nix { inherit lib pkgs; };
