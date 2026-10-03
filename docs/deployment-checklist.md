@@ -877,6 +877,7 @@ plugin configuration before every qBittorrent start.
    ```bash
    systemctl status jackett jackett-qbittorrent-plugin podman-qbittorrent
    ss -tlnp | grep 9117        # loopback only
+   systemctl list-timers jackett-definitions   # indexer definitions refresh every six hours
    ```
 2. Sign in to Authentik as a member of `authentik Admins`, then open
    `https://jackett.<domain>`. Nobody else gets in, and Jackett has no

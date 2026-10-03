@@ -212,6 +212,10 @@ waits up to a minute for Jackett's first `ServerConfig.json`:
 - If Jackett restarts (deploy or crash), qBittorrent keeps running and searches fail only
   while Jackett is down. The initializer is not rerun, so it learns a changed key at its
   next start.
+- `jackett-definitions` (at unlock and every six hours) needs GitHub. If that is
+  unreachable it fails and Jackett starts or keeps running with the definitions it has;
+  an indexer whose site has since changed fails until the next successful run. A run
+  that finds new definitions restarts Jackett, so a search in progress fails.
 - If Jackett's state is lost, restore `/var/lib/jackett` from the backup, or add the
   indexers again, then `sudo systemctl restart podman-qbittorrent`: the new API key is
   written on that start, with nothing to edit.

@@ -91,6 +91,8 @@ let
   jackettService = base.services.jackett;
   jackettUnit = base.systemd.services.jackett;
   jackettPluginUnit = base.systemd.services.jackett-qbittorrent-plugin;
+  jackettDefinitionsUnit = base.systemd.services.jackett-definitions;
+  jackettDefinitionsTimer = base.systemd.timers.jackett-definitions;
   qbittorrentUnit = base.systemd.services.podman-qbittorrent;
 
   # ── Samba ────────────────────────────────────────────────────────────────
@@ -752,6 +754,7 @@ let
       &&
         jackett.units == [
           "jackett"
+          "jackett-definitions"
           "jackett-qbittorrent-plugin"
         ]
       && jackettService.enable
@@ -797,6 +800,25 @@ let
       ]
       && !lib.hasInfix "--ListenPublic" jackettUnit.serviceConfig.ExecStart
     ))
+
+    (expect
+      "jackett: upstream's indexer definitions are synced on the workload layer, before Jackett starts"
+      (
+        jackettDefinitionsUnit.serviceConfig.Type == "oneshot"
+        && lib.elem "jackett.service" jackettDefinitionsUnit.before
+        && !lib.elem "jackett.service" (jackettDefinitionsUnit.requires or [ ])
+        && lib.elem "workload-online.target" jackettDefinitionsUnit.wantedBy
+        && lib.elem "workload-online.target" jackettDefinitionsTimer.wantedBy
+        && lib.elem "workload-online.target" jackettDefinitionsTimer.partOf
+        && jackettDefinitionsTimer.timerConfig.OnCalendar != null
+        && jackettUnit.environment.XDG_CONFIG_HOME == "/var/lib/jackett/xdg"
+        && lib.all (text: lib.hasInfix text jackettDefinitionsUnit.script) [
+          "/var/lib/jackett/xdg/cardigann/definitions"
+          "src/Jackett.Common/Definitions"
+          "restart --no-block jackett.service"
+        ]
+      )
+    )
 
     (expect "jackett: qBittorrent starts only after its plugin is configured" (
       lib.elem "jackett-qbittorrent-plugin.service" qbittorrentUnit.requires
