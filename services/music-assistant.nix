@@ -342,12 +342,27 @@ in
         covers international radio without an account.
       '';
     };
+
+    options.fanartTvVip = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Apply a Fanart.tv VIP API key so the fanart.tv metadata provider is not
+        rate-limited. music-assistant-setup gives it the key from
+        secrets/ma-fanarttv-key.age (a single line holding the key).
+      '';
+    };
   };
 
   lanbat.services.music-assistant = {
     subdomain = "music";
     # music-assistant-setup signs in with Home Assistant's owner account.
     readsSecrets = lib.optional integrates "hass-bootstrap-env";
+    # Fanart.tv VIP key, read by the root music-assistant-setup unit.
+    secrets.ma-fanarttv-key = {
+      enable = cfg.fanartTvVip && integrates;
+      owner = "root";
+    };
     port = 8095;
     extraPorts = [
       8097 # MA stream server (players / imageproxy)
@@ -472,6 +487,9 @@ in
       export HASS_CONFIG="/var/lib/hass"
       # Music Assistant's Snapcast players come from the snapserver (services/snapcast.nix).
       export SNAPSERVER_CONTROL_PORT="${toString config.services.snapserver.settings.tcp-control.port}"
+      ${lib.optionalString (
+        cfg.fanartTvVip && integrates
+      ) "export MA_FANARTTV_KEY=\"$(cat ${config.lanbat.secrets.ma-fanarttv-key.path})\""}
       exec music-assistant-setup
     '';
   };

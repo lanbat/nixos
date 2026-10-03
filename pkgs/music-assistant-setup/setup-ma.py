@@ -27,8 +27,11 @@ HA_TOKEN_PATH = STATE_DIR / "ha-token"
 MA_TOKEN_PATH = STATE_DIR / "ma-token"
 # Added later than the rest, so servers set up before still get it.
 SNAPCAST_MARKER = STATE_DIR / "snapcast-provider"
+# Managed here after the initial setup, so already-provisioned servers still get it.
+METADATA_MARKER = STATE_DIR / "metadata-providers"
 SNAPSERVER_HOST = os.environ.get("SNAPSERVER_HOST", "127.0.0.1")
 SNAPSERVER_CONTROL_PORT = int(os.environ.get("SNAPSERVER_CONTROL_PORT", "1705"))
+MA_FANARTTV_KEY = os.environ.get("MA_FANARTTV_KEY", "").strip()
 HA_CONFIG_ENTRIES = Path(os.environ.get("HA_CONFIG_ENTRIES", "/var/lib/hass/.storage/core.config_entries"))
 HASS_BIN = os.environ["HASS_BIN"]
 HASS_CONFIG = os.environ.get("HASS_CONFIG", "/var/lib/hass")
@@ -133,6 +136,14 @@ async def with_ma_client(
     raise RuntimeError(f"music assistant api connection failed: {last_error}")
 
 
+async def restart_ma(session: aiohttp.ClientSession) -> str:
+    log("restarting music assistant to apply configuration")
+    run(["systemctl", "restart", "music-assistant.service"])
+    wait_for_http(f"{MA_URL}/info")
+    await asyncio.sleep(5)
+    return await ma_login(session)
+
+
 async def configure_ma_webserver(client: MusicAssistantClient) -> bool:
     current = await client.config.get_core_config_value("webserver", "base_url")
     if current == MA_PUBLIC_URL:
@@ -195,6 +206,63 @@ async def configure_ma_snapcast_provider(client: MusicAssistantClient) -> bool:
     log("adding the snapcast player provider to music assistant")
     await client.config.save_provider_config("snapcast", values)
     return True
+
+
+async def set_provider_enabled(
+    client: MusicAssistantClient, domain: str, enabled: bool
+) -> bool:
+    """Set a provider's enabled state; a no-op when the provider is absent."""
+    providers = await client.config.get_provider_configs(provider_domain=domain)
+    if not providers:
+        return False
+    for provider in providers:
+        if provider.enabled == enabled:
+            continue
+        action = "enabling" if enabled else "disabling"
+        try:
+            await client.config.save_provider_config(
+                domain, {"enabled": enabled}, instance_id=provider.instance_id
+            )
+        except RuntimeError as exc:
+            log(f"could not {action} the {domain} provider: {exc}")
+            continue
+        log(f"{action} the {domain} provider in music assistant")
+        return True
+    return False
+
+
+async def set_fanarttv_vip_key(client: MusicAssistantClient) -> bool:
+    """Give the fanart.tv provider its VIP key, so it is not rate-limited."""
+    if not MA_FANARTTV_KEY:
+        return False
+    providers = await client.config.get_provider_configs(
+        provider_domain="fanarttv", include_values=True
+    )
+    if not providers:
+        return False
+    for provider in providers:
+        current = provider.values or {}
+        if current.get("client_key") == MA_FANARTTV_KEY:
+            continue
+        log("setting the fanart.tv VIP key in music assistant")
+        await client.config.save_provider_config(
+            "fanarttv",
+            {"client_key": MA_FANARTTV_KEY},
+            instance_id=provider.instance_id,
+        )
+        return True
+    return False
+
+
+async def configure_ma_metadata_providers(client: MusicAssistantClient) -> bool:
+    """Turn on the free metadata scrapers and disable the iTunes provider."""
+    changes = [
+        await set_provider_enabled(client, "theaudiodb", True),
+        await set_provider_enabled(client, "fanarttv", True),
+        await set_fanarttv_vip_key(client),
+        await set_provider_enabled(client, "itunes", False),
+    ]
+    return any(changes)
 
 
 def mark_done(marker: Path) -> None:
@@ -477,7 +545,11 @@ async def async_main() -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     os.chmod(STATE_DIR, 0o700)
 
-    if COMPLETE_MARKER.exists() and SNAPCAST_MARKER.exists():
+    if (
+        COMPLETE_MARKER.exists()
+        and SNAPCAST_MARKER.exists()
+        and METADATA_MARKER.exists()
+    ):
         log("already complete")
         return
 
@@ -486,11 +558,31 @@ async def async_main() -> None:
 
     timeout = aiohttp.ClientTimeout(total=60)
     async with aiohttp.ClientSession(timeout=timeout) as session:
-        if COMPLETE_MARKER.exists():
-            # Set up before the Snapcast provider was added: add only that.
+        if COMPLETE_MARKER.exists() and SNAPCAST_MARKER.exists():
+            # Set up before the metadata providers were managed here: fix only those.
             ma_access_token = await ma_login(session)
-            await with_ma_client(session, ma_access_token, configure_ma_snapcast_provider)
+            changed = await with_ma_client(
+                session, ma_access_token, configure_ma_metadata_providers
+            )
+            if changed:
+                await restart_ma(session)
+            mark_done(METADATA_MARKER)
+            log("complete")
+            return
+
+        if COMPLETE_MARKER.exists():
+            # Set up before the Snapcast provider was added: add that plus metadata.
+            ma_access_token = await ma_login(session)
+            snapcast_changed = await with_ma_client(
+                session, ma_access_token, configure_ma_snapcast_provider
+            )
+            metadata_changed = await with_ma_client(
+                session, ma_access_token, configure_ma_metadata_providers
+            )
+            if snapcast_changed or metadata_changed:
+                await restart_ma(session)
             mark_done(SNAPCAST_MARKER)
+            mark_done(METADATA_MARKER)
             log("complete")
             return
 
@@ -503,16 +595,15 @@ async def async_main() -> None:
             hass_changed = await configure_ma_hass_provider(client, ha_token)
             web_changed = await configure_ma_webserver(client)
             snapcast_changed = await configure_ma_snapcast_provider(client)
-            return hass_changed or web_changed or snapcast_changed
+            metadata_changed = await configure_ma_metadata_providers(client)
+            return (
+                hass_changed or web_changed or snapcast_changed or metadata_changed
+            )
 
         changed = await with_ma_client(session, ma_access_token, configure_ma)
 
         if changed:
-            log("restarting music assistant to apply configuration")
-            run(["systemctl", "restart", "music-assistant.service"])
-            wait_for_http(f"{MA_URL}/info")
-            await asyncio.sleep(5)
-            ma_access_token = await ma_login(session)
+            ma_access_token = await restart_ma(session)
 
         ma_token = await create_ma_token_for_ha(session, ma_access_token)
         update_ha_config_entry(ma_token)
@@ -529,6 +620,7 @@ async def async_main() -> None:
             log("home assistant oauth login is available on the music assistant web ui")
 
     mark_done(SNAPCAST_MARKER)
+    mark_done(METADATA_MARKER)
     mark_done(COMPLETE_MARKER)
     log("complete")
 
