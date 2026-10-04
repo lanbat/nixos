@@ -85,22 +85,35 @@ in
       powerOnBoot = true;
     };
 
-    services.pipewire.wireplumber.extraConfig = lib.mkIf (cfg.output != "auto") {
-      "52-preferred-speaker" = {
-        "monitor.alsa.rules" = lib.optionals (cfg.output != "bluetooth") [
-          {
-            matches = [ { "node.name" = pattern.${cfg.output}; } ];
-            actions.update-props."priority.session" = preferred;
-          }
+    services.pipewire.wireplumber.extraConfig = lib.mkMerge [
+      (lib.mkIf (cfg.output != "auto") {
+        "52-preferred-speaker" = {
+          "monitor.alsa.rules" = lib.optionals (cfg.output != "bluetooth") [
+            {
+              matches = [ { "node.name" = pattern.${cfg.output}; } ];
+              actions.update-props."priority.session" = preferred;
+            }
+          ];
+          "monitor.bluez.rules" = lib.optionals (cfg.output == "bluetooth") [
+            {
+              matches = [ { "node.name" = pattern.bluetooth; } ];
+              actions.update-props."priority.session" = preferred;
+            }
+          ];
+        };
+      })
+      (lib.mkIf (cfg.output == "bluetooth") {
+        # A speaker that offers the headset profile too gets a call-audio (SCO)
+        # link opened as soon as anything records from its microphone, and while
+        # it is up the speaker plays nothing from A2DP although PipeWire reports
+        # the sink running. The satellite's microphone is the USB one, so A2DP
+        # alone is enough.
+        "53-bluetooth-a2dp-only"."monitor.bluez.properties"."bluez5.roles" = [
+          "a2dp_sink"
+          "a2dp_source"
         ];
-        "monitor.bluez.rules" = lib.optionals (cfg.output == "bluetooth") [
-          {
-            matches = [ { "node.name" = pattern.bluetooth; } ];
-            actions.update-props."priority.session" = preferred;
-          }
-        ];
-      };
-    };
+      })
+    ];
 
     systemd.services.speaker-bluetooth-connect = lib.mkIf (cfg.bluetooth.address != null) {
       description = "Reconnect the Bluetooth speaker";
