@@ -7,6 +7,24 @@ A Pi 3 (B or B+) with a speaker and a USB microphone. It plays the Snapcast stre
 mainline kernel from cache.nixos.org. The Pi 5 images from nixos-raspberrypi are not
 used.
 
+## Requirements
+
+- **Raspberry Pi 3 B or B+**, 1 GB of RAM, wired Ethernet.
+- **microSD card, 32 GB recommended (the size this setup was built and tested on).** It
+  holds the whole system, since the Pi has no other storage. The root filesystem grows to
+  fill the card on first boot. After the configuration was switched in and several
+  generations had accumulated, about 8 GB was in use (the Nix store with the voice
+  satellite, PipeWire, Bluetooth and the old generations; the capped journal adds up to
+  64 MB), so 16 GB is the practical floor, and a smaller card leaves no room for
+  generations and rollbacks. Use a quality card (A1/A2, a known brand): the system and
+  the journal write to it all the time.
+- **A 5 V / 2.5 A power supply** with a short, thick cable. A weak one makes the Pi log
+  `Undervoltage detected!` and crash at random; `cat /sys/class/hwmon/hwmon*/in0_lcrit_alarm`
+  reads 1 while the supply is too weak.
+- **A USB microphone.** The PlayStation Eye (USB 1415:2000) is the default; its speech is
+  quiet, so the deploy entry sets `lanbat.voiceSatellite.microphone.volumeMultiplier`.
+- **A speaker**: the 3.5 mm jack, a USB speaker or a Bluetooth speaker (section 5).
+
 ## Deploy entry
 
 ```nix
