@@ -18,6 +18,8 @@ MUSIC_ASSISTANT_URL="${MUSIC_ASSISTANT_URL:-http://127.0.0.1:8095}"
 PI_HOST="${PI_HOST:?PI_HOST is required}"
 # This server's own satellite, when it has one.
 LOCAL_SATELLITE_PORT="${LOCAL_SATELLITE_PORT:-}"
+# The satellites on other hosts (voice-pi): space-separated "<host key>=<address>".
+EXTRA_SATELLITES="${EXTRA_SATELLITES:-}"
 
 # The conversation agent: an OpenAI-compatible chat completions API through
 # the extended_openai_conversation component. Unset: Home Assistant's own agent.
@@ -676,6 +678,9 @@ for svc in openwakeword faster-whisper piper satellite; do
   wyoming_needed "$svc" && needs_work=true
 done
 if [[ -n "$LOCAL_SATELLITE_PORT" ]] && wyoming_needed server-satellite; then needs_work=true; fi
+for entry in $EXTRA_SATELLITES; do
+  wyoming_needed "satellite-${entry%%=*}" && needs_work=true
+done
 if llm_needed; then needs_work=true; fi
 if ! state_done "$(pipeline_state_key)"; then needs_work=true; fi
 if ! state_done "$(satellite_vad_state_key)"; then needs_work=true; fi
@@ -701,6 +706,9 @@ ensure_wyoming "satellite" "$PI_HOST" 10700
 if [[ -n "$LOCAL_SATELLITE_PORT" ]]; then
   ensure_wyoming "server-satellite" "127.0.0.1" "$LOCAL_SATELLITE_PORT"
 fi
+for entry in $EXTRA_SATELLITES; do
+  ensure_wyoming "satellite-${entry%%=*}" "${entry#*=}" 10700
+done
 ensure_llm
 ensure_pipeline
 ensure_satellite_vad
