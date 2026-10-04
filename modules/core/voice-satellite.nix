@@ -153,6 +153,18 @@ in
       description = "USB vendor:product ID of the microphone, as lsusb shows it. The default is the PlayStation Eye.";
     };
 
+    microphone.volumeMultiplier = mkOption {
+      type = types.numbers.positive;
+      default = 1.0;
+      example = 6.0;
+      description = ''
+        Gain the satellite applies to the microphone audio (wyoming-satellite
+        --mic-volume-multiplier). The PlayStation Eye's speech peaks near -27 dBFS
+        (rms ~230 of 32768), too quiet for speech-to-text to recognise a command
+        although the wake word still triggers; a value around 6 fixes that.
+      '';
+    };
+
     speaker = mkOption {
       type = types.str;
       example = "plughw:CARD=PCH,DEV=0";
@@ -255,7 +267,11 @@ in
       vad.enable = false;
       sound.command = "${soundCommand}";
       extraArgs =
-        lib.optionals (cfg.room != null && !cfg.alwaysPlayLocally) [
+        lib.optionals (cfg.microphone.volumeMultiplier != 1.0) [
+          "--mic-volume-multiplier"
+          (toString cfg.microphone.volumeMultiplier)
+        ]
+        ++ lib.optionals (cfg.room != null && !cfg.alwaysPlayLocally) [
           "--synthesize-command"
           "${replyCommand}"
         ]
