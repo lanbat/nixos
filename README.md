@@ -113,7 +113,9 @@ docs/                     architecture, extensibility, plugins, migration
 
 You need:
 
-- an `x86_64` server and a Raspberry Pi 5 with NVMe storage;
+- an `x86_64` server and a Raspberry Pi 5 with NVMe storage and a 64 GB microSD card (32 GB at least);
+- optionally a Raspberry Pi 3 as a Snapcast speaker and voice satellite (a 32 GB microSD card,
+  a USB microphone and a speaker; [docs/pi3-satellite.md](docs/pi3-satellite.md));
 - a domain for the services (`<service>.<domain>`), and local DNS that resolves those
   names to the server. The services stay on your LAN; Caddy serves them with certificates
   from an internal CA that each client device trusts once;

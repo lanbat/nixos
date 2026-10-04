@@ -272,6 +272,12 @@ This phase is the Pi 5's. A Pi 3 voice satellite is installed differently; see
 
 ### 2a. Flash the Pi 5 installer image (on your workstation)
 
+**microSD card:** it holds the whole system (the NVMe drives only hold the data), so
+use at least 32 GB; 64 GB is recommended, the size this setup runs on. The storage Pi
+carries Kodi, the games frontend, the emulators and Samba, so its Nix store is large
+(about 20 GB in use here after 36 generations) and a small card runs out of room for
+generations and rollbacks. Use a quality A1/A2 card from a known brand.
+
 > **The generic NixOS aarch64 SD image from nixos.org does not boot a Raspberry Pi 5.**
 > Use the installer image from [nixos-raspberrypi](https://github.com/nvmd/nixos-raspberrypi),
 > which ships the Raspberry Pi kernel and firmware for the Pi 5.
