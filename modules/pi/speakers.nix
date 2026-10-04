@@ -91,13 +91,25 @@ in
           "monitor.alsa.rules" = lib.optionals (cfg.output != "bluetooth") [
             {
               matches = [ { "node.name" = pattern.${cfg.output}; } ];
-              actions.update-props."priority.session" = preferred;
+              actions.update-props = {
+                "priority.session" = preferred;
+                # See the Bluetooth rule below: a suspended sink wakes up late
+                # and the wake chime would arrive after the microphone is
+                # unmuted again, ending the spoken command before it starts.
+                "session.suspend-timeout-seconds" = 0;
+              };
             }
           ];
           "monitor.bluez.rules" = lib.optionals (cfg.output == "bluetooth") [
             {
               matches = [ { "node.name" = pattern.bluetooth; } ];
-              actions.update-props."priority.session" = preferred;
+              actions.update-props = {
+                "priority.session" = preferred;
+                # An idle A2DP sink is suspended after 5 s, and waking it takes
+                # about 2 s: the wake chime would arrive late and a reply would
+                # lose its first words. The speaker stays up instead.
+                "session.suspend-timeout-seconds" = 0;
+              };
             }
           ];
         };

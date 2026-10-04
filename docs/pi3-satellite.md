@@ -138,6 +138,15 @@ aplay -l               # the analog jack is "Headphones", a USB speaker "USB Aud
   Bluetooth through a system-wide PipeWire is the least tested path. If the speaker pairs
   but no `bluez_output` node appears in `wpctl status`, use the analog or USB output.
 
+  The Pi 3's onboard Bluetooth chip is unreliable under the mainline kernel: the kernel log
+  fills with `Frame reassembly failed` and `unknown connection handle`, the Pi reports the
+  speaker as connected while the speaker has dropped the pairing, and it is sensitive to an
+  under-spec power supply. Prefer the analog or USB output, or add a USB Bluetooth adapter.
+
+  Whichever output is used, the wake chime is padded with silence on purpose: the satellite
+  mutes its microphone for the length of the chime file, and a chime the microphone still
+  hears makes the assistant end the command before you speak ("No text recognized").
+
 ## 6. Home Assistant
 
 `home-assistant-post-setup` registers the Wyoming satellite of every `voice-pi` host, so
