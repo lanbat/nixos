@@ -1,4 +1,4 @@
-# hosts/pi/hardware.nix
+# hosts/pi5/hardware.nix
 #
 # Raspberry Pi 5 support from nixos-raspberrypi (added in flake.nix): the
 # Raspberry Pi kernel and firmware, and the bootloader that manages the
@@ -7,7 +7,7 @@
 #
 # The filesystems use the labels of that SD image (NIXOS_SD, FIRMWARE). The
 # two NVMe storage drives are separate devices, unlocked after boot by
-# modules/pi/clevis-unlock.nix.
+# modules/storage/clevis-unlock.nix.
 { nixos-raspberrypi, ... }:
 {
   imports = with nixos-raspberrypi.nixosModules; [

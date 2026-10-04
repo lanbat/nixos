@@ -189,8 +189,18 @@ host's `modules` or its `local/` directory (see [Local modules](#local-modules))
 
 ### Replacing a host's hardware module
 
-A host with `platform = "raspberry-pi"` imports `hosts/pi/hardware.nix` (kernel,
-firmware, SD card filesystems) whatever its role. A deploy entry replaces it with
+A host's `platform` selects the hardware module of its board (kernel, firmware, SD card
+filesystems), whatever its role:
+
+| `platform` | Imports | Board |
+|---|---|---|
+| `raspberry-pi-3` | `hosts/pi3/hardware.nix` | Pi 3 B/B+ booted from the stock NixOS aarch64 SD image (see [pi3-satellite.md](pi3-satellite.md)) |
+| `raspberry-pi-5` | `hosts/pi5/hardware.nix` | Pi 5, built with nixos-raspberrypi |
+
+`raspberry-pi` still works as an alias for `raspberry-pi-5`. Each board has its own
+directory under `hosts/` and an entry in the platform table in `lib/platforms.nix`, which
+`lib/validate-deploy.nix` checks a host against (an unknown platform, or a `system` the
+board does not run); nothing else in the code names a board. A deploy entry replaces the hardware module with
 `hardware`, a module or a list of them, or drops it with `[ ]`:
 
 ```nix

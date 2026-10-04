@@ -161,7 +161,7 @@ in
     nfs.drives = [ cfg.drive ];
     account = {
       uid = 966;
-      # The audiobooks on the Pi belong to qbt, group media (modules/pi/storage.nix).
+      # The audiobooks on the Pi belong to qbt, group media (modules/storage/storage.nix).
       extraGroups = [ "media" ];
     };
     dashboard = {

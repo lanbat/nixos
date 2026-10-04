@@ -54,7 +54,8 @@ let
     in
     (lanbatLib.mkHost "homelab" deploy hostName (deploy.hosts.${hostName} // entry) { }).lanbatModules;
 
-  piHardware = ../hosts/pi/hardware.nix;
+  piHardware = ../hosts/pi5/hardware.nix;
+  pi3Hardware = ../hosts/pi3/hardware.nix;
   # A marker module: only its place in the list is compared.
   ownHardware = {
     _file = "own-hardware";
@@ -99,7 +100,7 @@ let
       if lib.elem piHardware (modulesOf "pi-storage" { }) then
         null
       else
-        "mkHost: a Raspberry Pi host must import hosts/pi/hardware.nix by default"
+        "mkHost: a Raspberry Pi host must import hosts/pi5/hardware.nix by default"
     )
     (
       let
@@ -108,7 +109,22 @@ let
       if lib.elem ownHardware modules && !(lib.elem piHardware modules) then
         null
       else
-        "mkHost: hardware must replace hosts/pi/hardware.nix"
+        "mkHost: hardware must replace hosts/pi5/hardware.nix"
+    )
+    (
+      let
+        modules = modulesOf "pi-storage" { platform = "raspberry-pi-3"; };
+      in
+      if lib.elem pi3Hardware modules && !(lib.elem piHardware modules) then
+        null
+      else
+        "mkHost: platform raspberry-pi-3 must import hosts/pi3/hardware.nix and not the Pi 5's"
+    )
+    (
+      if lib.elem piHardware (modulesOf "pi-storage" { platform = "raspberry-pi"; }) then
+        null
+      else
+        "mkHost: the old platform name raspberry-pi must still mean the Pi 5"
     )
     (
       if !(lib.elem piHardware (modulesOf "pi-storage" { hardware = [ ]; })) then

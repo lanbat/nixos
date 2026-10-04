@@ -28,8 +28,10 @@ let
     legacyPlugins
     ;
   inherit (import ./roles.nix { inherit lib; }) resolveRoleModules;
+  platformsLib = import ./platforms.nix { inherit lib; };
 
-  platform = hostCfg.platform or "generic";
+  # The machine the host runs on (lib/platforms.nix); null for a generic one.
+  platformInfo = platformsLib.resolve hostCfg;
   system = hostCfg.system;
 
   pluginModules = resolvePlugins hostCfg.role (hostCfg.plugins or [ ]) (hostCfg.services or [ ]);
@@ -96,11 +98,10 @@ let
   ++ pluginSettingsModules
   ++ pluginModules;
 
-  # The hardware the platform brings: the Raspberry Pi's kernel, firmware and
-  # filesystems, or nothing on a generic machine, whose role carries its own
-  # (the server's is the role module named "hardware"). A deploy entry's
-  # hardware replaces it: a module, a list of them, or [ ] for none.
-  platformHardware = lib.optionals (platform == "raspberry-pi") [ ../hosts/pi/hardware.nix ];
+  # The hardware the platform brings, or nothing on a generic machine. A
+  # deploy entry's hardware replaces it: a module, a list of them, or [ ] for
+  # none.
+  platformHardware = lib.optionals (platformInfo != null) [ platformInfo.hardware ];
   hardwareModules =
     if !(hostCfg ? hardware) then
       platformHardware
@@ -109,8 +110,6 @@ let
     else
       lib.toList hostCfg.hardware;
 
-  raspberryPiModules = commonModules ++ hardwareModules;
-
   genericModules =
     commonModules
     ++ hardwareModules
@@ -118,11 +117,10 @@ let
       disko.nixosModules.disko
     ];
 
-  modules =
-    (if platform == "raspberry-pi" then raspberryPiModules else genericModules) ++ userModules;
+  modules = genericModules ++ userModules;
 
   nixosSystem =
-    if platform == "raspberry-pi" then
+    if platformInfo.nixosRaspberrypi or false then
       nixos-raspberrypi.lib.nixosSystem {
         specialArgs = {
           inherit inputs nixos-raspberrypi;

@@ -1,11 +1,11 @@
 # pkgs/es-de/default.nix
 #
 # ES-DE (EmulationStation Desktop Edition), the game browser of the Pi's TV
-# games session (modules/pi/tv.nix). nixpkgs removed ES-DE together with
+# games session (modules/storage/tv-box.nix). nixpkgs removed ES-DE together with
 # FreeImage, which ES-DE still needs, so this wraps the upstream AArch64
 # AppImage, which bundles its own libraries.
 #
-# passthru.systems is ES-DE's bundled Linux system list; modules/pi/tv.nix
+# passthru.systems is ES-DE's bundled Linux system list; modules/storage/tv-box.nix
 # generates its emulator overrides from it.
 {
   appimageTools,

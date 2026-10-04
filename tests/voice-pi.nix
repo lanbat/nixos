@@ -52,6 +52,9 @@ pkgs.testers.runNixOSTest {
     with subtest("Wyoming satellite unit"):
         voice_pi.succeed("systemctl cat wyoming-satellite.service >/dev/null")
 
+    with subtest("Snapcast client plays the server's stream"):
+        voice_pi.succeed("systemctl cat snapclient.service | grep -q -- '--host 192.0.2.10'")
+
     with subtest("firewall restricts port 10700 to server IP"):
         voice_pi.succeed("iptables -S | grep -q -- '--dport 10700'")
         voice_pi.succeed("iptables -S | grep -q '10700.*192.0.2.10'")

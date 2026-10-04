@@ -111,7 +111,7 @@ let
         pi-storage = {
           role = "storage-pi";
           system = "aarch64-linux";
-          platform = "raspberry-pi";
+          platform = "raspberry-pi-5";
           networking = {
             ip = "192.0.2.11";
             interface = "end0";

@@ -1,6 +1,7 @@
 # plugins/tv/default.nix
 #
-# TV frontend plugin for storage Pis: Kodi and EmulationStation on HDMI.
+# TV box plugin for storage Pis: a Raspberry Pi based TV box, Kodi and
+# EmulationStation on HDMI (modules/storage/tv-box.nix).
 {
   name = "lanbat-tv";
   version = 2;
@@ -8,6 +9,6 @@
     "storage-pi"
   ];
   modules = [
-    ../../modules/pi/tv.nix
+    ../../modules/storage/tv-box.nix
   ];
 }

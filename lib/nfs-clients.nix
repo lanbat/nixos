@@ -1,6 +1,6 @@
 # lib/nfs-clients.nix
 #
-# The hosts a storage host serves over NFS, for modules/pi/nfs-exports.nix and
+# The hosts a storage host serves over NFS, for modules/storage/nfs-exports.nix and
 # the firewall in lib/roles/storage-pi.nix, which must agree on them.
 #
 # They are the hosts running a service whose nfs.drives is non-empty and whose

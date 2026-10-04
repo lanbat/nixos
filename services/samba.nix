@@ -231,7 +231,7 @@ let
   };
 
   # The default share layout: media split across both drives
-  # (modules/pi/storage.nix), which qBittorrent saves into, and the private
+  # (modules/storage/storage.nix), which qBittorrent saves into, and the private
   # media kept apart from it.
   defaultShares = {
     # ---- Shared media shares (read-only for all users) ----

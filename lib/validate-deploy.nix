@@ -8,6 +8,7 @@ let
   hostLib = import ./host.nix { inherit lib; };
   pluginLib = import ./plugins.nix { inherit lib; };
   rolesLib = import ./roles.nix { inherit lib; };
+  platformsLib = import ./platforms.nix { inherit lib; };
 
   containsChangeMe =
     value:
@@ -54,6 +55,18 @@ let
         rolesLib.resolveRoleModules roles host.role (host.roleModules or { })
       )) null;
 
+  # The platform table (lib/platforms.nix) decides which boards exist and the
+  # system each one runs.
+  validatePlatform =
+    profileName: hostName: host:
+    let
+      errors = platformsLib.problems host;
+    in
+    if errors != [ ] then
+      builtins.throw "profile '${profileName}', host '${hostName}': ${lib.concatStringsSep "; " errors}"
+    else
+      null;
+
   validateNetworking =
     profileName: name: host:
     let
@@ -73,8 +86,10 @@ let
     builtins.seq (requireField profileName name "role" host) (
       builtins.seq (requireField profileName name "system" host) (
         builtins.seq (validateNetworking profileName name host) (
-          builtins.seq (validateRoleRequirements profileName name host) (
-            pluginLib.resolvePlugins host.role (host.plugins or [ ]) (host.services or [ ])
+          builtins.seq (validatePlatform profileName name host) (
+            builtins.seq (validateRoleRequirements profileName name host) (
+              pluginLib.resolvePlugins host.role (host.plugins or [ ]) (host.services or [ ])
+            )
           )
         )
       )

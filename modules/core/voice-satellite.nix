@@ -42,27 +42,34 @@ let
   coreutils = pkgs.coreutils;
   # The module always adds webrtc-noise-gain, for auto gain and noise
   # suppression. Its bundled WebRTC code uses uint32_t without including
-  # <cstdint>, which GCC 15 rejects on x86_64. stdint.h, because the flags
-  # reach its C files too. Elsewhere (the Pi) it builds unchanged, and the
-  # unchanged package comes from the binary cache instead of a two-minute
-  # compile.
-  webrtcNoiseGain = pkgs.python3Packages.webrtc-noise-gain.overridePythonAttrs (old: {
-    env = (old.env or { }) // {
-      NIX_CFLAGS_COMPILE = toString [
-        (old.env.NIX_CFLAGS_COMPILE or "")
-        "-include stdint.h"
-      ];
-    };
-  });
+  # <cstdint>, which GCC 15 rejects, on x86_64 and aarch64 alike. A nixpkgs
+  # that has fixed it carries a patch, and then the unchanged package comes
+  # from the binary cache instead of a compile: the Pi 5's (nixos-raspberrypi's
+  # newer pin) does, while the server's and the Pi 3's nixpkgs do not yet.
+  # Until a pin has the patch, the workaround includes stdint.h, rather than
+  # <cstdint>, because the flags reach its C files too. The result is not in
+  # the binary cache, so a host compiles it: about two minutes on the server,
+  # much longer on a Pi 3.
+  webrtcNoiseGain = pkgs.python3Packages.webrtc-noise-gain;
+  webrtcFixedUpstream = (webrtcNoiseGain.patches or [ ]) != [ ];
   satellitePackage =
-    if pkgs.stdenv.hostPlatform.isx86_64 then
+    if webrtcFixedUpstream then
+      pkgs.wyoming-satellite
+    else
       pkgs.wyoming-satellite.overridePythonAttrs (old: {
         optional-dependencies = old.optional-dependencies // {
-          webrtc = [ webrtcNoiseGain ];
+          webrtc = [
+            (webrtcNoiseGain.overridePythonAttrs (webrtcOld: {
+              env = (webrtcOld.env or { }) // {
+                NIX_CFLAGS_COMPILE = toString [
+                  (webrtcOld.env.NIX_CFLAGS_COMPILE or "")
+                  "-include stdint.h"
+                ];
+              };
+            }))
+          ];
         };
-      })
-    else
-      pkgs.wyoming-satellite;
+      });
 
   vendor = lib.head (lib.splitString ":" cfg.microphone.usbId);
   product = lib.last (lib.splitString ":" cfg.microphone.usbId);

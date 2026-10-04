@@ -102,9 +102,9 @@ deployments/
 lib/                      host builder, roles, plugin loader
 plugins/                  built-in plugins (services, tv, voice)
 services/                 one file per server service
-modules/                  core, wiring, server, pi infrastructure
+modules/                  core, wiring, and one directory per role: server/, storage/, pi/ (shared by the Pi roles)
 hosts/server/             hardware.nix, disk.nix (disko layout)
-hosts/pi/                 hardware.nix (Raspberry Pi 5)
+hosts/pi3/, hosts/pi5/    hardware.nix, one per Raspberry Pi model
 tests/                    assertion tests and VM tests
 docs/                     architecture, extensibility, plugins, migration
 ```

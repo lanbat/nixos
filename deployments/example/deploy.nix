@@ -115,7 +115,7 @@
     pi-storage = {
       role = "storage-pi";
       system = "aarch64-linux";
-      platform = "raspberry-pi";
+      platform = "raspberry-pi-5";
       networking = {
         ip = "192.0.2.11";
         interface = "end0";
@@ -135,6 +135,26 @@
       plugins = [
         inputs.self.lanbatPlugins.tv
         inputs.self.lanbatPlugins.voice
+      ];
+    };
+
+    # A Raspberry Pi 3 with a speaker and a microphone: a Snapcast speaker and
+    # a voice satellite (docs/pi3-satellite.md).
+    pi-voice = {
+      role = "voice-pi";
+      system = "aarch64-linux";
+      platform = "raspberry-pi-3";
+      networking = {
+        ip = "192.0.2.12";
+        interface = "eth0";
+        hostname = "pi3";
+      };
+      plugins = [ inputs.self.lanbatPlugins.voice ];
+      modules = [
+        {
+          lanbat.voiceSatellite.name = "Pi 3 Satellite";
+          lanbat.speakers.output = "usb";
+        }
       ];
     };
   };

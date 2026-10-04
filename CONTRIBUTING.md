@@ -50,12 +50,12 @@ Run it locally when you change a host, a service's tier or the unlock scripts:
 
 ```bash
 nix build -L .#checks.x86_64-linux.server  # KVM, about 10 GB of free memory, 15–45 minutes
-nix build -L .#checks.aarch64-linux.pi     # an aarch64 machine with KVM, such as the Pi (see tests/pi.nix)
+nix build -L .#checks.aarch64-linux.storage-pi     # an aarch64 machine with KVM, such as the Pi (see tests/storage-pi.nix)
 nix build -L .#checks.aarch64-linux.voice-pi
 ```
 
 GitHub's arm64 runners have no KVM, so CI cannot boot the Pi VM tests. On every pull
-request it builds their drivers (`.#checks.aarch64-linux.{pi,voice-pi}.driver`), which
+request it builds their drivers (`.#checks.aarch64-linux.{storage-pi,voice-pi}.driver`), which
 builds the Pi systems without booting them. Run the tests themselves on an aarch64
 machine when you change a Pi role, a Pi plugin or `tests/lib/mk-host-fixture.nix`.
 
@@ -90,13 +90,19 @@ Please don't open public issues for vulnerabilities. See [SECURITY.md](SECURITY.
   rejects inconsistent descriptions (`checks.nix`). `services/homepage.nix` builds the
   dashboard from them.
 - `modules/core/`: settings and configuration shared by both hosts.
+- `modules/server/`, `modules/storage/`, `modules/pi/`: a role's own modules, named for
+  the role (the storage-pi role is `modules/storage/`, with the TV frontend of the `tv`
+  plugin), and `modules/pi/` for what both Pi roles share (audio, Snapcast client,
+  speakers, Telegraf).
 - `lib/roles.nix`: the role table, with each role's bundled modules (a host can
   replace or drop one with `roleModules`) and what it requires of a deploy entry.
 - `lib/roles/`: host role modules (server, storage-pi, voice-pi), and what they
   share (`common.nix`, `pi-common.nix`).
 - `plugins/`: built-in plugins; enable per host in `deploy.nix`.
 - `deployments/`: one `deploy.nix` per site/profile.
-- `hosts/server/`, `hosts/pi/`: hardware and the server's disk layout (disko). A
+- `hosts/server/`, `hosts/pi3/`, `hosts/pi5/`: hardware (one directory per board; a new
+  board is a new directory and an entry in the platform table in `lib/platforms.nix`) and
+  the server's disk layout (disko). A
   deploy entry can replace them (`roleModules.hardware`, `roleModules.disk`, `hardware`).
 
 ## Adding a new service

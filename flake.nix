@@ -282,7 +282,7 @@
       );
 
       checks.aarch64-linux = {
-        pi = import ./tests/pi.nix {
+        storage-pi = import ./tests/storage-pi.nix {
           pkgs = nixos-raspberrypi.inputs.nixpkgs.legacyPackages.aarch64-linux;
           inherit (inputs)
             agenix

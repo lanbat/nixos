@@ -1,4 +1,4 @@
-# modules/pi/clevis-unlock.nix
+# modules/storage/clevis-unlock.nix
 #
 # Post-boot Clevis/Tang unlock for the Raspberry Pi's NVMe storage drives, one
 # unit per key of hosts.<key>.storage.drives.

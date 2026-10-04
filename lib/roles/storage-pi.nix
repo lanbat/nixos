@@ -11,7 +11,7 @@ args@{
 
 let
   # Only the hosts that mount this Pi's drives may reach NFS, the same hosts
-  # modules/pi/nfs-exports.nix exports to.
+  # modules/storage/nfs-exports.nix exports to.
   nfsClients = (import ../nfs-clients.nix { inherit config lib; }).addresses;
 
   # The rule bodies, without the -I/-D verb, so that the start and stop commands

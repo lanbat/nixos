@@ -1,4 +1,4 @@
-# modules/pi/nfs-exports.nix
+# modules/storage/nfs-exports.nix
 #
 # NFS server configuration — exports Pi storage to the hosts that use it.
 #
@@ -11,7 +11,7 @@
 # "no_root_squash" is used because the clients' service accounts must write to
 # the NFS paths without being squashed to nobody. Ownership is stored as the
 # numeric UID of each service's lanbat.services.<name>.account. The Pi does not
-# run those services, so modules/pi/storage.nix reads the same accounts from
+# run those services, so modules/storage/storage.nix reads the same accounts from
 # the profile-wide lanbat.endpoints table to own the directories it creates.
 #
 # Exports are restricted to those hosts' addresses, and the Pi firewall

@@ -1,4 +1,4 @@
-# tests/pi.nix
+# tests/storage-pi.nix
 #
 # VM test of the storage-pi role built through mkHost and the test deploy fixture.
 {
@@ -23,11 +23,11 @@ let
   };
 in
 pkgs.testers.runNixOSTest {
-  name = "pi";
+  name = "storage-pi";
 
   node.pkgsReadOnly = false;
 
-  nodes.pi =
+  nodes.storage-pi =
     { ... }:
     {
       imports = [
@@ -36,30 +36,30 @@ pkgs.testers.runNixOSTest {
     };
 
   testScript = ''
-    pi.start()
-    pi.wait_for_unit("multi-user.target")
+    storage_pi.start()
+    storage_pi.wait_for_unit("multi-user.target")
 
     with subtest("admin user, SSH and passwordless sudo"):
-        pi.wait_for_unit("sshd.service")
-        pi.succeed("id admin")
-        pi.succeed("sudo -u admin sudo -n true")
+        storage_pi.wait_for_unit("sshd.service")
+        storage_pi.succeed("id admin")
+        storage_pi.succeed("sudo -u admin sudo -n true")
 
     with subtest("static address and NFS firewall rules"):
-        pi.succeed("ip -4 addr show eth1 | grep -q 192.168.1.2")
-        pi.succeed("iptables -S | grep -q -- '--dport 2049'")
+        storage_pi.succeed("ip -4 addr show eth1 | grep -q 192.168.1.2")
+        storage_pi.succeed("iptables -S | grep -q -- '--dport 2049'")
 
     with subtest("agenix decrypts the Telegraf token and services start"):
-        pi.succeed("test -s /run/agenix/telegraf-token")
-        pi.wait_for_unit("telegraf.service")
-        pi.wait_for_unit("snapclient.service")
+        storage_pi.succeed("test -s /run/agenix/telegraf-token")
+        storage_pi.wait_for_unit("telegraf.service")
+        storage_pi.wait_for_unit("snapclient.service")
 
     with subtest("storage unlock retries without blocking boot or NFS"):
-        pi.wait_until_succeeds(
+        storage_pi.wait_until_succeeds(
             "systemctl show storage-a-unlock.service -p ActiveState --value | grep -qE '^(activating|failed)$'",
             timeout=120,
         )
-        pi.wait_for_unit("nfs-server.service")
-        pi.succeed("exportfs -v | grep -q mountpoint")
-        pi.fail("mountpoint -q /mnt/storage-a")
+        storage_pi.wait_for_unit("nfs-server.service")
+        storage_pi.succeed("exportfs -v | grep -q mountpoint")
+        storage_pi.fail("mountpoint -q /mnt/storage-a")
   '';
 }

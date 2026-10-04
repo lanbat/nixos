@@ -265,7 +265,10 @@ From now on, deploy changes from your workstation with `deploy --skip-checks pat
 
 ---
 
-## Phase 2 — Pi installation
+## Phase 2 — Pi installation (Pi 5 storage host)
+
+This phase is the Pi 5's. A Pi 3 voice satellite is installed differently; see
+[pi3-satellite.md](pi3-satellite.md).
 
 ### 2a. Flash the Pi 5 installer image (on your workstation)
 
@@ -388,7 +391,7 @@ nix run nixpkgs#nixos-rebuild -- switch --flake path:.#homelab-pi-storage \
   --target-host root@<pi-ip> --build-host root@<pi-ip>
 ```
 
-The Pi configuration boots the same way as the installer: `hosts/pi/hardware.nix` imports
+The Pi configuration boots the same way as the installer: `hosts/pi5/hardware.nix` imports
 nixos-raspberrypi's Raspberry Pi 5 modules and sets
 `boot.loader.raspberry-pi.bootloader = "kernel"`. The Pi is built with nixos-raspberrypi's
 pinned nixpkgs (see `flake.nix`), so its kernel comes from that project's binary cache.

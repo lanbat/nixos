@@ -113,7 +113,7 @@ let
   psql = "${config.services.postgresql.finalPackage}/bin/psql -X -v ON_ERROR_STOP=1 -tA";
 
   # ES-DE's folder names are RomM's platform names, except atari800. bios is
-  # RetroArch's BIOS folder (modules/pi/tv.nix), not a platform.
+  # RetroArch's BIOS folder (modules/storage/tv-box.nix), not a platform.
   seedConfig = pkgs.writeText "romm-config.yml" ''
     exclude:
       platforms:
@@ -185,7 +185,7 @@ in
     account = {
       uid = 965;
       container = true;
-      # The library on the Pi belongs to qbt, group media (modules/pi/storage.nix).
+      # The library on the Pi belongs to qbt, group media (modules/storage/storage.nix).
       extraGroups = [ "media" ];
     };
     secrets = {
