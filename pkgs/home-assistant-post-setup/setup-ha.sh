@@ -425,8 +425,15 @@ ensure_pipeline() {
   mark_done "$key"
 }
 
+# The key covers the set of satellites Home Assistant knows, so one added later
+# (restore_state lists its entity after Home Assistant first connects to it) gets
+# the setting too, instead of staying on Home Assistant's default.
 satellite_vad_state_key() {
-  echo "satellite-vad-${SATELLITE_VAD}"
+  local ids=""
+  if [[ -f "$RESTORE_STATE" ]]; then
+    ids="$(jq -r '[.data[].state.entity_id | select(test("_finished_speaking_detection$"))] | sort | join(",")' "$RESTORE_STATE" | cksum | cut -d' ' -f1)"
+  fi
+  echo "satellite-vad-${SATELLITE_VAD}-${ids}"
 }
 
 # Home Assistant defaults Wyoming satellites to relaxed VAD, which waits 1.25 s
