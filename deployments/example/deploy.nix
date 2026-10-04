@@ -153,8 +153,6 @@
       modules = [
         {
           lanbat.voiceSatellite.name = "Pi 3 Satellite";
-          # The PlayStation Eye is quiet; without gain speech-to-text hears nothing.
-          lanbat.voiceSatellite.microphone.volumeMultiplier = 6.0;
           lanbat.speakers.output = "usb";
         }
       ];

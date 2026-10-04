@@ -1,16 +1,18 @@
 # modules/core/voice-satellite.nix
 #
 # Wyoming voice satellite: a microphone and a speaker for Home Assistant's
-# Assist, on either host. HA on the server connects to it, runs the audio
-# through the "Voice" pipeline (wake word, speech-to-text, conversation agent,
-# text-to-speech; services/wyoming.nix and services/home-assistant.nix) and
-# sends the spoken reply back.
+# Assist, on any host: the server, a Pi 3, 4 or 5. HA on the server connects to
+# it, runs the audio through the "Voice" pipeline (wake word, speech-to-text,
+# conversation agent, text-to-speech; services/wyoming.nix and
+# services/home-assistant.nix) and sends the spoken reply back.
 #
 # Microphone
 # ----------
 # Found by its USB ID each time capture starts, so its ALSA card number
 # doesn't matter and it can be unplugged and plugged back in. The default is
-# the PlayStation Eye, a webcam with a 4-microphone array.
+# the PlayStation Eye, a webcam with a 4-microphone array, with the gain it
+# needs. The satellite runs, and is registered in Home Assistant, before the
+# microphone is plugged in: it waits for it quietly and listens once it is.
 #
 # Speaker
 # -------
@@ -76,15 +78,33 @@ let
 
   # 16 kHz mono, which Wyoming's speech-to-text expects. Bash builtins only,
   # so it doesn't depend on the unit's PATH.
+  #
+  # Without the microphone it waits, silently, until one is plugged in, instead
+  # of failing: the satellite restarts a failing capture command every couple
+  # of seconds, which would fill the journal (on an SD card) and flood the log,
+  # while a satellite waiting here is simply deaf. Plug the microphone in and
+  # it starts listening; unplug it and capture ends, and the wait begins again.
   micCommand = pkgs.writeShellScript "voice-satellite-mic" ''
-    for card in /sys/class/sound/card*; do
-      [[ -r $card/device/../idVendor && -r $card/device/../idProduct ]] || continue
-      if [[ $(<"$card/device/../idVendor") == ${vendor} && $(<"$card/device/../idProduct") == ${product} ]]; then
-        exec ${alsa}/bin/arecord -D "plughw:$(<"$card/number"),0" -r 16000 -c 1 -f S16_LE -t raw -q
+    find_card() {
+      local card
+      for card in /sys/class/sound/card*; do
+        [[ -r $card/device/../idVendor && -r $card/device/../idProduct ]] || continue
+        if [[ $(<"$card/device/../idVendor") == ${vendor} && $(<"$card/device/../idProduct") == ${product} ]]; then
+          cardNumber=$(<"$card/number")
+          return 0
+        fi
+      done
+      return 1
+    }
+    announced=
+    until find_card; do
+      if [[ -z $announced ]]; then
+        echo "voice-satellite: waiting for a sound card with USB ID ${cfg.microphone.usbId}" >&2
+        announced=1
       fi
+      ${coreutils}/bin/sleep 3
     done
-    echo "voice-satellite: no sound card with USB ID ${cfg.microphone.usbId}" >&2
-    exit 1
+    exec ${alsa}/bin/arecord -D "plughw:$cardNumber,0" -r 16000 -c 1 -f S16_LE -t raw -q
   '';
 
   runtimeDir = "/run/voice-satellite";
@@ -155,13 +175,16 @@ in
 
     microphone.volumeMultiplier = mkOption {
       type = types.numbers.positive;
-      default = 1.0;
+      default = if cfg.microphone.usbId == "1415:2000" then 6.0 else 1.0;
+      defaultText = lib.literalExpression ''if microphone.usbId == "1415:2000" then 6.0 else 1.0'';
       example = 6.0;
       description = ''
         Gain the satellite applies to the microphone audio (wyoming-satellite
         --mic-volume-multiplier). The PlayStation Eye's speech peaks near -27 dBFS
         (rms ~230 of 32768), too quiet for speech-to-text to recognise a command
-        although the wake word still triggers; a value around 6 fixes that.
+        although the wake word still triggers; a value around 6 fixes that, so
+        that is the default for it, and every satellite works with one out of
+        the box. Another microphone keeps a gain of 1.
       '';
     };
 

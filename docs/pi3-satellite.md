@@ -165,3 +165,25 @@ The conversation agent runs on the server (`lanbat.deployment.haLlm`, see
 `services/llama-cpp.nix`), and so do speech-to-text and Piper. The Pi 3 only streams the
 microphone and plays the audio it is sent, so its 1 GB of RAM and slow CPU are not in the
 path of how fast it answers.
+
+## 7. The same satellite on every machine
+
+The satellite is the same on the server, a Pi 3, a Pi 4 and a Pi 5, and each one is ready
+for a PlayStation Eye before it is plugged in. The satellite runs, Home Assistant knows it,
+and it waits quietly (one log line, no restart loop) until the camera's USB ID appears;
+plug it in at any time, or move it, and the satellite listens. The microphone gain the Eye
+needs is the default, so there is nothing to set per host.
+
+| Machine | How it gets a satellite | Speaker |
+|---|---|---|
+| Server | `lanbat.voiceSatellite.enable = true;` in the server's `modules` (or a place in `voiceRooms`) | the onboard codec, `lanbat.services.wyoming.settings.satellite.speaker` |
+| Pi 5 (`storage-pi`) | the `voice` plugin | PipeWire, `lanbat.speakers.output` |
+| Pi 4 (`voice-pi`, `platform = "raspberry-pi-4"`) | the `voice` plugin | PipeWire, `lanbat.speakers.output` |
+| Pi 3 (`voice-pi`, `platform = "raspberry-pi-3"`) | the `voice` plugin | PipeWire, `lanbat.speakers.output` |
+
+Home Assistant registers a satellite for the server, the storage Pi and every `voice-pi`
+host when the server is deployed. Give each satellite its own `name` (`lanbat.voiceSatellite.name`),
+and put each in the area it is in: two satellites that hear the same "hey nabu" make
+Home Assistant discard one of them ("Duplicate wake-up detected"), so two in one room
+fight over every command. Keep the satellites in different rooms, or leave all but one
+switched off in a shared room.

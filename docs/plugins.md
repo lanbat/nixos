@@ -129,7 +129,7 @@ roles' own, and a role no plugin of the host declares fails validation. The
 role module can start from what every built-in role shares, the hostname,
 static address and firewall baseline, by importing
 `inputs.lanbat.nixosModules.lanbat-role-common`. The Raspberry Pi hardware comes
-with `platform = "raspberry-pi-3"` or `"raspberry-pi-5"`, whatever the role.
+with `platform = "raspberry-pi-3"`, `"raspberry-pi-4"` or `"raspberry-pi-5"`, whatever the role.
 
 ### Service settings
 

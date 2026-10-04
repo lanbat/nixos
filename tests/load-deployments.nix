@@ -121,6 +121,15 @@ let
         "mkHost: platform raspberry-pi-3 must import hosts/pi3/hardware.nix and not the Pi 5's"
     )
     (
+      if
+        lib.elem ../hosts/pi4/hardware.nix (modulesOf "pi-storage" { platform = "raspberry-pi-4"; })
+        && !(lib.elem piHardware (modulesOf "pi-storage" { platform = "raspberry-pi-4"; }))
+      then
+        null
+      else
+        "mkHost: platform raspberry-pi-4 must import hosts/pi4/hardware.nix and not the Pi 5's"
+    )
+    (
       if lib.elem piHardware (modulesOf "pi-storage" { platform = "raspberry-pi"; }) then
         null
       else

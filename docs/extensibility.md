@@ -195,6 +195,7 @@ filesystems), whatever its role:
 | `platform` | Imports | Board |
 |---|---|---|
 | `raspberry-pi-3` | `hosts/pi3/hardware.nix` | Pi 3 B/B+ booted from the stock NixOS aarch64 SD image (see [pi3-satellite.md](pi3-satellite.md)) |
+| `raspberry-pi-4` | `hosts/pi4/hardware.nix` | Pi 4, built with nixos-raspberrypi |
 | `raspberry-pi-5` | `hosts/pi5/hardware.nix` | Pi 5, built with nixos-raspberrypi |
 
 `raspberry-pi` still works as an alias for `raspberry-pi-5`. Each board has its own

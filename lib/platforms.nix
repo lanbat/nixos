@@ -30,6 +30,12 @@ let
       hardware = root + "/hosts/pi3/hardware.nix";
       nixosRaspberrypi = false;
     };
+    # nixos-raspberrypi's kernel and firmware, like the Pi 5.
+    raspberry-pi-4 = {
+      system = "aarch64-linux";
+      hardware = root + "/hosts/pi4/hardware.nix";
+      nixosRaspberrypi = true;
+    };
     raspberry-pi-5 = {
       system = "aarch64-linux";
       hardware = root + "/hosts/pi5/hardware.nix";
