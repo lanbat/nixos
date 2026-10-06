@@ -1,6 +1,6 @@
 # plugins/voice/default.nix
 #
-# Wyoming voice satellite plugin for Pi hosts.
+# Voice satellite plugin for Pi hosts (Wyoming or Linux Voice Assistant).
 {
   name = "lanbat-voice";
   version = 2;

@@ -1,34 +1,17 @@
 # modules/core/voice-satellite.nix
 #
-# Wyoming voice satellite: a microphone and a speaker for Home Assistant's
-# Assist, on any host: the server, a Pi 3, 4 or 5. HA on the server connects to
-# it, runs the audio through the "Voice" pipeline (wake word, speech-to-text,
-# conversation agent, text-to-speech; services/wyoming.nix and
-# services/home-assistant.nix) and sends the spoken reply back.
+# Voice satellite for Home Assistant Assist on any host: the server, a Pi 3, 4
+# or 5. Two backends:
 #
-# Microphone
-# ----------
-# Found by its USB ID each time capture starts, so its ALSA card number
-# doesn't matter and it can be unplugged and plugged back in. The default is
-# the PlayStation Eye, a webcam with a 4-microphone array, with the gain it
-# needs. The satellite runs, and is registered in Home Assistant, before the
-# microphone is plugged in: it waits for it quietly and listens once it is.
+#   wyoming — streams audio to Home Assistant; wake word and STT run on the
+#     server (services/wyoming.nix). Supports room replies via voice_reply.
 #
-# Speaker
-# -------
-# Replies play to an ALSA device. A hardware device plays nothing else at the
-# same time; the Pi plays replies through its PipeWire instead, which mixes
-# them with Snapcast and the TV (modules/pi/audio.nix).
+#   lva — Linux Voice Assistant (OHF-Voice): ESPHome protocol on port 6053,
+#     local wake word and continued conversation after a question. Registered
+#     in Home Assistant as an ESPHome device (home-assistant-post-setup).
 #
-# Replies in the room
-# -------------------
-# A satellite with a room (lanbat.voiceRooms) hands each reply to Home
-# Assistant's voice_reply script (services/home-assistant.nix), which speaks
-# it as an announcement on the Music Assistant players in that area; Music
-# Assistant turns their music down meanwhile. The satellite then skips its
-# own copy, so a satellite that is also a Snapcast speaker (the Pi) doesn't
-# say it twice. With no players in the room, or Home Assistant out of reach,
-# the reply plays on the satellite's speaker.
+# Microphone and speaker behaviour match the Wyoming path unless noted in
+# docs/pi3-satellite.md.
 {
   config,
   lib,
@@ -40,120 +23,38 @@ let
   inherit (lib) mkOption types;
 
   cfg = config.lanbat.voiceSatellite;
-  alsa = pkgs.alsa-utils;
-  coreutils = pkgs.coreutils;
-  # The module always adds webrtc-noise-gain, for auto gain and noise
-  # suppression. Its bundled WebRTC code uses uint32_t without including
-  # <cstdint>, which GCC 15 rejects, on x86_64 and aarch64 alike. A nixpkgs
-  # that has fixed it carries a patch, and then the unchanged package comes
-  # from the binary cache instead of a compile: the Pi 5's (nixos-raspberrypi's
-  # newer pin) does, while the server's and the Pi 3's nixpkgs do not yet.
-  # Until a pin has the patch, the workaround includes stdint.h, rather than
-  # <cstdint>, because the flags reach its C files too. The result is not in
-  # the binary cache, so a host compiles it: about two minutes on the server,
-  # much longer on a Pi 3.
-  webrtcNoiseGain = pkgs.python3Packages.webrtc-noise-gain;
-  webrtcFixedUpstream = (webrtcNoiseGain.patches or [ ]) != [ ];
-  satellitePackage =
-    if webrtcFixedUpstream then
-      pkgs.wyoming-satellite
-    else
-      pkgs.wyoming-satellite.overridePythonAttrs (old: {
-        optional-dependencies = old.optional-dependencies // {
-          webrtc = [
-            (webrtcNoiseGain.overridePythonAttrs (webrtcOld: {
-              env = (webrtcOld.env or { }) // {
-                NIX_CFLAGS_COMPILE = toString [
-                  (webrtcOld.env.NIX_CFLAGS_COMPILE or "")
-                  "-include stdint.h"
-                ];
-              };
-            }))
-          ];
-        };
-      });
 
-  vendor = lib.head (lib.splitString ":" cfg.microphone.usbId);
-  product = lib.last (lib.splitString ":" cfg.microphone.usbId);
-
-  # 16 kHz mono, which Wyoming's speech-to-text expects. Bash builtins only,
-  # so it doesn't depend on the unit's PATH.
-  #
-  # Without the microphone it waits, silently, until one is plugged in, instead
-  # of failing: the satellite restarts a failing capture command every couple
-  # of seconds, which would fill the journal (on an SD card) and flood the log,
-  # while a satellite waiting here is simply deaf. Plug the microphone in and
-  # it starts listening; unplug it and capture ends, and the wait begins again.
-  micCommand = pkgs.writeShellScript "voice-satellite-mic" ''
-    find_card() {
-      local card
-      for card in /sys/class/sound/card*; do
-        [[ -r $card/device/../idVendor && -r $card/device/../idProduct ]] || continue
-        if [[ $(<"$card/device/../idVendor") == ${vendor} && $(<"$card/device/../idProduct") == ${product} ]]; then
-          cardNumber=$(<"$card/number")
-          return 0
-        fi
-      done
-      return 1
-    }
-    announced=
-    until find_card; do
-      if [[ -z $announced ]]; then
-        echo "voice-satellite: waiting for a sound card with USB ID ${cfg.microphone.usbId}" >&2
-        announced=1
-      fi
-      ${coreutils}/bin/sleep 3
-    done
-    exec ${alsa}/bin/arecord -D "plughw:$cardNumber,0" -r 16000 -c 1 -f S16_LE -t raw -q
-  '';
-
-  runtimeDir = "/run/voice-satellite";
-  # Present while the room's speakers announce the current reply.
-  announced = "${runtimeDir}/announced";
-
-  # Runs for each reply, with its text on stdin, before its audio arrives.
-  replyCommand = pkgs.writeShellScript "voice-satellite-reply" ''
-    ${coreutils}/bin/rm -f ${announced}
-    message=$(${coreutils}/bin/cat)
-    [[ -n $message ]] || exit 0
-    if [[ "${toString cfg.alwaysPlayLocally}" == "1" ]]; then
-      exit 0
-    fi
-    if [[ ! -s ${runtimeDir}/ha-token ]]; then
-      echo "voice-satellite: no Home Assistant token (ha-voice-token.age), playing the reply here" >&2
-      exit 0
-    fi
-    # A header file, not an argument, keeps the token out of the process list.
-    (umask 077 && printf 'Authorization: Bearer %s\n' "$(<${runtimeDir}/ha-token)" > ${runtimeDir}/auth-header)
-    body=$(${lib.getExe pkgs.jq} -n --arg message "$message" --arg room ${lib.escapeShellArg cfg.room} \
-      '{message: $message, room: $room}')
-    if ! response=$(${lib.getExe pkgs.curl} -sS --fail --max-time 5 \
-      ${lib.optionalString (cfg.homeAssistant.caFile != null) "--cacert ${cfg.homeAssistant.caFile}"} \
-      -H @${runtimeDir}/auth-header -H 'Content-Type: application/json' --data "$body" \
-      '${cfg.homeAssistant.url}/api/services/script/voice_reply?return_response'); then
-      echo "voice-satellite: Home Assistant didn't take the reply, playing it here" >&2
-      exit 0
-    fi
-    players=$(${lib.getExe pkgs.jq} -r '.service_response.players // 0' <<<"$response")
-    if (( players > 0 )); then
-      : > ${announced}
-    fi
-  '';
-
-  # Plays a reply, unless the room's speakers announce it. The satellite starts
-  # this for each reply.
-  soundCommand = pkgs.writeShellScript "voice-satellite-play" ''
-    if [[ -e ${announced} ]]; then
-      ${coreutils}/bin/rm -f ${announced}
-      exec ${coreutils}/bin/cat > /dev/null
-    fi
-    # piper's replies are 22.05 kHz mono.
-    exec ${alsa}/bin/aplay -D ${cfg.speaker} -r 22050 -c 1 -f S16_LE -t raw -q
-  '';
+  satellitePort =
+    if cfg.backend == "lva" then cfg.lva.port else lib.toInt (lib.last (lib.splitString ":" cfg.uri));
 in
 {
+  imports = [
+    ./voice-satellite-wyoming.nix
+    ./voice-satellite-lva.nix
+    ./voice-satellite-diagnostics.nix
+    ./voice-satellite-audio.nix
+  ];
+
   options.lanbat.voiceSatellite = {
-    enable = lib.mkEnableOption "a Wyoming voice satellite for Home Assistant";
+    enable = lib.mkEnableOption "a voice satellite for Home Assistant Assist";
+
+    backend = mkOption {
+      type = types.enum [
+        "wyoming"
+        "lva"
+      ];
+      default = "wyoming";
+      description = ''
+        Which satellite implementation to run. Only one runs per host.
+
+        "wyoming" keeps today's behaviour: wyoming-satellite, Home Assistant
+        detects the wake word on the server, port 10700.
+
+        "lva" runs Linux Voice Assistant: local wake word, ESPHome on port
+        6053, follow-up listening after a question. Home Assistant still uses
+        the same Voice pipeline for speech-to-text, conversation and TTS.
+      '';
+    };
 
     name = mkOption {
       type = types.str;
@@ -164,7 +65,277 @@ in
     uri = mkOption {
       type = types.str;
       example = "tcp://0.0.0.0:10700";
-      description = "Address the satellite listens on. Home Assistant connects to it.";
+      description = ''
+        Address the Wyoming satellite listens on (backend "wyoming" only). Home
+        Assistant connects to it.
+      '';
+    };
+
+    lva = {
+      port = mkOption {
+        type = types.port;
+        default = 6053;
+        description = "TCP port Linux Voice Assistant listens on (ESPHome API).";
+      };
+
+      networkInterface = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "eth0";
+        description = ''
+          Interface LVA advertises and binds on (--network-interface). Null
+          uses this host's deploy networking.interface.
+        '';
+      };
+
+      wakeModels = mkOption {
+        type = types.addCheck (types.listOf types.str) (l: l != [ ] && lib.length l <= 2) // {
+          description = "list of one or two wake word ids";
+        };
+        default = [ "okay_nabu" ];
+        example = [
+          "okay_nabu"
+          "hey_jarvis"
+        ];
+        description = ''
+          The wake words LVA listens for: one or two model ids (LVA's limit).
+          The first is also --wake-model. They are written into LVA's
+          prefs.json on every start, so this setting wins over a choice made
+          in Home Assistant's "Wake word" selects, which lasts until the next
+          restart.
+
+          The default ``okay_nabu`` is Home Assistant's own wake word, one of
+          the microWakeWord models bundled with LVA (``hey_jarvis``,
+          ``hey_mycroft``, ``alexa``, ...). Each costs about 7 % of one Pi 3
+          core.
+
+          ``hey_nabu`` exists only as an openWakeWord model (the Wyoming
+          pipeline's, pkgs/lva-wakewords-hey-nabu). On the Pi 3 it took 109 %
+          of a core and ran at 0.9x realtime, falling behind the microphone
+          (measured 2026-10-06), so hosts/pi3/hardware.nix warns against it;
+          a faster CPU runs it.
+        '';
+      };
+
+      wakeModel = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        visible = false;
+        description = "Deprecated: one wake word id; sets wakeModels to that one word.";
+      };
+
+      extraWakeWordDir = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = ''
+          Extra directory of wake word .tflite and .json manifests
+          (--wake-word-dir). When ``wakeModels`` lists ``hey_nabu``, the module
+          adds pkgs/lva-wakewords-hey-nabu automatically unless you override
+          this.
+        '';
+      };
+
+      continueConversationDelay = mkOption {
+        type = types.float;
+        default = 0.65;
+        description = ''
+          Seconds after TTS finishes before the microphone reopens for a
+          follow-up when Home Assistant sets ``continue_conversation``
+          (--continue-conversation-delay). Increase slightly if the mic picks
+          up the tail of the assistant's reply; decrease for snappier turn-taking.
+        '';
+      };
+
+      listenDuringWakeSound = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Start streaming speech to Home Assistant while the wake chime still
+          plays (--listen-during-wake-sound). Works best with echo cancellation
+          enabled so the chime is not transcribed as speech.
+        '';
+      };
+
+      stopWord = {
+        model = mkOption {
+          type = types.str;
+          default = "stop";
+          description = ''
+            Stop-word model id bundled with LVA (--stop-model). While TTS or a
+            timer is playing, saying this word stops playback (barge-in).
+          '';
+        };
+      };
+
+      snapcastDucking = {
+        enable = mkOption {
+          type = types.bool;
+          default = true;
+          description = ''
+            Fade Snapcast down while the assistant listens or speaks, through a
+            follow-up turn, and back up when the conversation ends (Pi hosts
+            with PipeWire and snapclient). Follows LVA's peripheral WebSocket
+            (``peripheralPort``); see ``disablePeripheralApi``.
+          '';
+        };
+
+        volume = mkOption {
+          type = types.str;
+          default = "0.25";
+          example = "0.25";
+          description = "Snapcast stream volume while the assistant thinks and answers, as a fraction of the volume before.";
+        };
+
+        listenVolume = mkOption {
+          type = types.str;
+          default = "0.05";
+          example = "0.1";
+          description = ''
+            Snapcast stream volume while the microphone is open (after the wake
+            word, and in a follow-up turn), as a fraction of the volume before.
+            Near silence on purpose: a speech station at a quarter of its
+            volume is still clear speech a metre from the speaker, and ends up
+            in the transcript with the command.
+          '';
+        };
+
+        fadeDown = mkOption {
+          type = types.float;
+          default = 0.2;
+          description = "Seconds the music takes to fade down when the wake word is heard.";
+        };
+
+        fadeUp = mkOption {
+          type = types.float;
+          default = 0.8;
+          description = "Seconds the music takes to fade back up when the conversation ends.";
+        };
+      };
+
+      peripheralPort = mkOption {
+        type = types.port;
+        default = 6055;
+        description = ''
+          Port of LVA's peripheral WebSocket (--peripheral-port), which the
+          Snapcast ducking follows. It listens on the loopback only: anyone who
+          reaches it can start listening, mute the microphone or stop a reply.
+        '';
+      };
+
+      micVolume = mkOption {
+        type = types.ints.between 1 100;
+        default = lib.min 100 (lib.max 1 (lib.floor (cfg.microphone.volumeMultiplier * (100.0 / 6.0))));
+        defaultText = lib.literalExpression "min 100 (max 1 (floor (microphone.volumeMultiplier * (100.0 / 6.0))))";
+        description = "Microphone volume for LVA (--mic-volume, 1–100).";
+      };
+
+      micAutoGain = mkOption {
+        type = types.ints.between 0 31;
+        default = if cfg.microphone.usbId == "1415:2000" then 1 else 0;
+        defaultText = lib.literalExpression ''if microphone.usbId == "1415:2000" then 1 else 0'';
+        description = "WebRTC auto gain for LVA (--mic-auto-gain).";
+      };
+
+      micNoiseSuppression = mkOption {
+        type = types.ints.between 0 4;
+        default = if cfg.microphone.usbId == "1415:2000" then 2 else 0;
+        defaultText = lib.literalExpression ''if microphone.usbId == "1415:2000" then 2 else 0'';
+        description = "WebRTC noise suppression for LVA (--mic-noise-suppression, 0–4).";
+      };
+
+      audioInputDevice = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "Sony Playstation Eye Analog Surround 4.0";
+        description = ''
+          Pulse/ALSA input name for LVA (--audio-input-device). Null uses the
+          PlayStation Eye name when microphone.usbId is 1415:2000, otherwise
+          LVA picks the default device.
+        '';
+      };
+
+      audioOutputDevice = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "pulse/alsa_output.platform-sound.stereo-fallback";
+        description = ''
+          Output device for replies (--audio-output-device). Null uses LVA's
+          default. On Pis with PipeWire, null is usually enough.
+        '';
+      };
+
+      audioInputChannels = mkOption {
+        type = types.enum [
+          1
+          2
+        ];
+        default = 1;
+        description = "Mic channels to capture (--audio-input-channels). Use 1 on the Pi 3.";
+      };
+
+      startListeningSound = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = "Sound when manual listen starts (--start-listening-sound). Null keeps LVA's default.";
+      };
+
+      disablePeripheralApi = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Disable LVA's peripheral WebSocket (``peripheralPort``, loopback
+          only). Set false to attach HAT buttons or LEDs. Snapcast ducking
+          keeps the API enabled even when this is true.
+        '';
+      };
+    };
+
+    echoCancellation = {
+      enable = mkOption {
+        type = types.bool;
+        default = true;
+        description = ''
+          Route the microphone through PipeWire/PulseAudio WebRTC echo
+          cancellation before LVA captures it. Lets the wake and stop words
+          work during playback and supports ``listenDuringWakeSound``. Needs
+          system-wide PipeWire (``modules/pi/audio.nix``). On a Pi 3, expect
+          roughly 10–20% extra CPU; disable here if the device becomes sluggish.
+        '';
+      };
+
+      pulseSourceName = mkOption {
+        type = types.str;
+        default = "lanbat_aec_mic";
+        example = "lanbat_aec_mic";
+        description = ''
+          Pulse/ALSA name of the echo-cancelled capture source LVA should use
+          as ``lva.audioInputDevice`` when ``echoCancellation.enable`` is true.
+        '';
+      };
+
+      pulseSinkName = mkOption {
+        type = types.str;
+        default = "lanbat_aec_playback";
+        example = "lanbat_aec_playback";
+        description = ''
+          PipeWire echo-cancel virtual sink (``sink.props`` node name). When
+          ``echoCancellation.enable`` is true, LVA plays replies here so WebRTC
+          AEC gets a reference of assistant TTS. Snapcast and other apps keep
+          the normal default sink unless you route them too.
+        '';
+      };
+
+      includeMusic = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Experimental: play Snapcast into the echo-cancel sink as well, so
+          the music is part of the reference and WebRTC AEC takes it out of
+          the microphone too, not only the assistant's own voice. Costs CPU on
+          every second of music (measure it on a Pi 3 first). Needs
+          ``echoCancellation.enable``.
+        '';
+      };
     };
 
     microphone.usbId = mkOption {
@@ -179,26 +350,35 @@ in
       defaultText = lib.literalExpression ''if microphone.usbId == "1415:2000" then 6.0 else 1.0'';
       example = 6.0;
       description = ''
-        Gain the satellite applies to the microphone audio (wyoming-satellite
-        --mic-volume-multiplier). The PlayStation Eye's speech peaks near -27 dBFS
-        (rms ~230 of 32768), too quiet for speech-to-text to recognise a command
-        although the wake word still triggers; a value around 6 fixes that, so
-        that is the default for it, and every satellite works with one out of
-        the box. Another microphone keeps a gain of 1.
+        Gain the Wyoming satellite applies to the microphone audio
+        (--mic-volume-multiplier). For backend "lva", this value is mapped to
+        lva.micVolume unless you set lva.micVolume yourself. The PlayStation
+        Eye's speech is quiet; 6.0 is the default for it.
       '';
     };
 
     speaker = mkOption {
       type = types.str;
       example = "plughw:CARD=PCH,DEV=0";
-      description = "ALSA device that plays the replies. aplay -L lists them.";
+      description = "ALSA device that plays Wyoming replies (backend \"wyoming\"). aplay -L lists them.";
     };
 
     mixer = mkOption {
       type = types.listOf types.str;
       default = [ ];
       example = [ "-c PCH sset Master 80% unmute" ];
-      description = "amixer arguments applied before the satellite starts, for example to unmute the speaker.";
+      description = "amixer arguments applied before the satellite starts (either backend).";
+    };
+
+    playMusic = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Whether this host's speaker also plays music: a Snapcast client
+        (lanbat.snapclient.enable) makes it a Music Assistant player in the
+        satellite's room. False keeps it to spoken replies. The Pi roles run
+        the client regardless.
+      '';
     };
 
     room = mkOption {
@@ -206,9 +386,10 @@ in
       default = null;
       example = "Living Room";
       description = ''
-        Home Assistant area the satellite is in. Its replies then play on the
-        area's Music Assistant players, and on its own speaker only when the
-        area has none.
+        Home Assistant area the satellite is in. With backend "wyoming", replies
+        can play on the area's Music Assistant players (see alwaysPlayLocally).
+        LVA plays TTS on the device; room hand-off via voice_reply is not wired
+        for backend "lva".
       '';
     };
 
@@ -216,10 +397,8 @@ in
       type = types.bool;
       default = false;
       description = ''
-        Play the pipeline's Piper audio on this satellite immediately, instead
-        of handing the reply to Home Assistant's voice_reply script for Music
-        Assistant room speakers. Skips an HTTPS round trip and a second TTS
-        pass, which cuts perceived latency.
+        Wyoming only: play Piper audio on this satellite immediately instead of
+        handing the reply to voice_reply for Music Assistant room speakers.
       '';
     };
 
@@ -228,9 +407,8 @@ in
       default = null;
       example = "/nix/store/…-voice-satellite-awake-chime/awake.wav";
       description = ''
-        WAV file played on the speaker when Home Assistant detects the wake word
-        (wyoming-satellite --awake-wav). Use a short clip (~0.2 s) at 22.05 kHz
-        mono so the mic is not muted for long before command capture.
+        Short sound when listening starts. Wyoming: --awake-wav (22.05 kHz mono
+        WAV). LVA: --wakeup-sound (bundled FLAC by default).
       '';
     };
 
@@ -238,7 +416,7 @@ in
       url = mkOption {
         type = types.str;
         example = "https://ha.example.com";
-        description = "Home Assistant's address, for handing replies to the room's speakers.";
+        description = "Home Assistant's address (Wyoming room replies).";
       };
 
       caFile = mkOption {
@@ -249,76 +427,47 @@ in
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    users.groups.wyoming-satellite = { };
-    users.users.wyoming-satellite = {
-      isSystemUser = true;
-      group = "wyoming-satellite";
-    };
-
-    # The satellites' Home Assistant token: a long-lived access token of a
-    # Home Assistant user, copied for the satellite when it starts.
-    lanbat.services.voice-satellite.secrets.ha-voice-token = {
-      enable = cfg.room != null;
-      owner = "root";
-    };
-
-    # The satellite listens and Home Assistant connects to it, so the satellite
-    # is the provider of this edge. The port comes from cfg.uri rather than a
-    # literal, the same way services/home-assistant.nix reads it.
-    lanbat.services.voice-satellite.endpoint = {
-      scheme = "tcp";
-      port = lib.toInt (lib.last (lib.splitString ":" cfg.uri));
-    };
-
-    services.wyoming.satellite = {
-      enable = true;
-      package = satellitePackage;
-      inherit (cfg) name uri;
-      user = "wyoming-satellite";
-      group = "wyoming-satellite";
-      microphone = {
-        command = "${micCommand}";
-        # Home Assistant runs its own VAD and optional noise processing on the
-        # stream; satellite-side WebRTC gain/suppression adds latency only.
-        autoGain = 0;
-        noiseSuppression = 0;
+  config = lib.mkMerge [
+    {
+      lanbat.settingsSchema.voice-satellite = {
+        options = {
+          backend = mkOption {
+            type = types.enum [
+              "wyoming"
+              "lva"
+            ];
+            default = "wyoming";
+            description = "Satellite backend on this host; copied from lanbat.voiceSatellite.backend for Home Assistant registration.";
+          };
+          displayName = mkOption {
+            type = types.str;
+            default = "Voice satellite";
+            description = "Device name Home Assistant shows; copied from lanbat.voiceSatellite.name.";
+          };
+        };
       };
-      # Home Assistant detects the wake word, so the satellite streams all the
-      # time. Its own VAD can't run here anyway: pysilero-vad takes 512-sample
-      # chunks only, and the webrtc processing re-chunks the audio.
-      vad.enable = false;
-      sound.command = "${soundCommand}";
-      extraArgs =
-        lib.optionals (cfg.microphone.volumeMultiplier != 1.0) [
-          "--mic-volume-multiplier"
-          (toString cfg.microphone.volumeMultiplier)
-        ]
-        ++ lib.optionals (cfg.room != null && !cfg.alwaysPlayLocally) [
-          "--synthesize-command"
-          "${replyCommand}"
-        ]
-        ++ lib.optionals (cfg.awakeSound != null) [
-          "--awake-wav"
-          cfg.awakeSound
-        ];
-    };
+    }
+    (lib.mkIf (cfg.lva.wakeModel != null) {
+      lanbat.voiceSatellite.lva.wakeModels = [ cfg.lva.wakeModel ];
+      warnings = [
+        "lanbat.voiceSatellite.lva.wakeModel is deprecated; set lanbat.voiceSatellite.lva.wakeModels = [ \"${cfg.lva.wakeModel}\" ] instead."
+      ];
+    })
+    (lib.mkIf cfg.enable {
+      lanbat.services.voice-satellite.secrets.ha-voice-token = {
+        enable = cfg.room != null && cfg.backend == "wyoming";
+        owner = "root";
+      };
 
-    systemd.services.wyoming-satellite.serviceConfig = {
-      # The module hides /dev, expecting PulseAudio or PipeWire; this satellite
-      # uses the ALSA devices directly.
-      PrivateDevices = lib.mkForce false;
-      DeviceAllow = lib.mkForce [ "char-alsa rw" ];
-      # As root (+). A missing card, or a missing token, doesn't stop the
-      # satellite (-); without the token, replies play on its own speaker.
-      # systemd reads % as a specifier.
-      ExecStartPre =
-        map (args: "-+${alsa}/bin/amixer -q ${lib.replaceStrings [ "%" ] [ "%%" ] args}") cfg.mixer
-        ++
-          lib.optional (cfg.room != null)
-            "-+${coreutils}/bin/install -m 0400 -o wyoming-satellite -g wyoming-satellite ${config.lanbat.secrets.ha-voice-token.path} ${runtimeDir}/ha-token";
-      RuntimeDirectory = "voice-satellite";
-      RuntimeDirectoryMode = "0700";
-    };
-  };
+      lanbat.services.voice-satellite.settings = {
+        backend = lib.mkDefault cfg.backend;
+        displayName = lib.mkDefault cfg.name;
+      };
+
+      lanbat.services.voice-satellite.endpoint = {
+        scheme = "tcp";
+        port = satellitePort;
+      };
+    })
+  ];
 }

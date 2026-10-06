@@ -107,6 +107,37 @@ let
     else
       config.lanbat.endpointHost "voice-satellite" storageKey;
 
+  voiceSatelliteEntry = config.lanbat.endpoints.voice-satellite or null;
+  voiceSatelliteHosts = voiceSatelliteEntry.hosts or [ ];
+  voiceSatelliteRegistrations = voiceSatelliteEntry.registrations or { };
+  voiceSatellitePort = voiceSatelliteEntry.endpoint.port or 10700;
+  hasLvaSatellite = lib.any (
+    hostKey: (voiceSatelliteRegistrations.${hostKey}.backend or "wyoming") == "lva"
+  ) voiceSatelliteHosts;
+  voiceSatelliteRegistrationLine =
+    hostKey:
+    let
+      reg =
+        voiceSatelliteRegistrations.${hostKey} or {
+          backend = "wyoming";
+          displayName = hostKey;
+        };
+      # This host's own satellite: Wyoming listens on the loopback, LVA on the
+      # LAN address only.
+      address =
+        if hostKey != config.lanbat.hostKey then
+          config.lanbat.endpointHost "voice-satellite" hostKey
+        else if reg.backend == "lva" then
+          config.lanbat.hosts.${hostKey}.networking.ip
+        else
+          "127.0.0.1";
+    in
+    "${hostKey}|${address}|${toString voiceSatellitePort}|${reg.backend}|${reg.displayName}";
+  # One line per satellite: names contain spaces.
+  voiceSatelliteRegistrationsEnv = lib.concatStringsSep "\n" (
+    map voiceSatelliteRegistrationLine voiceSatelliteHosts
+  );
+
   # Home Assistant on the loopback: what Music Assistant and the local tools
   # call, rather than the public URL behind forward auth.
   internalUrl = "http://127.0.0.1:${toString config.lanbat.services.home-assistant.port}";
@@ -365,8 +396,16 @@ in
         ${lib.optionalString (config.lanbat.hasService "music-assistant") ''export MUSIC_ASSISTANT_URL="${localUrl "music-assistant" ""}"''}
         export PI_HOST="${piHost}"
         export EXTRA_SATELLITES="${lib.concatStringsSep " " extraSatellites}"
+        export SERVER_HOST_KEY="${config.lanbat.hostKey}"
+        export PRIMARY_STORAGE_KEY="${if storageKey == null then "" else storageKey}"
+        export VOICE_SATELLITE_REGISTRATIONS=${lib.escapeShellArg voiceSatelliteRegistrationsEnv}
         ${lib.optionalString satellite.enable ''
-          export LOCAL_SATELLITE_PORT="${lib.last (lib.splitString ":" satellite.uri)}"
+          export LOCAL_SATELLITE_PORT="${
+            if satellite.backend == "lva" then
+              toString satellite.lva.port
+            else
+              lib.last (lib.splitString ":" satellite.uri)
+          }"
         ''}
         export PIPELINE_STT_LANGUAGE="${config.services.wyoming.faster-whisper.servers.main.language}"
         export PIPELINE_TTS_LANGUAGE="${lib.head (lib.splitString "-" piper.voice)}"
@@ -431,6 +470,11 @@ in
         "ffmpeg"
         # Wyoming voice assistant protocol
         "wyoming"
+      ]
+      ++ lib.optionals hasLvaSatellite [
+        "esphome"
+      ]
+      ++ [
         "music_assistant"
         "qbittorrent"
         # Bluetooth LE sensors.  "bluetooth" also relaxes the module's systemd
@@ -468,7 +512,12 @@ in
           external_url = "https://ha.${domain}";
           # Music Assistant fetches tts_proxy URLs server-side; use loopback so
           # announcements are not blocked by ip_ban when MA calls 192.168.1.10.
-          internal_url = internalUrl;
+          # LVA satellites fetch each spoken reply from the URL Home Assistant
+          # builds from internal_url, so with one in the profile it must be an
+          # address other hosts can reach: the HTTPS one through Caddy, where
+          # /api/* (the replies' /api/tts_proxy/) skips forward auth. Port 8123
+          # stays closed to the LAN.
+          internal_url = if hasLvaSatellite then "https://ha.${domain}" else internalUrl;
         };
 
         # Voice replies in a room (modules/core/voice-satellite.nix). A satellite

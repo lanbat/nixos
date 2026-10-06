@@ -94,6 +94,22 @@ let
               hostnames = lib.listToAttrs (
                 map (hostName: lib.nameValuePair hostName hosts.${hostName}.networking.hostname) hostNames
               );
+              registrations =
+                if svcName == "voice-satellite" then
+                  lib.listToAttrs (
+                    map (
+                      hostName:
+                      let
+                        settings = described.${hostName}.${svcName}.settings or { };
+                      in
+                      lib.nameValuePair hostName {
+                        backend = settings.backend or "wyoming";
+                        displayName = settings.displayName or hostName;
+                      }
+                    ) hostNames
+                  )
+                else
+                  { };
               inherit (first) endpoint account consumes;
               # The storage Pi exports its drives to the hosts of the services
               # that use them, which it can only learn from here.

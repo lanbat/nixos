@@ -92,6 +92,20 @@ let
     in
     (lanbatLib.mkProfile "example" deploy).configurations.example-server.config;
 
+  # Merge modules into named hosts (voice-satellite backend must match on every host).
+  hostsWithModules =
+    hostModules:
+    exampleDeploy
+    // {
+      hosts = lib.mapAttrs (
+        hostName: host:
+        host
+        // lib.optionalAttrs (hostModules ? ${hostName}) {
+          modules = (host.modules or [ ]) ++ hostModules.${hostName};
+        }
+      ) exampleDeploy.hosts;
+    };
+
   failedAssertions = config: map (a: a.message) (lib.filter (a: !a.assertion) config.assertions);
 
   base = serverWith [ ];
@@ -169,6 +183,74 @@ let
   ];
 
   wyomingBadVoice = serverWith [ { lanbat.services.wyoming.settings.textToSpeech.voice = "alan"; } ];
+
+  lvaServer =
+    (lanbatLib.mkProfile "example" (hostsWithModules {
+      server = [
+        {
+          lanbat.voiceSatellite = {
+            backend = "lva";
+            lva.continueConversationDelay = 0.8;
+          };
+        }
+      ];
+      pi-storage = [
+        { lanbat.voiceSatellite.backend = "lva"; }
+      ];
+      pi-voice = [
+        { lanbat.voiceSatellite.backend = "lva"; }
+      ];
+    })).configurations.example-server.config;
+
+  # The example server's LVA satellite with these settings on top.
+  lvaServerWith =
+    settings:
+    (lanbatLib.mkProfile "example" (hostsWithModules {
+      server = [
+        {
+          lanbat.voiceSatellite = {
+            backend = "lva";
+          }
+          // settings;
+        }
+      ];
+      pi-storage = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+      pi-voice = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+    })).configurations.example-server.config;
+  lvaTwoWords = lvaServerWith {
+    lva.wakeModels = [
+      "okay_nabu"
+      "hey_nabu"
+    ];
+  };
+  lvaOldOption = lvaServerWith { lva.wakeModel = "hey_jarvis"; };
+  lvaThreeWords = lvaServerWith {
+    lva.wakeModels = [
+      "okay_nabu"
+      "hey_jarvis"
+      "alexa"
+    ];
+  };
+  # The example Pi 3 on LVA, with echo cancellation and the music sent
+  # through it.
+  lvaPi3Aec =
+    (lanbatLib.mkProfile "example" (hostsWithModules {
+      server = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+      pi-storage = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+      pi-voice = [
+        {
+          lanbat.voiceSatellite = {
+            backend = "lva";
+            echoCancellation = {
+              enable = true;
+              includeMusic = true;
+            };
+          };
+        }
+      ];
+    })).configurations.example-pi-voice.config;
+  lvaExec = config: config.systemd.services.linux-voice-assistant.serviceConfig.ExecStart;
+  lvaPre = config: config.systemd.services.linux-voice-assistant.serviceConfig.ExecStartPre;
 
   postSetup = config: config.systemd.services.home-assistant-post-setup.script;
 
@@ -461,6 +543,115 @@ let
       !(builtins.tryEval (
         builtins.deepSeq wyomingBadVoice.services.wyoming.piper.servers.main.voice true
       )).success
+    ))
+
+    (expect "lva: backend runs Linux Voice Assistant and registers ESPHome in post-setup" (
+      let
+        exec = lvaServer.systemd.services.linux-voice-assistant.serviceConfig.ExecStart or "";
+        setup = postSetup lvaServer;
+      in
+      !(lvaServer.services.wyoming.satellite.enable or false)
+      && lib.hasInfix "linux-voice-assistant" exec
+      && lib.hasInfix "--wake-model" exec
+      && lib.hasInfix "--wake-model okay_nabu" exec
+      && lib.hasInfix "--stop-model" exec
+      && lib.hasInfix "--continue-conversation-delay" exec
+      && lib.hasInfix "0.8" exec
+      && lib.hasInfix "VOICE_SATELLITE_REGISTRATIONS" setup
+      && lib.hasInfix "|lva|Server Satellite" setup
+      && lib.elem "esphome" lvaServer.services.home-assistant.extraComponents
+    ))
+
+    # LVA's audio library talks only to a PulseAudio server: a server without
+    # one gets system-wide PipeWire, its mixer settings before LVA starts, and
+    # the microphone's mono capture node.
+    (expect "lva: a server gets system-wide PipeWire with a PulseAudio server" (
+      lvaServer.services.pipewire.enable
+      && lvaServer.services.pipewire.systemWide
+      && lvaServer.services.pipewire.pulse.enable
+    ))
+
+    (expect "lva: the server's mixer settings run before LVA" (
+      # systemd reads % as a specifier, so the command line carries %%.
+      lib.any (lib.hasInfix "sset Master 80%% unmute") (
+        lvaServer.systemd.services.linux-voice-assistant.serviceConfig.ExecStartPre or [ ]
+      )
+    ))
+
+    (expect "lva: the microphone gets its mono capture node" (
+      lvaServer.services.pipewire.wireplumber.extraConfig ? "52-lva-microphone"
+    ))
+
+    (expect "lva: the server passes its assertions" (failedAssertions lvaServer == [ ]))
+
+    # LVA satellites fetch replies from internal_url, so it must be reachable
+    # from other hosts: the HTTPS address through Caddy, and the player gets
+    # the profile's CA to verify it.
+    (expect "lva: internal_url is the HTTPS address, and LVA verifies it" (
+      (haConfig lvaServer).homeassistant.internal_url == "https://ha.home.example.com"
+      && lvaServer.systemd.services.linux-voice-assistant.environment ? LVA_TLS_CA_FILE
+    ))
+
+    (expect "lva: the music ducks to near silence while listening, a quarter while answering" (
+      lvaPi3Aec.systemd.services.lva-snapcast-duck.environment.DUCK_LISTEN_VOLUME == "0.05"
+      # A ducker restarted with the music down finds the volumes to put back.
+      && lvaPi3Aec.systemd.services.lva-snapcast-duck.environment ? STATE_FILE
+      && lvaPi3Aec.systemd.services.lva-snapcast-duck.serviceConfig.RuntimeDirectoryPreserve
+      # And WirePlumber doesn't give a new music stream the ducked volume.
+      && lvaPi3Aec.services.pipewire.wireplumber.extraConfig ? "51-snapclient-volume"
+      && lvaPi3Aec.systemd.services.lva-snapcast-duck.environment.DUCK_VOLUME == "0.25"
+    ))
+
+    # A WirePlumber or PipeWire restart recreates the microphone's node; LVA
+    # must restart with them or it stays deaf.
+    (expect "lva: restarts with the audio stack" (
+      lib.all (u: lib.elem u lvaPi3Aec.systemd.services.linux-voice-assistant.partOf) [
+        "pipewire.service"
+        "wireplumber.service"
+      ]
+    ))
+
+    (expect "lva: includeMusic plays Snapcast into the echo-cancel sink" (
+      lib.hasInfix "--soundcard lanbat_aec_playback" lvaPi3Aec.systemd.services.snapclient.serviceConfig.ExecStart
+      && !(lib.hasInfix "--soundcard" lvaServer.systemd.services.snapclient.serviceConfig.ExecStart or "")
+    ))
+
+    # Any host with an LVA satellite plays music in its room: a Snapcast client
+    # (a Music Assistant player) and the ducker, like the Pis.
+    (expect "lva: a server satellite is also a music player, with ducking" (
+      lvaServer.lanbat.snapclient.enable
+      && lvaServer.systemd.services ? snapclient
+      && lvaServer.systemd.services ? lva-snapcast-duck
+      && lvaServer.services.pipewire.wireplumber.extraConfig ? "51-snapclient-volume"
+    ))
+
+    (expect "lva: playMusic = false keeps a satellite to spoken replies" (
+      !(lvaServerWith { playMusic = false; }).lanbat.snapclient.enable
+    ))
+
+    (expect "lva: the wake words are set in prefs.json on every start" (
+      lib.any (lib.hasInfix "lva-set-wake-words") (lvaPre lvaServer)
+      && lvaServer.lanbat.voiceSatellite.lva.wakeModels == [ "okay_nabu" ]
+    ))
+
+    (expect "lva: two wake words; the first is --wake-model, hey_nabu brings its model" (
+      lvaTwoWords.lanbat.voiceSatellite.lva.wakeModels == [
+        "okay_nabu"
+        "hey_nabu"
+      ]
+      && lib.hasInfix "--wake-model okay_nabu" (lvaExec lvaTwoWords)
+      && lib.hasInfix "lva-wakewords-hey-nabu" (lvaExec lvaTwoWords)
+    ))
+
+    (expect "lva: the old wakeModel option still works, with a warning" (
+      lvaOldOption.lanbat.voiceSatellite.lva.wakeModels == [ "hey_jarvis" ]
+      && lib.hasInfix "--wake-model hey_jarvis" (lvaExec lvaOldOption)
+      && lib.any (lib.hasInfix "wakeModel is deprecated") lvaOldOption.warnings
+    ))
+
+    (expect "lva: more than two wake words are rejected" (
+      !(builtins.tryEval (builtins.deepSeq lvaThreeWords.lanbat.voiceSatellite.lva.wakeModels true))
+      .success
     ))
 
     (expect "home assistant: the defaults keep today's URLs and Zigbee watch" (

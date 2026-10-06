@@ -1,8 +1,8 @@
 # Raspberry Pi 3 as a Snapcast speaker and voice satellite
 
 A Pi 3 (B or B+) with a speaker and a USB microphone. It plays the Snapcast stream
-(`modules/pi/snapclient.nix`) and is a Wyoming satellite for Home Assistant's Assist
-(`lanbatPlugins.voice`). It uses the `voice-pi` role and `platform = "raspberry-pi-3"`
+(`modules/pi/snapclient.nix`) and is a voice satellite for Home Assistant's Assist
+(`lanbatPlugins.voice`, `modules/core/voice-satellite.nix`). It uses the `voice-pi` role and `platform = "raspberry-pi-3"`
 (`hosts/pi3/hardware.nix`): the stock NixOS aarch64 SD image, with U-Boot and the
 mainline kernel from cache.nixos.org. The Pi 5 images from nixos-raspberrypi are not
 used.
@@ -40,7 +40,11 @@ pi-voice = {
   plugins = [ inputs.self.lanbatPlugins.voice ];
   modules = [
     {
-      lanbat.voiceSatellite.name = "Pi 3 Satellite"; # what Home Assistant calls it
+      lanbat.voiceSatellite = {
+        name = "Pi 3 Satellite"; # what Home Assistant calls the device
+        # backend = "wyoming";   # default — Wyoming on port 10700
+        # backend = "lva";       # Linux Voice Assistant (ESPHome, port 6053, local wake word)
+      };
       # lanbat.speakers.output = "usb";   # "analog", "usb", "bluetooth" or "auto"
       # lanbat.speakers.bluetooth.address = "AA:BB:CC:DD:EE:FF";
     }
@@ -54,7 +58,8 @@ should not play the stream. `deployments/example/deploy.nix` has the same host, 
 evaluates.
 
 The server's firewall admits the Pi for Snapcast and InfluxDB, and the Pi admits only the
-server on the satellite's port 10700, all generated from the declared services.
+server on the satellite's TCP port (10700 for Wyoming, 6053 for LVA), all generated from
+the declared service endpoint.
 
 ## 1. Flash the card
 
@@ -147,26 +152,134 @@ aplay -l               # the analog jack is "Headphones", a USB speaker "USB Aud
   mutes its microphone for the length of the chime file, and a chime the microphone still
   hears makes the assistant end the command before you speak ("No text recognized").
 
-## 6. Home Assistant
+## 6. Voice backends (Wyoming vs Linux Voice Assistant)
 
-`home-assistant-post-setup` registers the Wyoming satellite of every `voice-pi` host, so
-deploying the server after this host exists adds it (as `satellite-pi-voice`) with no UI
-step. Give the device an area, and check **Settings → Voice assistants** has the **Voice**
-pipeline selected for it. Saying "hey nabu" does nothing until the server has been
-deployed with this host in the deployment; `ss -tn | grep 10700` on the Pi shows an
-established connection once Home Assistant has it.
+`lanbat.voiceSatellite.backend` chooses the implementation (`modules/core/voice-satellite.nix`):
 
-`home-assistant-post-setup` sets each satellite's **Finished speaking detection** to
-**Aggressive** once, so a satellite added afterwards keeps Home Assistant's default,
-**Relaxed**, which waits over a second after a command. On the new device, set it to
-**Aggressive** too.
+| | **wyoming** (default) | **lva** (Linux Voice Assistant) |
+|---|---|---|
+| Protocol | Wyoming (`wyoming-satellite`, port 10700) | ESPHome API (port 6053, UDP 5353 mDNS) |
+| Wake word | On the server (openWakeWord, "hey nabu" in the Voice pipeline) | On the device (`lva.wakeModels`, default **`okay_nabu`**, a microWakeWord model; up to two) |
+| Follow-up after "?" | No (Wyoming satellite limitation in HA 2026.3) | Yes — HA `continue_conversation`; tune `lva.continueConversationDelay` (default 0.65 s) |
+| Barge-in / "stop" | Stop Wyoming TTS via HA only | Local stop word (`lva.stopWord.model`, default `stop`) during TTS and timers |
+| Echo / wake during playback | Mic muted for Wyoming chime | Optional PipeWire WebRTC AEC (`echoCancellation.enable`; **off by default on Pi 3**). LVA captures `echoCancellation.pulseSourceName` and plays TTS via `pulseSinkName` + `listenDuringWakeSound` |
+| HA registration | Wyoming integration (`home-assistant-post-setup`) | ESPHome integration |
+| Pi microphone | ALSA capture; WirePlumber **disables** the USB card for PipeWire | Pulse capture; WirePlumber **keeps** the USB card enabled; mono + gain/noise options on `lva.*` |
+| Room replies via `voice_reply` / Music Assistant | Yes, when `alwaysPlayLocally` is false | No — TTS plays on the satellite; see `room` option docs |
+| Snapcast ducking during assist | Yes (`modules/pi/audio.nix`, Wyoming `--detection-command`) | Yes when `lva.snapcastDucking.enable` (default) — peripheral API on port 6055 |
+
+Use **one backend per profile** for every satellite: the endpoint table requires the same
+port on all hosts that run a satellite (10700 or 6053). Mixed Wyoming and LVA in one
+profile is unsupported.
+
+**Rollout suggestion:** deploy and validate **Pi 3 → Pi 5 → server**, updating Home
+Assistant on the server after each host so `home-assistant-post-setup` adds ESPHome
+devices. On the Pi 3, check `systemctl status linux-voice-assistant` and that HA sees
+`_esphomelib._tcp` / the device under **Settings → Devices**.
+
+For LVA on the Pi 3, keep `lva.audioInputChannels = 1` (2 channels crashes with current
+`aioesphomeapi`). Set `lva.networkInterface` to the deploy `networking.interface` when
+auto-detection fails (required on the Pi 3). Tune quiet mics with `lva.micVolume` /
+`lva.micAutoGain` or the shared `microphone.volumeMultiplier` default for the PlayStation Eye.
+
+**Conversational defaults (backend `lva`):** wake phrase **"okay nabu"**; follow-up
+listening after a question; say **"stop"** to interrupt a reply; short wake chime with
+`listenDuringWakeSound`; Snapcast fades in 0.2 s when the wake word is heard, to 5% of its
+volume while the microphone is open and 25% while the assistant answers, stays down through
+follow-up turns, and fades back over 0.8 s
+(`lva.snapcastDucking.{listenVolume,volume,fadeDown,fadeUp}`).
+
+**Commands over a speech station.** The microphone hears the speaker. With the radio at a
+quarter of its volume, a command came out as "two sides obviously turn off the radio": the
+presenter's words and yours in one transcript, which no command sentence matches, so it went to
+the LLM. Hence the near silence while listening.
+
+**Every satellite with a speaker plays music.** A host running a Linux Voice Assistant
+satellite also runs a Snapcast client (`modules/core/snapclient.nix`), so its speaker is a
+Music Assistant player and ducks while the assistant listens and answers. The Pi roles run the
+client regardless; `lanbat.voiceSatellite.playMusic = false` keeps another host's satellite to
+spoken replies.
+
+**Ducking and the music's volume.** The music's own volume belongs to Snapserver and Music
+Assistant; ducking never touches it. It lowers the Snapcast stream in PipeWire, and keeps the
+levels to return to in `/run/lva-snapcast-duck/saved.json`, so a ducker stopped or restarted
+while the music is down (a deploy) still puts it back.
+
+**Echo cancellation with the music (experiment).** `echoCancellation.includeMusic = true`
+(with `echoCancellation.enable`) plays Snapcast through the echo canceller's sink, so the music
+is part of its reference and is taken out of the microphone too, not only the assistant's voice.
+It costs CPU for every second of music; measure it on a Pi 3 before leaving it on.
+
+**Wake words.** `lva.wakeModels` lists one or two (LVA listens for at most two at once).
+They are written into LVA's `prefs.json` every time it starts, so the Nix setting wins over a
+choice made in Home Assistant's "Wake word" selects, which lasts until the next restart.
+
+The default is "okay nabu", Home Assistant's own wake word. "Hey nabu", which the Wyoming
+pipeline uses, exists only as an openWakeWord model, which runs several neural networks on every
+audio frame. Measured on the Pi 3 (1.2 GHz, 30 s of audio, 2026-10-06):
+
+| Active | CPU (one core) | Speed vs. realtime |
+|---|---|---|
+| `okay_nabu` (microWakeWord) | 7 % | 13.7x |
+| `hey_jarvis` (microWakeWord) | 7 % | 14.7x |
+| `okay_nabu` + `hey_jarvis` | 14 % | 7.0x |
+| `hey_nabu` (openWakeWord) | 109 % | 0.9x, slower than realtime |
+| `okay_nabu` + `hey_nabu` | 117 % | 0.8x |
+
+openWakeWord falls behind the microphone on a Pi 3, so `hosts/pi3/hardware.nix` warns when it is
+listed there; a faster CPU (the server, a Pi 5) runs it. LVA's bundled microWakeWord models are
+`okay_nabu`, `hey_jarvis`, `hey_mycroft`, `alexa` and others.
+
+LVA needs a PulseAudio server (its `soundcard` library talks to nothing else): every LVA host
+gets a system-wide PipeWire with one (`modules/core/voice-satellite-audio.nix`), which also
+names the microphone's capture node `lanbat_ps_eye_capture` (mono) and sets up echo
+cancellation when `echoCancellation.enable` is on. The Pis already run PipeWire for Snapcast;
+the server gets it for its satellite.
+
+`voice-satellite-diagnostics` (run with `sudo`) checks the satellite in one go: its services,
+Home Assistant's connection, Snapcast, the audio devices and streams, three seconds of
+microphone level, CPU, memory, temperature, undervoltage and recent errors. On the Pi 3,
+`echoCancellation.enable` defaults to **false** (CPU cost); turn it on if you need reliable
+wake/stop detection while music or TTS is playing. On Pi 5 and the server satellite, AEC
+defaults to **on** when PipeWire is used.
+
+Example module overlay:
+
+```nix
+lanbat.voiceSatellite = {
+  backend = "lva";
+  lva = {
+    continueConversationDelay = 0.65; # lower = snappier follow-up; raise if the mic catches TTS tail
+    listenDuringWakeSound = true;
+    snapcastDucking.enable = true;
+  };
+  echoCancellation.enable = true; # false on Pi 3 unless you accept the CPU cost
+};
+```
+
+## 7. Home Assistant
+
+With backend **wyoming**, `home-assistant-post-setup` registers the Wyoming satellite of
+every `voice-pi` host (as `satellite-pi-voice`) plus the storage Pi and optional server
+satellite. With backend **lva**, it adds **ESPHome** config entries titled with each
+host's `lanbat.voiceSatellite.name` instead.
+
+Give each device an area. The **Voice** assist pipeline (openWakeWord or local wake,
+faster-whisper, Piper, `lanbat.deployment.haLlm`) stays the profile default;
+ESPHome satellites use the preferred pipeline when their pipeline select is unset.
+
+Wyoming only: `home-assistant-post-setup` sets **Finished speaking detection** to
+**Aggressive** once. LVA does not use that entity.
 
 The conversation agent runs on the server (`lanbat.deployment.haLlm`, see
-`services/llama-cpp.nix`), and so do speech-to-text and Piper. The Pi 3 only streams the
-microphone and plays the audio it is sent, so its 1 GB of RAM and slow CPU are not in the
-path of how fast it answers.
+`services/llama-cpp.nix`), and so do speech-to-text and Piper. Satellites never embed an
+LLM: point `lanbat.deployment.haLlm.baseUrl` and `.model` at any OpenAI-compatible API
+(local `http://127.0.0.1:8091/v1` from `services/llama-cpp.nix`, or e.g. a Mac running
+llama.cpp, LM Studio or Ollama behind `/v1`). External APIs use the `ha-llm-api-key` secret
+(`secrets/README.md`). The Pi 3 streams audio and plays replies; with LVA it also runs the
+wake word locally (~18–30% CPU idle in testing, more with AEC).
 
-## 7. The same satellite on every machine
+## 8. The same satellite on every machine
 
 The satellite is the same on the server, a Pi 3, a Pi 4 and a Pi 5, and each one is ready
 for a PlayStation Eye before it is plugged in. The satellite runs, Home Assistant knows it,
@@ -183,7 +296,13 @@ needs is the default, so there is nothing to set per host.
 
 Home Assistant registers a satellite for the server, the storage Pi and every `voice-pi`
 host when the server is deployed. Give each satellite its own `name` (`lanbat.voiceSatellite.name`),
-and put each in the area it is in: two satellites that hear the same "hey nabu" make
-Home Assistant discard one of them ("Duplicate wake-up detected"), so two in one room
-fight over every command. Keep the satellites in different rooms, or leave all but one
-switched off in a shared room.
+and put each in the area it is in.
+
+**Duplicate wake-up:** with Wyoming, two satellites hearing the same server-side wake word
+make Home Assistant discard one ("Duplicate wake-up detected"). With LVA, each device runs
+its own wake word — two Pis in one room can both fire on `okay_nabu`. Keep one active
+satellite per room, or use different `lva.wakeModels` per device.
+
+**After deploy, try:** "okay nabu" → a command; ask something that ends in "?" and speak again
+without the wake phrase (follow-up); say "stop" during a long reply (barge-in); play Snapcast
+music and repeat (ducking + optional AEC).

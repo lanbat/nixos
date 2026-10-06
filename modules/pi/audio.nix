@@ -9,6 +9,8 @@
 #
 # The system-wide instance listens on /run/pipewire/pipewire-0 and, for
 # PulseAudio clients, /run/pulse/native. Clients need the pipewire group.
+# The Linux Voice Assistant's microphone and echo cancellation are set up for
+# any host in modules/core/voice-satellite-audio.nix.
 #
 # Voice satellite
 # ---------------
@@ -26,6 +28,8 @@
 let
   satellite = config.lanbat.voiceSatellite;
   runtimeDir = "/run/pipewire";
+
+  lvaWakeupChime = pkgs.callPackage ../../pkgs/lva-wakeup-chime { };
 
   # Sets the volume of Snapcast's client streams in PipeWire. The process
   # binary is a property of snapclient's client, not of its stream nodes.
@@ -48,6 +52,7 @@ let
         ${config.services.pipewire.wireplumber.package}/bin/wpctl set-volume "$id" ${volume} 2>/dev/null
       done
     '';
+  # Wyoming's ducking; LVA's fades (pkgs/lva-snapcast-duck).
   duck = snapcastVolume "duck" "0.25";
   restore = snapcastVolume "restore" "1.0";
 
@@ -66,19 +71,21 @@ in
       "device.routes.default-sink-volume" = 1.0;
     };
 
-    wireplumber.extraConfig."51-voice-satellite-microphone" = lib.mkIf satellite.enable {
-      "monitor.alsa.rules" = [
+    wireplumber.extraConfig."51-voice-satellite-microphone" =
+      lib.mkIf (satellite.enable && satellite.backend == "wyoming")
         {
-          matches = [
+          "monitor.alsa.rules" = [
             {
-              "device.vendor.id" = "0x${lib.head usbId}";
-              "device.product.id" = "0x${lib.last usbId}";
+              matches = [
+                {
+                  "device.vendor.id" = "0x${lib.head usbId}";
+                  "device.product.id" = "0x${lib.last usbId}";
+                }
+              ];
+              actions.update-props."device.disabled" = true;
             }
           ];
-          actions.update-props."device.disabled" = true;
-        }
-      ];
-    };
+        };
   };
 
   # For login sessions (the TV sessions).
@@ -88,25 +95,32 @@ in
   };
 
   lanbat.voiceSatellite.speaker = "pipewire";
-  lanbat.voiceSatellite.awakeSound = lib.mkDefault (
-    "${pkgs.callPackage ../../pkgs/voice-satellite-awake-chime { }}/awake.wav"
+  lanbat.voiceSatellite.awakeSound = lib.mkIf satellite.enable (
+    lib.mkDefault (
+      if satellite.backend == "lva" then
+        "${lvaWakeupChime}/wakeup.flac"
+      else
+        "${pkgs.callPackage ../../pkgs/voice-satellite-awake-chime { }}/awake.wav"
+    )
   );
 
-  services.wyoming.satellite.extraArgs = lib.mkIf satellite.enable [
-    # Home Assistant heard the wake word.
-    "--detection-command"
-    "${duck}"
-    "--tts-played-command"
-    "${restore}"
-    "--error-command"
-    "${restore}"
-    "--disconnected-command"
-    "${restore}"
-    "--startup-command"
-    "${restore}"
-  ];
+  services.wyoming.satellite.extraArgs =
+    lib.mkIf (satellite.enable && satellite.backend == "wyoming")
+      [
+        # Home Assistant heard the wake word.
+        "--detection-command"
+        "${duck}"
+        "--tts-played-command"
+        "${restore}"
+        "--error-command"
+        "${restore}"
+        "--disconnected-command"
+        "${restore}"
+        "--startup-command"
+        "${restore}"
+      ];
 
-  systemd.services.wyoming-satellite = lib.mkIf satellite.enable {
+  systemd.services.wyoming-satellite = lib.mkIf (satellite.enable && satellite.backend == "wyoming") {
     environment.PIPEWIRE_RUNTIME_DIR = runtimeDir;
     serviceConfig.SupplementaryGroups = [ "pipewire" ];
   };
