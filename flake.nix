@@ -200,19 +200,63 @@
             nixos-raspberrypi
             ;
         };
-        service-settings = import ./tests/service-settings.nix {
-          inherit
-            lib
-            pkgs
-            inputs
-            self
-            agenix
-            disko
-            deploy-rs
-            nixpkgs
-            nixos-raspberrypi
-            ;
-        };
+        service-settings = import ./tests/service-settings.nix (
+          {
+            part = 1;
+            parts = 3;
+          }
+          // {
+            inherit
+              lib
+              pkgs
+              inputs
+              self
+              agenix
+              disko
+              deploy-rs
+              nixpkgs
+              nixos-raspberrypi
+              ;
+          }
+        );
+        service-settings-2 = import ./tests/service-settings.nix (
+          {
+            part = 2;
+            parts = 3;
+          }
+          // {
+            inherit
+              lib
+              pkgs
+              inputs
+              self
+              agenix
+              disko
+              deploy-rs
+              nixpkgs
+              nixos-raspberrypi
+              ;
+          }
+        );
+        service-settings-3 = import ./tests/service-settings.nix (
+          {
+            part = 3;
+            parts = 3;
+          }
+          // {
+            inherit
+              lib
+              pkgs
+              inputs
+              self
+              agenix
+              disko
+              deploy-rs
+              nixpkgs
+              nixos-raspberrypi
+              ;
+          }
+        );
         settings-guard = import ./tests/settings-guard.nix { inherit lib pkgs; };
         settings-schema = import ./tests/settings-schema.nix { inherit lib pkgs; };
         validate-deploy = import ./tests/validate-deploy.nix { inherit lib pkgs; };
@@ -282,7 +326,7 @@
       );
 
       checks.aarch64-linux = {
-        pi = import ./tests/pi.nix {
+        storage-pi = import ./tests/storage-pi.nix {
           pkgs = nixos-raspberrypi.inputs.nixpkgs.legacyPackages.aarch64-linux;
           inherit (inputs)
             agenix

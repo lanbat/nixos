@@ -1,4 +1,4 @@
-# modules/pi/storage.nix
+# modules/storage/storage.nix
 #
 # Raspberry Pi NVMe storage — directory initialisation and NFS dependency wiring.
 #
@@ -29,7 +29,7 @@
 # UNLOCK MODEL
 # ─────────────────────────────────────────────────────────────────────────────
 #
-#  LUKS unlock and mounting are handled by modules/pi/clevis-unlock.nix.
+#  LUKS unlock and mounting are handled by modules/storage/clevis-unlock.nix.
 #  That module creates one storage-<drive>-unlock.service per key of
 #  hosts.<key>.storage.drives, for example:
 #    storage-a-unlock.service  — unlocks + mounts /mnt/storage-a
@@ -135,7 +135,7 @@ in
   # ── Drive initialisation, one unit per drive ───────────────────────────────
   # Runs after storage-<drive> is unlocked and mounted, creates the top-level
   # directory tree with correct permissions, then refreshes the NFS exports so
-  # the drive is served (modules/pi/nfs-exports.nix exports it once mounted).
+  # the drive is served (modules/storage/nfs-exports.nix exports it once mounted).
   systemd.services = lib.listToAttrs (
     map (
       drive:

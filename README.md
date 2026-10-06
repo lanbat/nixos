@@ -102,9 +102,9 @@ deployments/
 lib/                      host builder, roles, plugin loader
 plugins/                  built-in plugins (services, tv, voice)
 services/                 one file per server service
-modules/                  core, wiring, server, pi infrastructure
+modules/                  core, wiring, and one directory per role: server/, storage/, pi/ (shared by the Pi roles)
 hosts/server/             hardware.nix, disk.nix (disko layout)
-hosts/pi/                 hardware.nix (Raspberry Pi 5)
+hosts/pi3/, hosts/pi5/    hardware.nix, one per Raspberry Pi model
 tests/                    assertion tests and VM tests
 docs/                     architecture, extensibility, plugins, migration
 ```
@@ -113,7 +113,9 @@ docs/                     architecture, extensibility, plugins, migration
 
 You need:
 
-- an `x86_64` server and a Raspberry Pi 5 with NVMe storage;
+- an `x86_64` server and a Raspberry Pi 5 with NVMe storage and a 64 GB microSD card (32 GB at least);
+- optionally a Raspberry Pi 3 as a Snapcast speaker and voice satellite (a 32 GB microSD card,
+  a USB microphone and a speaker; [docs/pi3-satellite.md](docs/pi3-satellite.md));
 - a domain for the services (`<service>.<domain>`), and local DNS that resolves those
   names to the server. The services stay on your LAN; Caddy serves them with certificates
   from an internal CA that each client device trusts once;

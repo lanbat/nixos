@@ -96,6 +96,11 @@ let
   # The storage Pi's satellite, reached the way policy on the Pi admits Home
   # Assistant: over the overlay when the profile runs one, the LAN otherwise.
   storageKey = config.lanbat.deployment.primaryStorage;
+  # Every voice-pi host's satellite too, as "<host key>=<address>".
+  hostLib = import ../lib/host.nix { inherit lib; };
+  extraSatellites = map (key: "${key}=${config.lanbat.endpointHost "voice-satellite" key}") (
+    hostLib.hostsWithRole config.lanbat.hosts "voice-pi"
+  );
   piHost =
     if storageKey == null then
       config.lanbat.deployment.storageIp
@@ -359,6 +364,7 @@ in
         ${lib.optionalString (config.lanbat.hasService "frigate") ''export FRIGATE_URL="${localUrl "frigate" "/"}"''}
         ${lib.optionalString (config.lanbat.hasService "music-assistant") ''export MUSIC_ASSISTANT_URL="${localUrl "music-assistant" ""}"''}
         export PI_HOST="${piHost}"
+        export EXTRA_SATELLITES="${lib.concatStringsSep " " extraSatellites}"
         ${lib.optionalString satellite.enable ''
           export LOCAL_SATELLITE_PORT="${lib.last (lib.splitString ":" satellite.uri)}"
         ''}

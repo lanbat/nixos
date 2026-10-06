@@ -65,6 +65,15 @@ let
       };
     };
 
+  withPi =
+    entry:
+    baseDeploy
+    // {
+      hosts = baseDeploy.hosts // {
+        pi-storage = baseDeploy.hosts.pi-storage // entry;
+      };
+    };
+
   twoServers = baseDeploy // {
     hosts = baseDeploy.hosts // {
       server-b = baseDeploy.hosts.server;
@@ -134,6 +143,15 @@ let
 
   failures = lib.filter (x: x != null) [
     (expectPass "example deploy with server in voiceRooms" baseDeploy)
+    (expectPass "the old raspberry-pi platform name" (withPi {
+      platform = "raspberry-pi";
+    }))
+    (expectThrow "an unknown platform" (withPi {
+      platform = "raspberry-pi-9";
+    }))
+    (expectThrow "a Raspberry Pi platform on x86_64" (withPi {
+      system = "x86_64-linux";
+    }))
     (expectPass "voiceRooms server role without lanbat-voice" voiceRoomOnServer)
     (expectThrow "bad voiceRooms host" badVoiceRooms)
     (expectThrow "storage-pi without drives" missingDrives)

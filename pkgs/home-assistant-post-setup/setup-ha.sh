@@ -18,6 +18,8 @@ MUSIC_ASSISTANT_URL="${MUSIC_ASSISTANT_URL:-http://127.0.0.1:8095}"
 PI_HOST="${PI_HOST:?PI_HOST is required}"
 # This server's own satellite, when it has one.
 LOCAL_SATELLITE_PORT="${LOCAL_SATELLITE_PORT:-}"
+# The satellites on other hosts (voice-pi): space-separated "<host key>=<address>".
+EXTRA_SATELLITES="${EXTRA_SATELLITES:-}"
 
 # The conversation agent: an OpenAI-compatible chat completions API through
 # the extended_openai_conversation component. Unset: Home Assistant's own agent.
@@ -423,8 +425,15 @@ ensure_pipeline() {
   mark_done "$key"
 }
 
+# The key covers the set of satellites Home Assistant knows, so one added later
+# (restore_state lists its entity after Home Assistant first connects to it) gets
+# the setting too, instead of staying on Home Assistant's default.
 satellite_vad_state_key() {
-  echo "satellite-vad-${SATELLITE_VAD}"
+  local ids=""
+  if [[ -f "$RESTORE_STATE" ]]; then
+    ids="$(jq -r '[.data[].state.entity_id | select(test("_finished_speaking_detection$"))] | sort | join(",")' "$RESTORE_STATE" | cksum | cut -d' ' -f1)"
+  fi
+  echo "satellite-vad-${SATELLITE_VAD}-${ids}"
 }
 
 # Home Assistant defaults Wyoming satellites to relaxed VAD, which waits 1.25 s
@@ -676,6 +685,9 @@ for svc in openwakeword faster-whisper piper satellite; do
   wyoming_needed "$svc" && needs_work=true
 done
 if [[ -n "$LOCAL_SATELLITE_PORT" ]] && wyoming_needed server-satellite; then needs_work=true; fi
+for entry in $EXTRA_SATELLITES; do
+  wyoming_needed "satellite-${entry%%=*}" && needs_work=true
+done
 if llm_needed; then needs_work=true; fi
 if ! state_done "$(pipeline_state_key)"; then needs_work=true; fi
 if ! state_done "$(satellite_vad_state_key)"; then needs_work=true; fi
@@ -701,6 +713,9 @@ ensure_wyoming "satellite" "$PI_HOST" 10700
 if [[ -n "$LOCAL_SATELLITE_PORT" ]]; then
   ensure_wyoming "server-satellite" "127.0.0.1" "$LOCAL_SATELLITE_PORT"
 fi
+for entry in $EXTRA_SATELLITES; do
+  ensure_wyoming "satellite-${entry%%=*}" "${entry#*=}" 10700
+done
 ensure_llm
 ensure_pipeline
 ensure_satellite_vad

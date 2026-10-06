@@ -48,10 +48,10 @@ than two. Everything is derived from each key:
 
 | Derived from key `<d>` | Where |
 |---|---|
-| `storage-<d>-unlock.service` and its retry timer | `modules/pi/clevis-unlock.nix` |
-| LUKS mapper `/dev/mapper/storage-<d>`, mount point `/mnt/storage-<d>` | `modules/pi/clevis-unlock.nix` |
-| `storage-<d>-init.service` (directory tree, then `exportfs -ra`) | `modules/pi/storage.nix` |
-| NFS export of `/mnt/storage-<d>` | `modules/pi/nfs-exports.nix` |
+| `storage-<d>-unlock.service` and its retry timer | `modules/storage/clevis-unlock.nix` |
+| LUKS mapper `/dev/mapper/storage-<d>`, mount point `/mnt/storage-<d>` | `modules/storage/clevis-unlock.nix` |
+| `storage-<d>-init.service` (directory tree, then `exportfs -ra`) | `modules/storage/storage.nix` |
+| NFS export of `/mnt/storage-<d>` | `modules/storage/nfs-exports.nix` |
 | Server mount `/srv/storage/<d>` (`srv-storage-<d>.mount`) | `modules/wiring/nfs.nix` |
 | Disk usage and SMART metrics | `modules/pi/telegraf.nix` |
 
@@ -62,7 +62,7 @@ escapes a `-` in a mount path and the mount unit would no longer be
 have.
 
 What lives on which drive is a layout choice kept by name: the directory trees in
-`modules/pi/storage.nix` belong to `a` and `b`, the per-user directories and their quotas
+`modules/storage/storage.nix` belong to `a` and `b`, the per-user directories and their quotas
 to `lanbat.userStorage.drive` (`b` by default), and the services' paths
 (`/srv/storage/b/...`) name their drive. A drive without a tree is still unlocked,
 initialised and exported, and starts empty. A profile with different drive names moves

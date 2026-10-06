@@ -21,7 +21,8 @@
       {
         lanbat.voiceSatellite = {
           enable = true;
-          name = "Pi Satellite";
+          # What Home Assistant calls the device; a second satellite sets its own.
+          name = lib.mkDefault "Pi Satellite";
           uri = "tcp://0.0.0.0:10700";
           room = room;
           alwaysPlayLocally = true;

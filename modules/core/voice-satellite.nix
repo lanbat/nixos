@@ -1,16 +1,18 @@
 # modules/core/voice-satellite.nix
 #
 # Wyoming voice satellite: a microphone and a speaker for Home Assistant's
-# Assist, on either host. HA on the server connects to it, runs the audio
-# through the "Voice" pipeline (wake word, speech-to-text, conversation agent,
-# text-to-speech; services/wyoming.nix and services/home-assistant.nix) and
-# sends the spoken reply back.
+# Assist, on any host: the server, a Pi 3, 4 or 5. HA on the server connects to
+# it, runs the audio through the "Voice" pipeline (wake word, speech-to-text,
+# conversation agent, text-to-speech; services/wyoming.nix and
+# services/home-assistant.nix) and sends the spoken reply back.
 #
 # Microphone
 # ----------
 # Found by its USB ID each time capture starts, so its ALSA card number
 # doesn't matter and it can be unplugged and plugged back in. The default is
-# the PlayStation Eye, a webcam with a 4-microphone array.
+# the PlayStation Eye, a webcam with a 4-microphone array, with the gain it
+# needs. The satellite runs, and is registered in Home Assistant, before the
+# microphone is plugged in: it waits for it quietly and listens once it is.
 #
 # Speaker
 # -------
@@ -42,42 +44,67 @@ let
   coreutils = pkgs.coreutils;
   # The module always adds webrtc-noise-gain, for auto gain and noise
   # suppression. Its bundled WebRTC code uses uint32_t without including
-  # <cstdint>, which GCC 15 rejects on x86_64. stdint.h, because the flags
-  # reach its C files too. Elsewhere (the Pi) it builds unchanged, and the
-  # unchanged package comes from the binary cache instead of a two-minute
-  # compile.
-  webrtcNoiseGain = pkgs.python3Packages.webrtc-noise-gain.overridePythonAttrs (old: {
-    env = (old.env or { }) // {
-      NIX_CFLAGS_COMPILE = toString [
-        (old.env.NIX_CFLAGS_COMPILE or "")
-        "-include stdint.h"
-      ];
-    };
-  });
+  # <cstdint>, which GCC 15 rejects, on x86_64 and aarch64 alike. A nixpkgs
+  # that has fixed it carries a patch, and then the unchanged package comes
+  # from the binary cache instead of a compile: the Pi 5's (nixos-raspberrypi's
+  # newer pin) does, while the server's and the Pi 3's nixpkgs do not yet.
+  # Until a pin has the patch, the workaround includes stdint.h, rather than
+  # <cstdint>, because the flags reach its C files too. The result is not in
+  # the binary cache, so a host compiles it: about two minutes on the server,
+  # much longer on a Pi 3.
+  webrtcNoiseGain = pkgs.python3Packages.webrtc-noise-gain;
+  webrtcFixedUpstream = (webrtcNoiseGain.patches or [ ]) != [ ];
   satellitePackage =
-    if pkgs.stdenv.hostPlatform.isx86_64 then
+    if webrtcFixedUpstream then
+      pkgs.wyoming-satellite
+    else
       pkgs.wyoming-satellite.overridePythonAttrs (old: {
         optional-dependencies = old.optional-dependencies // {
-          webrtc = [ webrtcNoiseGain ];
+          webrtc = [
+            (webrtcNoiseGain.overridePythonAttrs (webrtcOld: {
+              env = (webrtcOld.env or { }) // {
+                NIX_CFLAGS_COMPILE = toString [
+                  (webrtcOld.env.NIX_CFLAGS_COMPILE or "")
+                  "-include stdint.h"
+                ];
+              };
+            }))
+          ];
         };
-      })
-    else
-      pkgs.wyoming-satellite;
+      });
 
   vendor = lib.head (lib.splitString ":" cfg.microphone.usbId);
   product = lib.last (lib.splitString ":" cfg.microphone.usbId);
 
   # 16 kHz mono, which Wyoming's speech-to-text expects. Bash builtins only,
   # so it doesn't depend on the unit's PATH.
+  #
+  # Without the microphone it waits, silently, until one is plugged in, instead
+  # of failing: the satellite restarts a failing capture command every couple
+  # of seconds, which would fill the journal (on an SD card) and flood the log,
+  # while a satellite waiting here is simply deaf. Plug the microphone in and
+  # it starts listening; unplug it and capture ends, and the wait begins again.
   micCommand = pkgs.writeShellScript "voice-satellite-mic" ''
-    for card in /sys/class/sound/card*; do
-      [[ -r $card/device/../idVendor && -r $card/device/../idProduct ]] || continue
-      if [[ $(<"$card/device/../idVendor") == ${vendor} && $(<"$card/device/../idProduct") == ${product} ]]; then
-        exec ${alsa}/bin/arecord -D "plughw:$(<"$card/number"),0" -r 16000 -c 1 -f S16_LE -t raw -q
+    find_card() {
+      local card
+      for card in /sys/class/sound/card*; do
+        [[ -r $card/device/../idVendor && -r $card/device/../idProduct ]] || continue
+        if [[ $(<"$card/device/../idVendor") == ${vendor} && $(<"$card/device/../idProduct") == ${product} ]]; then
+          cardNumber=$(<"$card/number")
+          return 0
+        fi
+      done
+      return 1
+    }
+    announced=
+    until find_card; do
+      if [[ -z $announced ]]; then
+        echo "voice-satellite: waiting for a sound card with USB ID ${cfg.microphone.usbId}" >&2
+        announced=1
       fi
+      ${coreutils}/bin/sleep 3
     done
-    echo "voice-satellite: no sound card with USB ID ${cfg.microphone.usbId}" >&2
-    exit 1
+    exec ${alsa}/bin/arecord -D "plughw:$cardNumber,0" -r 16000 -c 1 -f S16_LE -t raw -q
   '';
 
   runtimeDir = "/run/voice-satellite";
@@ -144,6 +171,21 @@ in
       type = types.strMatching "[0-9a-f]{4}:[0-9a-f]{4}";
       default = "1415:2000";
       description = "USB vendor:product ID of the microphone, as lsusb shows it. The default is the PlayStation Eye.";
+    };
+
+    microphone.volumeMultiplier = mkOption {
+      type = types.numbers.positive;
+      default = if cfg.microphone.usbId == "1415:2000" then 6.0 else 1.0;
+      defaultText = lib.literalExpression ''if microphone.usbId == "1415:2000" then 6.0 else 1.0'';
+      example = 6.0;
+      description = ''
+        Gain the satellite applies to the microphone audio (wyoming-satellite
+        --mic-volume-multiplier). The PlayStation Eye's speech peaks near -27 dBFS
+        (rms ~230 of 32768), too quiet for speech-to-text to recognise a command
+        although the wake word still triggers; a value around 6 fixes that, so
+        that is the default for it, and every satellite works with one out of
+        the box. Another microphone keeps a gain of 1.
+      '';
     };
 
     speaker = mkOption {
@@ -248,7 +290,11 @@ in
       vad.enable = false;
       sound.command = "${soundCommand}";
       extraArgs =
-        lib.optionals (cfg.room != null && !cfg.alwaysPlayLocally) [
+        lib.optionals (cfg.microphone.volumeMultiplier != 1.0) [
+          "--mic-volume-multiplier"
+          (toString cfg.microphone.volumeMultiplier)
+        ]
+        ++ lib.optionals (cfg.room != null && !cfg.alwaysPlayLocally) [
           "--synthesize-command"
           "${replyCommand}"
         ]

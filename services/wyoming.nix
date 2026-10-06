@@ -150,7 +150,7 @@ in
     10301
     10302
   ]
-  ++ lib.optionals serverSatellite [ 10700 ];
+  ++ lib.optionals config.lanbat.voiceSatellite.enable [ 10700 ];
 
   # ---------------------------------------------------------------------------
   # Wake word detection
@@ -195,14 +195,22 @@ in
   # ---------------------------------------------------------------------------
   # Satellite: the server's microphone, replies on its speaker (settings.satellite)
   # ---------------------------------------------------------------------------
-  lanbat.voiceSatellite = lib.mkIf serverSatellite {
-    enable = true;
+  #
+  # A server in a lanbat.voiceRooms room runs one. Any other server turns it on
+  # with `lanbat.voiceSatellite.enable = true;` in its modules: the satellite
+  # then starts without the microphone and listens once it is plugged in. The
+  # switch can't be a setting here, because the settings are part of
+  # lanbat.services, which depends on whether the satellite is enabled.
+  lanbat.voiceSatellite = {
+    enable = lib.mkIf serverSatellite true;
     inherit (cfg.satellite) name speaker mixer;
     microphone = lib.mkIf (cfg.satellite.microphoneUsbId != null) {
       usbId = cfg.satellite.microphoneUsbId;
     };
     uri = "tcp://127.0.0.1:10700";
     room = serverRoom;
+    # The same wake chime as the Pis'.
+    awakeSound = lib.mkDefault "${pkgs.callPackage ../pkgs/voice-satellite-awake-chime { }}/awake.wav";
     # Home Assistant on this host's loopback, at the port its description
     # gives; 8123 when it runs elsewhere, as before.
     homeAssistant.url =

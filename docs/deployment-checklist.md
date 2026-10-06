@@ -265,9 +265,18 @@ From now on, deploy changes from your workstation with `deploy --skip-checks pat
 
 ---
 
-## Phase 2 — Pi installation
+## Phase 2 — Pi installation (Pi 5 storage host)
+
+This phase is the Pi 5's. A Pi 3 voice satellite is installed differently; see
+[pi3-satellite.md](pi3-satellite.md).
 
 ### 2a. Flash the Pi 5 installer image (on your workstation)
+
+**microSD card:** it holds the whole system (the NVMe drives only hold the data), so
+use at least 32 GB; 64 GB is recommended, the size this setup runs on. The storage Pi
+carries Kodi, the games frontend, the emulators and Samba, so its Nix store is large
+(about 20 GB in use here after 36 generations) and a small card runs out of room for
+generations and rollbacks. Use a quality A1/A2 card from a known brand.
 
 > **The generic NixOS aarch64 SD image from nixos.org does not boot a Raspberry Pi 5.**
 > Use the installer image from [nixos-raspberrypi](https://github.com/nvmd/nixos-raspberrypi),
@@ -388,7 +397,7 @@ nix run nixpkgs#nixos-rebuild -- switch --flake path:.#homelab-pi-storage \
   --target-host root@<pi-ip> --build-host root@<pi-ip>
 ```
 
-The Pi configuration boots the same way as the installer: `hosts/pi/hardware.nix` imports
+The Pi configuration boots the same way as the installer: `hosts/pi5/hardware.nix` imports
 nixos-raspberrypi's Raspberry Pi 5 modules and sets
 `boot.loader.raspberry-pi.bootloader = "kernel"`. The Pi is built with nixos-raspberrypi's
 pinned nixpkgs (see `flake.nix`), so its kernel comes from that project's binary cache.

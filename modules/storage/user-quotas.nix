@@ -1,4 +1,4 @@
-# modules/pi/user-quotas.nix
+# modules/storage/user-quotas.nix
 #
 # Apply per-user XFS project quotas on the user storage drive
 # (lanbat.userStorage.drive, B by default) after it is unlocked.

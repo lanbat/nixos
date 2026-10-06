@@ -36,6 +36,12 @@
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
+#
+# Split into parts, one check each (service-settings, -2, -3): every variant is
+# a whole profile evaluation, and the whole list in one process grew past the
+# CI runner's memory (19.7 GB measured, 2026-10-06; CI builds each check in a
+# process of its own). Part n takes every parts-th case from the n-th; the
+# list is lazy, so a part evaluates only the variants its own cases use.
 {
   lib,
   pkgs,
@@ -46,6 +52,8 @@
   deploy-rs,
   nixpkgs,
   nixos-raspberrypi,
+  part ? 1,
+  parts ? 1,
 }:
 
 let
@@ -859,11 +867,17 @@ let
     (expect "the example profile's server has no failed assertion" (failedAssertions base == [ ]))
   ];
 
-  failures = lib.filter (x: x != null) cases;
+  partCases = map (c: c.value) (
+    lib.filter (c: lib.mod c.index parts == part - 1) (
+      lib.imap0 (index: value: { inherit index value; }) cases
+    )
+  );
+
+  failures = lib.filter (x: x != null) partCases;
 in
-pkgs.runCommand "service-settings-check" { } ''
+pkgs.runCommand "service-settings-check-${toString part}" { } ''
   if [ ${toString (lib.length failures)} -ne 0 ]; then
-    echo "service settings checks failed:" >&2
+    echo "service settings checks (part ${toString part} of ${toString parts}) failed:" >&2
     ${lib.concatStringsSep "\n" (map (msg: "echo \"  - ${msg}\" >&2") failures)}
     exit 1
   fi

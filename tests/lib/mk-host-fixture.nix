@@ -132,7 +132,7 @@ let
 
     storage-pi = _: {
       system = "aarch64-linux";
-      platform = "raspberry-pi";
+      platform = "raspberry-pi-5";
       storage.drives = {
         a = "test-storage-a";
         b = "test-storage-b";
@@ -141,7 +141,7 @@ let
 
     voice-pi = _: {
       system = "aarch64-linux";
-      platform = "raspberry-pi";
+      platform = "raspberry-pi-5";
     };
   };
 
@@ -254,7 +254,7 @@ let
     };
 
   # VM tests use virtio disks, not Pi SD labels; skip hardware.nix (needs nixos-raspberrypi).
-  hardwareModule = ../../hosts/pi/hardware.nix;
+  hardwareModule = ../../hosts/pi5/hardware.nix;
 
   vmModulesFor =
     hostCfg:
@@ -349,7 +349,7 @@ let
       server.role = "server";
       pi-storage = {
         role = "storage-pi";
-        # tests/pi.nix checks for this address on eth1. It predates the
+        # tests/storage-pi.nix checks for this address on eth1. It predates the
         # template and sits on the test driver's own VLAN subnet.
         networking = {
           ip = "192.168.1.2";

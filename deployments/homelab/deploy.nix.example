@@ -135,7 +135,7 @@
     pi-storage = {
       role = "storage-pi";
       system = "aarch64-linux";
-      platform = "raspberry-pi";
+      platform = "raspberry-pi-5";
       networking = {
         ip = "CHANGE_ME";
         interface = "end0";

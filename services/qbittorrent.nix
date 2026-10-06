@@ -16,7 +16,7 @@
 #   /srv/storage/a/media/  → /media/a  (movies, TV, music videos)
 #   /srv/storage/b/media/  → /media/b  (music, documentaries, ROMs, books, ...)
 # Each category saves into its folder. The Pi creates the folders
-# (modules/pi/storage.nix), owned by qbt, group media.
+# (modules/storage/storage.nix), owned by qbt, group media.
 #
 # Settings: qBittorrent's configuration is declared, not edited in the web UI.
 #   lanbat.services.qbittorrent.settings holds

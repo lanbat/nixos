@@ -1,6 +1,8 @@
-# modules/pi/tv.nix
+# modules/storage/tv-box.nix
 #
-# TV frontend on the Pi's HDMI output (loaded via the lanbat-tv plugin).
+# Raspberry Pi based TV box: Kodi and a games frontend on the Pi's HDMI output,
+# with the films, music and ROMs on the storage drives (loaded via the lanbat-tv
+# plugin, for the storage-pi role).
 #
 # Two sessions take turns on the screen. Each is a systemd service that runs
 # as the "media" user on tty1, and each conflicts with the other, so starting
@@ -43,7 +45,8 @@ let
   kodiTvConfig = pkgs.callPackage ../../pkgs/kodi-tv-config { };
   kodiBootstrap = pkgs.callPackage ../../pkgs/kodi-bootstrap { };
 
-  # Emulators that run well on a Raspberry Pi 5.
+  # Tuned for the Raspberry Pi 5: emulators that run well on it. Another board
+  # would want its own list.
   cores = with pkgs.libretro; [
     fceumm # NES
     nestopia
