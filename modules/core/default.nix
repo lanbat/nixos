@@ -16,6 +16,7 @@
     ./users.nix
     ./human-users.nix
     ./voice-satellite.nix
+    ./snapclient.nix
     ../wiring/accounts.nix
     ../wiring/secrets.nix
     ../wiring/checks.nix

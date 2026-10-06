@@ -16,6 +16,10 @@ let
   feedBridge = pkgs.callPackage ../pkgs/media-feed-bridge { };
   maSources = pkgs.callPackage ../pkgs/music-assistant-sources { };
   auntieSounds = pkgs.callPackage ../pkgs/auntie-sounds { };
+  linuxVoiceAssistant = pkgs.callPackage ../pkgs/linux-voice-assistant { };
+  lvaHeyNabu = pkgs.callPackage ../pkgs/lva-wakewords-hey-nabu { };
+  lvaWakeupChime = pkgs.callPackage ../pkgs/lva-wakeup-chime { };
+  lvaSnapcastDuck = pkgs.callPackage ../pkgs/lva-snapcast-duck { };
 in
 pkgs.runCommand "pkgs-build-smoke"
   {
@@ -29,6 +33,8 @@ pkgs.runCommand "pkgs-build-smoke"
       xiaomiClockSync
       feedBridge
       maSources
+      linuxVoiceAssistant
+      lvaSnapcastDuck
     ];
   }
   ''
@@ -44,5 +50,11 @@ pkgs.runCommand "pkgs-build-smoke"
     test -f ${caPage}/index.html
     test -d ${dashboards}
     test -f ${kodiTvConfig}/sources.xml
+    command -v linux-voice-assistant
+    test -f ${linuxVoiceAssistant}/bin/linux-voice-assistant
+    test -f ${lvaHeyNabu}/hey_nabu.tflite
+    test -f ${lvaHeyNabu}/hey_nabu.json
+    test -f ${lvaWakeupChime}/wakeup.flac
+    command -v lva-snapcast-duck
     touch $out
   ''

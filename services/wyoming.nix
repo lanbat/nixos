@@ -150,7 +150,9 @@ in
     10301
     10302
   ]
-  ++ lib.optionals config.lanbat.voiceSatellite.enable [ 10700 ];
+  ++ lib.optionals (
+    config.lanbat.voiceSatellite.enable && config.lanbat.voiceSatellite.backend == "wyoming"
+  ) [ 10700 ];
 
   # ---------------------------------------------------------------------------
   # Wake word detection
@@ -164,7 +166,6 @@ in
     extraArgs = [
       "--custom-model-dir"
       "/var/lib/openwakeword/custom-models"
-      "--debug"
     ];
   };
 

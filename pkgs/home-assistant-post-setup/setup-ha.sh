@@ -20,6 +20,10 @@ PI_HOST="${PI_HOST:?PI_HOST is required}"
 LOCAL_SATELLITE_PORT="${LOCAL_SATELLITE_PORT:-}"
 # The satellites on other hosts (voice-pi): space-separated "<host key>=<address>".
 EXTRA_SATELLITES="${EXTRA_SATELLITES:-}"
+# Space-separated "hostKey|address|port|backend|displayName" from the endpoint table.
+VOICE_SATELLITE_REGISTRATIONS="${VOICE_SATELLITE_REGISTRATIONS:-}"
+SERVER_HOST_KEY="${SERVER_HOST_KEY:-}"
+PRIMARY_STORAGE_KEY="${PRIMARY_STORAGE_KEY:-}"
 
 # The conversation agent: an OpenAI-compatible chat completions API through
 # the extended_openai_conversation component. Unset: Home Assistant's own agent.
@@ -200,6 +204,110 @@ ensure_wyoming() {
   log "adding wyoming service ${name} (${host}:${port})"
   add_entry wyoming "$name" "$(jq -n --arg host "$host" --argjson port "$port" '{host: $host, port: $port}')"
   mark_done "$state_key"
+}
+
+wyoming_satellite_title() {
+  local hostKey="$1"
+  if [[ -n "$PRIMARY_STORAGE_KEY" && "$hostKey" == "$PRIMARY_STORAGE_KEY" ]]; then
+    printf '%s' satellite
+  elif [[ -n "$SERVER_HOST_KEY" && "$hostKey" == "$SERVER_HOST_KEY" ]]; then
+    printf '%s' server-satellite
+  else
+    printf 'satellite-%s' "$hostKey"
+  fi
+}
+
+# The LVA satellites' ESPHome entries, and the Wyoming entries they replace.
+#
+# VOICE_SATELLITE_REGISTRATIONS has one "hostKey|address|port|backend|name"
+# line per satellite (names may contain spaces). Reconciling works on the
+# entries themselves rather than on state files, so it also repairs what an
+# earlier run got wrong:
+#   - an ESPHome entry is found by its address and port (or, failing that, its
+#     title) and given the configured title and address; only a satellite
+#     with no entry gets a new one, so a device is never added twice;
+#   - the Wyoming satellite entry this script made for a host that now runs
+#     LVA is removed, as are Wyoming "satellite…" entries with no host (left
+#     by a run that split names at spaces).
+# The server's own satellite may have been registered on the loopback before,
+# which LVA does not listen on; 127.0.0.1 counts as its old address.
+voice_registrations_json() {
+  local hostKey host port backend title old wyoming_title
+  while IFS='|' read -r hostKey host port backend title; do
+    [[ -n "$hostKey" ]] || continue
+    old="$host"
+    [[ -n "$SERVER_HOST_KEY" && "$hostKey" == "$SERVER_HOST_KEY" ]] && old="127.0.0.1"
+    wyoming_title="$(wyoming_satellite_title "$hostKey")"
+    jq -n --arg hostKey "$hostKey" --arg host "$host" --argjson port "$port" \
+      --arg backend "$backend" --arg title "$title" --arg old "$old" --arg wyoming "$wyoming_title" \
+      '{hostKey: $hostKey, host: $host, port: $port, backend: $backend, title: $title,
+        hosts: ([$host, $old] | unique), wyoming: $wyoming}'
+  done <<< "$VOICE_SATELLITE_REGISTRATIONS" | jq -s .
+}
+
+# The entries after reconciling, without the ones still to be added. Prints
+# the new storage JSON; the satellites still missing are in .missing.
+VOICE_RECONCILE_JQ='
+  ($regs | map(select(.backend == "lva"))) as $lva
+  | ($lva | map(.wyoming)) as $replaced
+  | .data.entries |= map(select(
+      (.domain == "wyoming"
+        and ((.title as $t | $replaced | index($t)) != null
+          or ((.title | startswith("satellite")) and (.data.host == null))))
+      | not))
+  | reduce $lva[] as $r (.;
+      ([.data.entries | to_entries[]
+        | select(.value.domain == "esphome"
+            and (.value.data.host as $h | $r.hosts | index($h)) != null
+            and .value.data.port == $r.port)
+        | .key] + [.data.entries | to_entries[]
+        | select(.value.domain == "esphome" and .value.title == $r.title) | .key])
+      as $hits
+      | if ($hits | length) > 0 then
+          .data.entries[$hits[0]] |= (.title = $r.title | .data.host = $r.host | .data.port = $r.port)
+        else
+          .missing += [$r]
+        end)'
+
+voice_satellites_reconciled() {
+  jq --argjson regs "$(voice_registrations_json)" "$VOICE_RECONCILE_JQ" "$CONFIG_ENTRIES"
+}
+
+voice_satellite_registration_needed() {
+  local wanted
+  wanted="$(voice_satellites_reconciled)"
+  # Anything to add for a Wyoming satellite, or any change to the entries.
+  jq -e '(.missing // []) | length > 0' <<< "$wanted" >/dev/null && return 0
+  [[ "$(jq -S 'del(.missing) | .data.entries' <<< "$wanted")" != "$(jq -S '.data.entries' "$CONFIG_ENTRIES")" ]] && return 0
+  local hostKey host port backend title
+  while IFS='|' read -r hostKey host port backend title; do
+    [[ -n "$hostKey" && "$backend" != "lva" ]] || continue
+    wyoming_needed "$(wyoming_satellite_title "$hostKey")" && return 0
+  done <<< "$VOICE_SATELLITE_REGISTRATIONS"
+  return 1
+}
+
+ensure_voice_satellite_registrations() {
+  local wanted tmp r hostKey host port backend title
+  wanted="$(voice_satellites_reconciled)"
+  if [[ "$(jq -S 'del(.missing) | .data.entries' <<< "$wanted")" != "$(jq -S '.data.entries' "$CONFIG_ENTRIES")" ]]; then
+    log "reconciling voice satellite entries"
+    tmp="$(mktemp)"
+    jq 'del(.missing)' <<< "$wanted" > "$tmp"
+    install -o hass -g hass -m 0600 "$tmp" "$CONFIG_ENTRIES"
+    rm "$tmp"
+  fi
+  while IFS= read -r r; do
+    [[ -n "$r" ]] || continue
+    title="$(jq -r .title <<< "$r")"; host="$(jq -r .host <<< "$r")"; port="$(jq -r .port <<< "$r")"
+    log "adding esphome device ${title} (${host}:${port})"
+    add_entry esphome "$title" "$(jq -n --arg host "$host" --argjson port "$port" \
+      '{host: $host, port: $port, password: "", noise_psk: ""}')"
+  done < <(jq -c '(.missing // [])[]' <<< "$wanted")
+  while IFS='|' read -r hostKey host port backend title; do
+    [[ -n "$hostKey" && "$backend" != "lva" ]] || continue
+    ensure_wyoming "$(wyoming_satellite_title "$hostKey")" "$host" "$port"
+  done <<< "$VOICE_SATELLITE_REGISTRATIONS"
 }
 
 llm_enabled() {
@@ -681,13 +789,18 @@ if ! state_done mqtt && ! has_entry mqtt; then needs_work=true; fi
 if ! state_done frigate && ! has_entry frigate; then needs_work=true; fi
 if ! state_done music_assistant && ! has_entry music_assistant; then needs_work=true; fi
 if ! state_done areas && [[ -f "$AREA_REGISTRY" ]]; then needs_work=true; fi
-for svc in openwakeword faster-whisper piper satellite; do
+for svc in openwakeword faster-whisper piper; do
   wyoming_needed "$svc" && needs_work=true
 done
-if [[ -n "$LOCAL_SATELLITE_PORT" ]] && wyoming_needed server-satellite; then needs_work=true; fi
-for entry in $EXTRA_SATELLITES; do
-  wyoming_needed "satellite-${entry%%=*}" && needs_work=true
-done
+if [[ -n "$VOICE_SATELLITE_REGISTRATIONS" ]]; then
+  voice_satellite_registration_needed && needs_work=true
+else
+  wyoming_needed satellite && needs_work=true
+  if [[ -n "$LOCAL_SATELLITE_PORT" ]] && wyoming_needed server-satellite; then needs_work=true; fi
+  for entry in $EXTRA_SATELLITES; do
+    wyoming_needed "satellite-${entry%%=*}" && needs_work=true
+  done
+fi
 if llm_needed; then needs_work=true; fi
 if ! state_done "$(pipeline_state_key)"; then needs_work=true; fi
 if ! state_done "$(satellite_vad_state_key)"; then needs_work=true; fi
@@ -709,13 +822,17 @@ ensure_music_assistant
 ensure_wyoming "openwakeword" "127.0.0.1" 10300
 ensure_wyoming "faster-whisper" "127.0.0.1" 10301
 ensure_wyoming "piper" "127.0.0.1" 10302
-ensure_wyoming "satellite" "$PI_HOST" 10700
-if [[ -n "$LOCAL_SATELLITE_PORT" ]]; then
-  ensure_wyoming "server-satellite" "127.0.0.1" "$LOCAL_SATELLITE_PORT"
+if [[ -n "$VOICE_SATELLITE_REGISTRATIONS" ]]; then
+  ensure_voice_satellite_registrations
+else
+  ensure_wyoming "satellite" "$PI_HOST" 10700
+  if [[ -n "$LOCAL_SATELLITE_PORT" ]]; then
+    ensure_wyoming "server-satellite" "127.0.0.1" "$LOCAL_SATELLITE_PORT"
+  fi
+  for entry in $EXTRA_SATELLITES; do
+    ensure_wyoming "satellite-${entry%%=*}" "${entry#*=}" 10700
+  done
 fi
-for entry in $EXTRA_SATELLITES; do
-  ensure_wyoming "satellite-${entry%%=*}" "${entry#*=}" 10700
-done
 ensure_llm
 ensure_pipeline
 ensure_satellite_vad

@@ -106,4 +106,18 @@
     MemoryMax = "550M";
     OOMScoreAdjust = 500;
   };
+
+  # WebRTC AEC in PipeWire is usable but costs CPU on the Pi 3; enable it only
+  # when you need wake/stop words during playback.
+  lanbat.voiceSatellite.echoCancellation.enable = lib.mkDefault false;
+
+  # openWakeWord can't keep up on a Pi 3: hey_nabu took 109 % of a core and ran
+  # at 0.9x realtime, against 7 % for a microWakeWord model (2026-10-06).
+  warnings =
+    let
+      satellite = config.lanbat.voiceSatellite;
+    in
+    lib.optional
+      (satellite.enable && satellite.backend == "lva" && lib.elem "hey_nabu" satellite.lva.wakeModels)
+      "lanbat: hey_nabu is an openWakeWord model, which runs slower than realtime on a Pi 3 (109 % of a core); the satellite will fall behind its microphone. Use a microWakeWord model such as okay_nabu.";
 }
