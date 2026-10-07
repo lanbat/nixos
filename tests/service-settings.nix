@@ -592,6 +592,16 @@ let
       && lvaServer.systemd.services.linux-voice-assistant.environment ? LVA_TLS_CA_FILE
     ))
 
+    # "play ..." on the room's speaker, and each satellite's room and host name
+    # for post-setup's area step (the example puts the server in the Office).
+    (expect "lva: voice play and stop automations, and rooms in the registrations" (
+      lib.all (id: lib.elem id (map (a: a.id) (haConfig lvaServer).automation)) [
+        "lanbat_voice_play"
+        "lanbat_voice_stop"
+      ]
+      && lib.hasInfix "|lva|Server Satellite|Office|" (postSetup lvaServer)
+    ))
+
     (expect "lva: the music ducks to near silence while listening, a quarter while answering" (
       lvaPi3Aec.systemd.services.lva-snapcast-duck.environment.DUCK_LISTEN_VOLUME == "0.05"
       # A ducker restarted with the music down finds the volumes to put back.
@@ -614,6 +624,34 @@ let
     (expect "lva: includeMusic plays Snapcast into the echo-cancel sink" (
       lib.hasInfix "--soundcard lanbat_aec_playback" lvaPi3Aec.systemd.services.snapclient.serviceConfig.ExecStart
       && !(lib.hasInfix "--soundcard" lvaServer.systemd.services.snapclient.serviceConfig.ExecStart or "")
+    ))
+
+    (expect "lva: stop works at the end of a transcript that caught the radio" (
+      let
+        stop = lib.findFirst (a: a.id == "lanbat_voice_stop") null (haConfig lvaServer).automation;
+      in
+      lib.elem "{noise} (stop|turn off) the (music|radio|podcast|audiobook|player|speaker)" (lib.head stop.trigger)
+      .command
+    ))
+
+    # Speech-to-text goes through the speaker-identification proxy, which
+    # passes it on to faster-whisper; faster-whisper's entry stays.
+    (expect "voice-id: the pipeline's speech-to-text, in front of faster-whisper" (
+      base.systemd.services ? voice-id
+      && lib.hasInfix "--upstream tcp://127.0.0.1:10301" base.systemd.services.voice-id.serviceConfig.ExecStart
+      && lib.hasInfix ''export PIPELINE_STT_ENGINE="stt.voice_id"'' (postSetup base)
+      && lib.elem 10303 base.lanbat.services.voice-id.extraPorts
+    ))
+
+    # A "stop" step inside if/then throws away the reply set before it (HA's
+    # _StopScript skips copying the sub-script's response), so the automations
+    # branch with if/then/else instead and every branch ends with a reply.
+    (expect "voice automations never use stop, so their replies reach the satellite" (
+      let
+        voiceAutomations = lib.filter (a: lib.hasPrefix "lanbat_voice" a.id) (haConfig base).automation;
+      in
+      voiceAutomations != [ ]
+      && !(lib.any (a: lib.hasInfix "\"stop\":" (builtins.toJSON a.action)) voiceAutomations)
     ))
 
     # Any host with an LVA satellite plays music in its room: a Snapcast client
@@ -654,6 +692,12 @@ let
       .success
     ))
 
+    # Home Assistant has no regex_escape filter; a template using one
+    # disables its whole automation at load.
+    (expect "voice automations use only filters Home Assistant has" (
+      !lib.hasInfix "regex_escape" (builtins.toJSON (haConfig base).automation)
+    ))
+
     (expect "home assistant: the defaults keep today's URLs and Zigbee watch" (
       (haConfig base).homeassistant.internal_url == "http://127.0.0.1:8123"
       && lib.hasInfix ''export FRIGATE_URL="http://127.0.0.1:5000/"'' (postSetup base)
@@ -664,6 +708,9 @@ let
         map (a: a.id) (haConfig base).automation == [
           "lanbat_zigbee_bridge_offline"
           "lanbat_zigbee_bridge_online"
+          "lanbat_voice_play"
+          "lanbat_voice_stop"
+          "lanbat_voice_volume"
         ]
       &&
         haViews base == [
@@ -682,7 +729,12 @@ let
     ))
 
     (expect "home assistant: the Zigbee watch can be turned off" (
-      (haConfig haNoZigbee).automation == [ ] && haViews haNoZigbee == [ "all" ]
+      map (a: a.id) (haConfig haNoZigbee).automation == [
+        "lanbat_voice_play"
+        "lanbat_voice_stop"
+        "lanbat_voice_volume"
+      ]
+      && haViews haNoZigbee == [ "all" ]
     ))
 
     (expect "telegraf: the defaults keep today's outputs and inputs" (

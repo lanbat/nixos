@@ -200,6 +200,19 @@
             nixos-raspberrypi
             ;
         };
+        voice-compute = import ./tests/voice-compute.nix {
+          inherit
+            lib
+            pkgs
+            inputs
+            self
+            agenix
+            disko
+            deploy-rs
+            nixpkgs
+            nixos-raspberrypi
+            ;
+        };
         service-settings = import ./tests/service-settings.nix (
           {
             part = 1;

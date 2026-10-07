@@ -87,6 +87,10 @@ let
   # An LLM on this host's loopback (services/llama-cpp.nix) needs no API key,
   # and no keepalive to hold off a scale-to-zero cold start.
   llmLocal = (import ../lib/host.nix { inherit lib; }).haLlmIsLocal llm;
+  llmKey = llm != null && (llm.apiKey or (!llmLocal));
+  # Where the heavy voice work runs (lib/voice-compute.nix).
+  voiceCompute = (import ../lib/voice-compute.nix { inherit lib; }).forConfig config;
+  voiceComputeProfile = config.lanbat.deployment.voiceCompute.profile or "low-spec";
   llmComponent = pkgs.callPackage ../pkgs/home-assistant-extended-openai-conversation { };
   satellite = config.lanbat.voiceSatellite;
   piper = config.services.wyoming.piper.servers.main;
@@ -131,8 +135,13 @@ let
           config.lanbat.hosts.${hostKey}.networking.ip
         else
           "127.0.0.1";
+      # The Home Assistant area the satellite and its host's Snapcast player
+      # belong in (lanbat.deployment.voiceRooms), and the host name the Music
+      # Assistant player carries.
+      room = lib.defaultTo "" (hostLib.voiceRoomForHost config.lanbat.deployment.voiceRooms hostKey);
+      hostname = config.lanbat.hosts.${hostKey}.networking.hostname or hostKey;
     in
-    "${hostKey}|${address}|${toString voiceSatellitePort}|${reg.backend}|${reg.displayName}";
+    "${hostKey}|${address}|${toString voiceSatellitePort}|${reg.backend}|${reg.displayName}|${room}|${hostname}";
   # One line per satellite: names contain spaces.
   voiceSatelliteRegistrationsEnv = lib.concatStringsSep "\n" (
     map voiceSatelliteRegistrationLine voiceSatelliteHosts
@@ -160,6 +169,388 @@ let
       '';
     };
   };
+
+  # Playing anything by voice on the room's speaker, without the LLM.
+  #
+  # Home Assistant's own "play {name}" sentence only takes its fixed patterns
+  # and picks a player by name; these sentence triggers (which win over the
+  # built-in intents) take everyday phrasing and play on the Music Assistant
+  # player in the area of the satellite that heard the request, or in an area
+  # named at the end ("... in the living room"). Music Assistant searches for
+  # the name across its providers (radio stations, podcasts, Audiobookshelf,
+  # music); a word in the request narrows the kind:
+  #
+  #   "play BBC Radio 4", "put on Massive Attack", "I want to listen to jazz"
+  #   "play the radio <station>", "play <station> radio", "tune in to <station>"
+  #   "play the podcast <name>", "play <name> podcast"
+  #   "play the audiobook <title>", "play the album/artist/song/playlist <name>"
+  #   "play something like <artist>" (Music Assistant's radio mode: similar
+  #   music, endlessly)
+  #   "stop the music", "turn off the radio"
+  # Kind words other than radio, and how each may be taken off the name: any
+  # of them as "the <word> <name>" or "<name> <word>", and the ones no name
+  # starts with also as "<word> <name>" ("song 2" is a song).
+  voicePlayKinds = {
+    podcast = "podcast";
+    audiobook = "audiobook";
+    album = "album";
+    artist = "artist";
+    song = "track";
+    track = "track";
+    playlist = "playlist";
+  };
+  voicePlayWords = lib.concatStringsSep "|" (lib.attrNames voicePlayKinds);
+  voicePlayLeadingWords = "podcast|audiobook|album|artist|playlist";
+
+  # The request with any room named at the end taken off, the area (named or
+  # the satellite's), the kind of media and the bare name to search for. Each
+  # uses the ones before it, and Home Assistant evaluates them in order, which
+  # a Nix attribute set (sorted by name) would not keep: voicePlaySteps turns
+  # them into one variables step each, in voicePlayOrder.
+  voicePlayVariables = {
+    raw = "{{ trigger.slots.query | default('') | trim }}";
+    sentence = "{{ trigger.sentence | lower }}";
+    named_area = ''
+      {%- set ns = namespace(id="") -%}
+      {%- for a in areas() -%}
+        {%- set n = area_name(a) | lower -%}
+        {%- if (raw | lower).endswith(' in the ' ~ n) or (raw | lower).endswith(' in ' ~ n) -%}
+          {%- set ns.id = a -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ ns.id }}'';
+    area = "{{ named_area if named_area else (area_id(trigger.device_id) or '') }}";
+    request = ''
+      {%- if named_area -%}
+        {%- set n = area_name(named_area) | lower -%}
+        {%- set cut = (' in the ' ~ n) if (raw | lower).endswith(' in the ' ~ n) else (' in ' ~ n) -%}
+        {{ raw[:(raw | length) - (cut | length)] }}
+      {%- else -%}{{ raw }}{%- endif -%}'';
+    kinds = builtins.toJSON voicePlayKinds;
+    # Radio is any request with the word in it ("Radio 1", "Absolute Radio")
+    # or "tune in to ...", and keeps the station's name whole.
+    kind = ''
+      {%- set k = kinds | from_json -%}
+      {%- set r = request | lower -%}
+      {%- set ns = namespace(kind="") -%}
+      {%- if sentence.startswith('tune in') or r is search('\\bradio\\b') -%}{%- set ns.kind = 'radio' -%}{%- endif -%}
+      {%- for word, value in k.items() -%}
+        {%- if not ns.kind and (r.startswith('the ' ~ word ~ ' ') or r.endswith(' ' ~ word)
+              or (word in '${voicePlayLeadingWords}'.split('|') and r.startswith(word ~ ' '))) -%}
+          {%- set ns.kind = value -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ ns.kind }}'';
+    similar = "{{ (request | lower) is match('(something|music|songs|stuff) like ') }}";
+    query = ''
+      {%- set q = request | regex_replace('(?i)^(something|music|songs|stuff) like\\s+', "") -%}
+      {%- if kind == 'radio' -%}
+        {{ q | regex_replace('(?i)^(the\\s+)?radio\\s+station\\s+|^the\\s+radio\\s+', "") | trim }}
+      {%- else -%}
+        {{ q | regex_replace('(?i)^the\\s+(${voicePlayWords})\\s+|^(${voicePlayLeadingWords})\\s+', "")
+             | regex_replace('(?i)\\s+(${voicePlayWords})$', "") | trim }}
+      {%- endif -%}'';
+    # "La Isla Bonita by Madonna": a track by that artist; "something by
+    # Madonna" (or a song, music, anything): the artist herself.
+    by_artist = "{{ query | regex_findall('(?i)^.+?\\s+by\\s+(.+)$') | first | default(\"\") }}";
+    by_title = "{{ query | regex_replace('(?i)\\s+by\\s+.+$', \"\") if by_artist else \"\" }}";
+    play_type = ''
+      {%- set generic = ['something', 'anything', 'a song', 'some songs', 'songs', 'music', 'some music', 'a track', 'tracks'] -%}
+      {%- if by_artist and (by_title | lower) in generic -%}artist
+      {%- elif by_artist -%}track
+      {%- else -%}{{ kind }}{%- endif -%}'';
+    play_id = "{{ by_artist if (by_artist and play_type == 'artist') else (by_title if by_artist else query) }}";
+    play_artist = "{{ by_artist if play_type == 'track' else \"\" }}";
+    player = ''
+      {{ integration_entities('music_assistant')
+         | select('match', 'media_player\\.')
+         | select('in', area_entities(area) if area else [])
+         | first | default("") }}'';
+    place = "{{ 'in the ' ~ area_name(area) if named_area else 'in here' }}";
+  };
+
+  # "stop the music [in the <room>]": the same area lookup, every player in it.
+  voicePlayStopVariables = voicePlayVariables // {
+    raw = "{{ 'x in ' ~ trigger.slots.query if trigger.slots.query is defined else '' }}";
+    players = ''
+      {{ integration_entities('music_assistant')
+         | select('match', 'media_player\\.')
+         | select('in', area_entities(area) if area else [])
+         | list }}'';
+  };
+
+  # "volume to 70 percent", "louder", "turn the music down", "increase the
+  # volume by 20 percent": the room's Music Assistant player, which is the
+  # music's volume. Home Assistant's own volume sentences need a player's name
+  # and, without one, fell through to the LLM, which can't set a volume.
+  voiceVolumeVariables = {
+    inherit (voicePlayVariables)
+      sentence
+      named_area
+      area
+      player
+      place
+      ;
+    raw = "{{ \"\" }}";
+    level = "{{ (trigger.slots.level | default(\"\") | regex_findall('\\d+') | first | default(\"\")) }}";
+  };
+
+  voicePlayOrder = [
+    "raw"
+    "sentence"
+    "named_area"
+    "area"
+    "request"
+    "kinds"
+    "kind"
+    "similar"
+    "query"
+    "by_artist"
+    "by_title"
+    "play_type"
+    "play_id"
+    "play_artist"
+    "player"
+    "players"
+    "place"
+    "level"
+  ];
+  voicePlaySteps =
+    vars:
+    map (name: { variables.${name} = vars.${name}; }) (
+      lib.filter (name: vars ? ${name}) voicePlayOrder
+    );
+
+  voiceVolumeAutomation = {
+    alias = "Voice: the room's speaker volume";
+    id = "lanbat_voice_volume";
+    mode = "parallel";
+    trigger = [
+      {
+        platform = "conversation";
+        id = "set";
+        command = [
+          "[set] [the] volume to {level}"
+          "(set|turn) the (volume|music|radio) to {level}"
+          "(increase|raise|decrease|lower|reduce) the volume to {level}"
+        ];
+      }
+      {
+        platform = "conversation";
+        id = "up";
+        command = [
+          "(increase|raise) the volume [by {level}]"
+          "turn (it|the volume|the music|the radio) up [by {level}]"
+          "turn up the (volume|music|radio) [by {level}]"
+          "[make it] louder [please]"
+          "volume up"
+        ];
+      }
+      {
+        platform = "conversation";
+        id = "down";
+        command = [
+          "(decrease|lower|reduce) the volume [by {level}]"
+          "turn (it|the volume|the music|the radio) down [by {level}]"
+          "turn down the (volume|music|radio) [by {level}]"
+          "[make it] quieter [please]"
+          "volume down"
+        ];
+      }
+    ];
+    action = voicePlaySteps voiceVolumeVariables ++ [
+      {
+        "if" = [
+          {
+            condition = "template";
+            value_template = "{{ not player or (trigger.id == 'set' and not level) }}";
+          }
+        ];
+        "then" = [
+          {
+            set_conversation_response = "{{ 'There is no speaker ' ~ place if not player else 'To what level?' }}";
+          }
+        ];
+        "else" = [
+          {
+            variables.target = ''
+              {%- set now = state_attr(player, 'volume_level') | float(0.5) -%}
+              {%- set step = (level | int / 100) if level else 0.15 -%}
+              {%- if trigger.id == 'set' -%}{{ [[level | int / 100, 0.02] | max, 1.0] | min }}
+              {%- elif trigger.id == 'up' -%}{{ [now + step, 1.0] | min }}
+              {%- else -%}{{ [now - step, 0.02] | max }}{%- endif -%}'';
+          }
+          {
+            service = "media_player.volume_set";
+            target.entity_id = "{{ player }}";
+            data.volume_level = "{{ target | float }}";
+          }
+          { set_conversation_response = "Volume {{ (target | float * 100) | round | int }} percent."; }
+        ];
+      }
+    ];
+  };
+
+  voicePlayAutomations = [
+    {
+      alias = "Voice: play on the room's speaker";
+      id = "lanbat_voice_play";
+      mode = "parallel";
+      trigger = [
+        {
+          platform = "conversation";
+          command = [
+            "play [me] [some] {query}"
+            "put on {query}"
+            "put {query} on"
+            "(I want to|I'd like to|let me|can I) (listen to|hear) {query}"
+            "listen to {query}"
+            "tune in to {query}"
+          ];
+        }
+      ];
+      action = voicePlaySteps voicePlayVariables ++ [
+        {
+          "if" = [
+            {
+              condition = "template";
+              value_template = "{{ not player }}";
+            }
+          ];
+          "then" = [
+            { set_conversation_response = "There's no speaker {{ place }}."; }
+          ];
+          "else" = [
+            # What the speaker had before, to tell the new item from it.
+            { variables.before = "{{ state_attr(player, 'media_content_id') or '' }}"; }
+            {
+              choose = [
+                {
+                  conditions = [
+                    {
+                      condition = "template";
+                      value_template = "{{ play_artist != '' }}";
+                    }
+                  ];
+                  sequence = [
+                    {
+                      service = "music_assistant.play_media";
+                      target.entity_id = "{{ player }}";
+                      continue_on_error = true;
+                      data = {
+                        media_id = "{{ play_id }}";
+                        media_type = "track";
+                        artist = "{{ play_artist }}";
+                        enqueue = "replace";
+                        radio_mode = "{{ similar }}";
+                      };
+                    }
+                  ];
+                }
+                {
+                  conditions = [
+                    {
+                      condition = "template";
+                      value_template = "{{ play_type != '' }}";
+                    }
+                  ];
+                  sequence = [
+                    {
+                      service = "music_assistant.play_media";
+                      target.entity_id = "{{ player }}";
+                      continue_on_error = true;
+                      data = {
+                        media_id = "{{ play_id }}";
+                        media_type = "{{ play_type }}";
+                        enqueue = "replace";
+                        radio_mode = "{{ similar }}";
+                      };
+                    }
+                  ];
+                }
+              ];
+              default = [
+                {
+                  service = "music_assistant.play_media";
+                  target.entity_id = "{{ player }}";
+                  continue_on_error = true;
+                  data = {
+                    media_id = "{{ play_id }}";
+                    enqueue = "replace";
+                    radio_mode = "{{ similar }}";
+                  };
+                }
+              ];
+            }
+            # Say what actually plays, or that nothing could be found: Music
+            # Assistant may fail, or pick something else than was meant.
+            {
+              wait_template = "{{ is_state(player, 'playing') and (state_attr(player, 'media_content_id') or '') != before }}";
+              timeout = "00:00:12";
+              continue_on_timeout = true;
+            }
+            {
+              set_conversation_response = ''
+                {%- if wait.completed -%}
+                  {%- set title = state_attr(player, 'media_title') or play_id -%}
+                  {%- set artist = state_attr(player, 'media_artist') -%}
+                  {{ 'Playing something like ' if (similar | string | lower) == 'true' else 'Playing ' }}{{ title }}{{ ' by ' ~ artist if artist and artist | lower not in title | lower else "" }}.
+                {%- else -%}
+                  Sorry, I couldn't find {{ play_id }}{{ ' by ' ~ play_artist if play_artist else "" }}.
+                {%- endif -%}'';
+            }
+          ];
+        }
+      ];
+    }
+    {
+      alias = "Voice: stop the room's speaker";
+      id = "lanbat_voice_stop";
+      mode = "parallel";
+      trigger = [
+        {
+          platform = "conversation";
+          command = [
+            "stop [playing] [the] [(music|radio|podcast|audiobook|song|playback|player|speaker)] [please] [in {query}]"
+            "stop it [please]"
+            "turn off the (music|radio|podcast|audiobook|player|speaker|playback) [please] [in {query}]"
+            "turn the (music|radio|podcast|audiobook|player|speaker) off [please] [in {query}]"
+            "(be quiet|silence|enough) [please]"
+            # Stray words before or after the command: a transcript that also
+            # caught the speaker's own audio ("... two sides obviously turn off
+            # the radio", "stop playing ... I can't help it", lyrics). Only for
+            # stopping: a stray stop is harmless, a stray play is not.
+            "{noise} (stop|turn off) the (music|radio|podcast|audiobook|player|speaker)"
+            "{noise} turn the (music|radio|podcast|audiobook|player|speaker) off"
+            "{noise} (stop|pause) [the] music"
+            "{noise} stop playing"
+            "stop playing {rest}"
+            "stop the (music|radio|player) {rest}"
+          ];
+        }
+      ];
+      action = voicePlaySteps voicePlayStopVariables ++ [
+        {
+          "if" = [
+            {
+              condition = "template";
+              value_template = "{{ players | length == 0 }}";
+            }
+          ];
+          "then" = [
+            { set_conversation_response = "There's no speaker {{ place }}."; }
+          ];
+          "else" = [
+            {
+              service = "media_player.media_stop";
+              target.entity_id = "{{ players }}";
+            }
+            { set_conversation_response = "Okay."; }
+          ];
+        }
+      ];
+    }
+  ];
 
   zigbeeAutomations = [
     {
@@ -239,6 +630,14 @@ in
           if llm == null then "" else llm.baseUrl
         }), but this host has no llama-cpp service; add it to the server's services, or point haLlm at another endpoint.";
       }
+      {
+        # The apple-silicon profile moves the model to the Mac; a model on the
+        # loopback would take back the cores that profile gives speech-to-text.
+        assertion = voiceComputeProfile != "apple-silicon" || (llm != null && !llmLocal);
+        message = "lanbat: lanbat.deployment.voiceCompute.profile is \"apple-silicon\", so lanbat.deployment.haLlm.baseUrl must be the Mac's OpenAI-compatible API on the LAN, not ${
+          if llm == null then "null" else llm.baseUrl
+        }.";
+      }
     ];
 
     # The schema is merged into lanbat.services.home-assistant.settings;
@@ -274,7 +673,7 @@ in
         hass-bootstrap-env.owner = "hass";
         # The API key of the conversation agent's LLM.
         ha-llm-api-key = {
-          enable = llm != null && !llmLocal;
+          enable = llmKey;
           owner = "hass";
         };
         # The record of the voice satellites' token, for home-assistant-post-setup.
@@ -408,16 +807,22 @@ in
           }"
         ''}
         export PIPELINE_STT_LANGUAGE="${config.services.wyoming.faster-whisper.servers.main.language}"
+        ${lib.optionalString (config.lanbat.hasService "voice-id") ''
+          # Speech-to-text through the speaker-identification proxy
+          # (services/voice-id.nix); faster-whisper stays as its upstream.
+          export VOICE_ID_PORT="${toString (lib.head config.lanbat.services.voice-id.extraPorts)}"
+          export PIPELINE_STT_ENGINE="stt.voice_id"
+        ''}
         export PIPELINE_TTS_LANGUAGE="${lib.head (lib.splitString "-" piper.voice)}"
         export PIPELINE_TTS_VOICE="${piper.voice}"
         export PIPELINE_WAKE_WORD="hey_nabu"
         ${lib.optionalString (llm != null) ''
           export LLM_BASE_URL="${llm.baseUrl}"
           export LLM_MODEL="${llm.model}"
-          ${lib.optionalString (!llmLocal) ''
+          ${lib.optionalString llmKey ''
             export LLM_API_KEY_FILE="${config.lanbat.secrets.ha-llm-api-key.path}"
           ''}
-          export LLM_MAX_TOKENS="150"
+          export LLM_MAX_TOKENS="${toString voiceCompute.llmMaxTokens}"
           export LLM_USE_TOOLS="false"
         ''}
         ${lib.optionalString voiceRooms ''
@@ -602,7 +1007,11 @@ in
           };
         };
 
-        automation = lib.optionals cfg.zigbee2mqttBridge zigbeeAutomations;
+        automation =
+          lib.optionals cfg.zigbee2mqttBridge zigbeeAutomations
+          ++ lib.optionals (config.lanbat.hasService "music-assistant" && voiceSatelliteHosts != [ ]) (
+            voicePlayAutomations ++ [ voiceVolumeAutomation ]
+          );
       };
 
       lovelaceConfig = {
@@ -626,8 +1035,12 @@ in
       };
     };
 
-    systemd.services.runpod-ha-llm-keepalive = lib.mkIf (llm != null && !llmLocal) {
-      description = "Ping RunPod HA LLM to avoid scale-to-zero cold starts";
+    # Keeps a model elsewhere warm between voice commands: a scale-to-zero API
+    # (RunPod) cold-starts, and a Mac's server (Ollama, LM Studio) unloads an
+    # idle model after a few minutes, either of which costs seconds on the
+    # next question.
+    systemd.services.ha-llm-keepalive = lib.mkIf (llm != null && !llmLocal) {
+      description = "Keep the conversation agent's LLM warm";
       serviceConfig = {
         Type = "oneshot";
         User = "root";
@@ -637,17 +1050,19 @@ in
         pkgs.coreutils
       ];
       script = ''
-        key=$(cat ${config.lanbat.secrets.ha-llm-api-key.path})
-        curl -sS --max-time 45 \
-          -H "Authorization: Bearer $key" \
+        auth=()
+        ${lib.optionalString llmKey ''
+          auth=(-H "Authorization: Bearer $(cat ${config.lanbat.secrets.ha-llm-api-key.path})")
+        ''}
+        curl -sS --max-time 45 "''${auth[@]}" \
           -H "Content-Type: application/json" \
           -d '{"model":"${llm.model}","messages":[{"role":"user","content":"ping"}],"max_tokens":1,"chat_template_kwargs":{"enable_thinking":false}}' \
           "${llm.baseUrl}/chat/completions" >/dev/null || true
       '';
     };
 
-    systemd.timers.runpod-ha-llm-keepalive = lib.mkIf (llm != null && !llmLocal) {
-      description = "Keep RunPod HA LLM worker warm between voice commands";
+    systemd.timers.ha-llm-keepalive = lib.mkIf (llm != null && !llmLocal) {
+      description = "Keep the conversation agent's LLM warm";
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnBootSec = "3min";

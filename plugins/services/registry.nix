@@ -39,6 +39,7 @@
   tang = ../../services/tang.nix;
   telegraf = ../../services/telegraf.nix;
   vaultwarden = ../../services/vaultwarden.nix;
+  voice-id = ../../services/voice-id.nix;
   wyoming = ../../services/wyoming.nix;
   zigbee2mqtt = ../../services/zigbee2mqtt.nix;
 }

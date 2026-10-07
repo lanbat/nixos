@@ -22,6 +22,8 @@ let
     "deployment.overlay"
     "deployment.haLlm"
     "deployment.haXiaomiBle"
+    # "low-spec" is how a profile without a Mac has always run, not a placeholder.
+    "deployment.voiceCompute.profile"
     "deployment.voiceRooms"
     "deployment.primaryServer"
     "deployment.primaryStorage"

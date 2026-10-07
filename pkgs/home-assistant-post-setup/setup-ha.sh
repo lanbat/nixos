@@ -45,6 +45,11 @@ PIPELINES="${HASS_CONFIG}/.storage/assist_pipeline.pipelines"
 PIPELINE_NAME="Voice"
 PIPELINE_LANGUAGE="${PIPELINE_LANGUAGE:-en}"
 PIPELINE_STT_LANGUAGE="${PIPELINE_STT_LANGUAGE:-en}"
+# The pipeline's speech-to-text: faster-whisper, or the voice-id proxy in front
+# of it (VOICE_ID_PORT) once that runs. Home Assistant names a Wyoming entity
+# after the program it reports.
+PIPELINE_STT_ENGINE="${PIPELINE_STT_ENGINE:-stt.faster_whisper}"
+VOICE_ID_PORT="${VOICE_ID_PORT:-}"
 PIPELINE_TTS_LANGUAGE="${PIPELINE_TTS_LANGUAGE:-en_GB}"
 PIPELINE_TTS_VOICE="${PIPELINE_TTS_VOICE:-en_GB-alan-medium}"
 PIPELINE_WAKE_WORD="${PIPELINE_WAKE_WORD:-okay_nabu}"
@@ -219,8 +224,9 @@ wyoming_satellite_title() {
 
 # The LVA satellites' ESPHome entries, and the Wyoming entries they replace.
 #
-# VOICE_SATELLITE_REGISTRATIONS has one "hostKey|address|port|backend|name"
-# line per satellite (names may contain spaces). Reconciling works on the
+# VOICE_SATELLITE_REGISTRATIONS has one "hostKey|address|port|backend|name|
+# room|hostname" line per satellite (names may contain spaces; room is empty
+# for a satellite outside lanbat.deployment.voiceRooms). Reconciling works on the
 # entries themselves rather than on state files, so it also repairs what an
 # earlier run got wrong:
 #   - an ESPHome entry is found by its address and port (or, failing that, its
@@ -233,7 +239,7 @@ wyoming_satellite_title() {
 # which LVA does not listen on; 127.0.0.1 counts as its old address.
 voice_registrations_json() {
   local hostKey host port backend title old wyoming_title
-  while IFS='|' read -r hostKey host port backend title; do
+  while IFS='|' read -r hostKey host port backend title _room _hostname; do
     [[ -n "$hostKey" ]] || continue
     old="$host"
     [[ -n "$SERVER_HOST_KEY" && "$hostKey" == "$SERVER_HOST_KEY" ]] && old="127.0.0.1"
@@ -280,7 +286,7 @@ voice_satellite_registration_needed() {
   jq -e '(.missing // []) | length > 0' <<< "$wanted" >/dev/null && return 0
   [[ "$(jq -S 'del(.missing) | .data.entries' <<< "$wanted")" != "$(jq -S '.data.entries' "$CONFIG_ENTRIES")" ]] && return 0
   local hostKey host port backend title
-  while IFS='|' read -r hostKey host port backend title; do
+  while IFS='|' read -r hostKey host port backend title _room _hostname; do
     [[ -n "$hostKey" && "$backend" != "lva" ]] || continue
     wyoming_needed "$(wyoming_satellite_title "$hostKey")" && return 0
   done <<< "$VOICE_SATELLITE_REGISTRATIONS"
@@ -304,10 +310,67 @@ ensure_voice_satellite_registrations() {
     add_entry esphome "$title" "$(jq -n --arg host "$host" --argjson port "$port" \
       '{host: $host, port: $port, password: "", noise_psk: ""}')"
   done < <(jq -c '(.missing // [])[]' <<< "$wanted")
-  while IFS='|' read -r hostKey host port backend title; do
+  while IFS='|' read -r hostKey host port backend title _room _hostname; do
     [[ -n "$hostKey" && "$backend" != "lva" ]] || continue
     ensure_wyoming "$(wyoming_satellite_title "$hostKey")" "$host" "$port"
   done <<< "$VOICE_SATELLITE_REGISTRATIONS"
+}
+
+# Each satellite with a room (lanbat.deployment.voiceRooms), and the Music
+# Assistant player of its host's Snapcast client, go in that Home Assistant
+# area, on every run, so "play …" and "turn off the lights" act on the room the
+# satellite is in. The satellite's device is the one under its ESPHome entry;
+# the player is the Music Assistant device named after the host. A room
+# Home Assistant has no area for is skipped with a message.
+DEVICE_REGISTRY="${HASS_CONFIG}/.storage/core.device_registry"
+
+satellite_areas_json() {
+  local hostKey host port backend title room hostname
+  while IFS='|' read -r hostKey host port backend title room hostname; do
+    [[ -n "$hostKey" && -n "$room" ]] || continue
+    jq -n --arg title "$title" --arg room "$room" --arg hostname "$hostname" \
+      '{title: $title, room: $room, hostname: $hostname}'
+  done <<< "$VOICE_SATELLITE_REGISTRATIONS" | jq -s .
+}
+
+# The device registry with the areas set; .unknown_rooms lists rooms with no
+# Home Assistant area.
+SATELLITE_AREAS_JQ='
+  ($areas[0].data.areas | map({key: (.name | ascii_downcase), value: .id}) | from_entries) as $ids
+  | ($entries[0].data.entries) as $all
+  | ($all | map(select(.domain == "music_assistant") | .entry_id)) as $ma
+  | .unknown_rooms = ($want | map(select(($ids[.room | ascii_downcase]) == null) | .room) | unique)
+  | reduce ($want[] | select($ids[.room | ascii_downcase] != null)) as $w (.;
+      ($ids[$w.room | ascii_downcase]) as $area
+      | ($all | map(select(.domain == "esphome" and .title == $w.title) | .entry_id)) as $sat
+      | .data.devices |= map(
+          if ((.config_entries | any(. as $e | $sat | index($e)))
+              or (.name == $w.hostname and (.config_entries | any(. as $e | $ma | index($e)))))
+          then .area_id = $area else . end))'
+
+satellite_areas_wanted() {
+  jq --argjson want "$(satellite_areas_json)" \
+    --slurpfile areas "$AREA_REGISTRY" --slurpfile entries "$CONFIG_ENTRIES" \
+    "$SATELLITE_AREAS_JQ" "$DEVICE_REGISTRY"
+}
+
+satellite_areas_needed() {
+  [[ -n "$VOICE_SATELLITE_REGISTRATIONS" && -f "$DEVICE_REGISTRY" && -f "$AREA_REGISTRY" ]] || return 1
+  [[ "$(satellite_areas_wanted | jq -S '.data.devices')" != "$(jq -S '.data.devices' "$DEVICE_REGISTRY")" ]]
+}
+
+ensure_satellite_areas() {
+  satellite_areas_needed || return 0
+  local wanted tmp room
+  wanted="$(satellite_areas_wanted)"
+  while IFS= read -r room; do
+    [[ -n "$room" ]] && log "no Home Assistant area named ${room}; its satellite keeps its area"
+  done < <(jq -r '.unknown_rooms[]' <<< "$wanted")
+  log "putting voice satellites and their speakers in their rooms"
+  tmp="$(mktemp)"
+  jq 'del(.unknown_rooms)' <<< "$wanted" > "$tmp"
+  install -o hass -g hass -m 0600 "$tmp" "$DEVICE_REGISTRY"
+  rm "$tmp"
 }
 
 llm_enabled() {
@@ -316,8 +379,9 @@ llm_enabled() {
   [[ -z "$LLM_API_KEY_FILE" || -s "$LLM_API_KEY_FILE" ]]
 }
 
-# The key sent to the API. The component insists on one, and a local server
-# (LLM_API_KEY_FILE unset) ignores it.
+# The key sent to the API. The component insists on one, and a server that
+# takes none (LLM_API_KEY_FILE unset: the loopback, or a Mac on the LAN)
+# ignores it.
 llm_api_key() {
   if [[ -n "$LLM_API_KEY_FILE" ]]; then
     tr -d '\n' < "$LLM_API_KEY_FILE"
@@ -340,6 +404,10 @@ llm_api_key() {
 llm_prompt() {
   cat <<'PROMPT'
 You are the voice assistant of this home, running in Home Assistant. Your answers are spoken aloud: reply in one or two short, plain sentences, without lists, markdown or emoji.
+
+Talk like a person in the room: use contractions, answer directly, don't repeat the question, and never mention entity IDs, functions or how you did something. When you've done something, a word or two is enough, such as "Done." or "Okay, it's on." Round numbers the way people say them ("about twenty-eight degrees"). If you can't know something, say so.
+
+Only say you've done something if you used control_device for it. You can't play music, radio or podcasts, and you don't know the time or date: say so rather than guess.
 
 Devices you can see and control:
 ```csv
@@ -490,13 +558,14 @@ pipeline_json() {
   if llm_enabled; then conversation="$LLM_ENTITY"; fi
   jq -n --arg name "$PIPELINE_NAME" --arg conversation "$conversation" \
     --arg language "$PIPELINE_LANGUAGE" --arg stt_language "$PIPELINE_STT_LANGUAGE" \
+    --arg stt_engine "$PIPELINE_STT_ENGINE" \
     --arg tts_language "$PIPELINE_TTS_LANGUAGE" --arg tts_voice "$PIPELINE_TTS_VOICE" \
     --arg wake_word "$PIPELINE_WAKE_WORD" '{
       name: $name,
       language: $language,
       conversation_engine: $conversation,
       conversation_language: $language,
-      stt_engine: "stt.faster_whisper",
+      stt_engine: $stt_engine,
       stt_language: $stt_language,
       tts_engine: "tts.piper",
       tts_language: $tts_language,
@@ -792,6 +861,7 @@ if ! state_done areas && [[ -f "$AREA_REGISTRY" ]]; then needs_work=true; fi
 for svc in openwakeword faster-whisper piper; do
   wyoming_needed "$svc" && needs_work=true
 done
+if [[ -n "$VOICE_ID_PORT" ]] && wyoming_needed voice-id; then needs_work=true; fi
 if [[ -n "$VOICE_SATELLITE_REGISTRATIONS" ]]; then
   voice_satellite_registration_needed && needs_work=true
 else
@@ -801,6 +871,7 @@ else
     wyoming_needed "satellite-${entry%%=*}" && needs_work=true
   done
 fi
+if satellite_areas_needed; then needs_work=true; fi
 if llm_needed; then needs_work=true; fi
 if ! state_done "$(pipeline_state_key)"; then needs_work=true; fi
 if ! state_done "$(satellite_vad_state_key)"; then needs_work=true; fi
@@ -821,6 +892,9 @@ ensure_frigate
 ensure_music_assistant
 ensure_wyoming "openwakeword" "127.0.0.1" 10300
 ensure_wyoming "faster-whisper" "127.0.0.1" 10301
+if [[ -n "$VOICE_ID_PORT" ]]; then
+  ensure_wyoming "voice-id" "127.0.0.1" "$VOICE_ID_PORT"
+fi
 ensure_wyoming "piper" "127.0.0.1" 10302
 if [[ -n "$VOICE_SATELLITE_REGISTRATIONS" ]]; then
   ensure_voice_satellite_registrations
@@ -833,6 +907,7 @@ else
     ensure_wyoming "satellite-${entry%%=*}" "${entry#*=}" 10700
   done
 fi
+ensure_satellite_areas
 ensure_llm
 ensure_pipeline
 ensure_satellite_vad

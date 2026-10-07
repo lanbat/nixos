@@ -25,9 +25,10 @@
 #
 # faster-whisper (10301) — speech-to-text.
 #   Downloads the model on first start (~40 MB for base-int8).
-#   base-int8 is the voice default: noticeably faster than small-int8 on CPU
-#   with enough accuracy for short commands. Use small-int8 if transcripts
-#   are often wrong.
+#   The model follows lanbat.deployment.voiceCompute.profile: base-int8 for
+#   "low-spec" (fast on a CPU shared with a local LLM, enough for short
+#   commands), small-int8 for "apple-silicon" (the LLM is on a Mac, so the
+#   server can afford better transcripts across a room or over music).
 #
 # piper (10302) — text-to-speech.
 #   Downloads the voice model on first start (~60 MB).
@@ -73,6 +74,10 @@ let
 
   cfg = config.lanbat.services.wyoming.settings;
 
+  # Where the heavy voice work runs, and so how large a model this host can
+  # afford for speech-to-text (lib/voice-compute.nix).
+  voiceCompute = (import ../lib/voice-compute.nix { inherit lib; }).forConfig config;
+
   wyomingSettings = {
     options = {
       wakeWord.threshold = mkOption {
@@ -84,9 +89,14 @@ let
       speechToText = {
         model = mkOption {
           type = types.str;
-          default = "base-int8";
+          default = voiceCompute.speechToTextModel;
+          defaultText = lib.literalExpression ''"base-int8" (voiceCompute.profile "low-spec"), "small-int8" ("apple-silicon")'';
           example = "small-int8";
-          description = "faster-whisper model. base-int8 is fast on a CPU; small-int8 transcribes better.";
+          description = ''
+            faster-whisper model. base-int8 is fast on a busy CPU; small-int8
+            transcribes better, and is the default once the apple-silicon
+            profile moves the LLM off this host (lib/voice-compute.nix).
+          '';
         };
         language = mkOption {
           type = types.str;
@@ -133,7 +143,10 @@ let
   hostLib = import ../lib/host.nix { inherit lib; };
   serverKey = config.lanbat.deployment.primaryServer;
   serverSatellite =
-    serverKey != null && lib.elem serverKey (lib.attrValues config.lanbat.deployment.voiceRooms);
+    serverKey != null
+    && lib.elem serverKey (
+      lib.concatMap lib.toList (lib.attrValues config.lanbat.deployment.voiceRooms)
+    );
   serverRoom = hostLib.voiceRoomForHost config.lanbat.deployment.voiceRooms serverKey;
   heyNabuModel = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/fwartner/home-assistant-wakewords-collection/main/en/hey_nabu/hey_nabu_v2.tflite";

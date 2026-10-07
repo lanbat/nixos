@@ -10,6 +10,9 @@
   ];
   modules = [
     ../../modules/pi/audio.nix
+    # Which speaker the Pi plays through (the voice-pi role bundles it too;
+    # a module is imported once).
+    ../../modules/pi/speakers.nix
     (
       { config, lib, ... }:
       let

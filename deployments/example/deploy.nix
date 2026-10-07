@@ -38,6 +38,10 @@
       baseUrl = "https://llm.example.com/v1";
       model = "example-model";
     };
+    # Where the voice assistant's heavy work runs (lib/voice-compute.nix):
+    # "low-spec" does it all on the server; "apple-silicon" takes the LLM from
+    # a Mac on the LAN (haLlm.baseUrl), with apiKey = false if it needs none.
+    voiceCompute.profile = "low-spec";
     voiceRooms = {
       "Office" = "server";
       "Living Room" = "pi-storage";

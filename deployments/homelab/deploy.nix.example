@@ -23,6 +23,13 @@
       baseUrl = "CHANGE_ME";
       model = "CHANGE_ME";
     };
+    # Where the voice assistant's heavy work runs (lib/voice-compute.nix).
+    # "low-spec": the server does everything, with a small model in haLlm on
+    # the loopback. "apple-silicon": a Mac on the LAN serves the LLM, and the
+    # server uses the freed cores for a better speech-to-text model:
+    #   voiceCompute.profile = "apple-silicon";
+    #   haLlm = { baseUrl = "http://<mac-ip>:8080/v1"; model = "<model>"; apiKey = false; };
+    voiceCompute.profile = "low-spec";
     voiceRooms = {
       "Office" = "server";
       "Living Room" = "pi-storage";

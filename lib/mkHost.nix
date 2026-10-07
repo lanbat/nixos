@@ -64,6 +64,8 @@ let
         overlay = host.overlay or null;
         # Needed by the endpoint wiring to work out which host runs a service.
         services = host.services or [ ];
+        # Read statically by other hosts (Home Assistant finds the Kodi hosts).
+        pluginNames = map (p: p.name or "") (host.plugins or [ ]);
       }) hosts;
 
       warnings = map (
