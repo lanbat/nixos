@@ -170,6 +170,8 @@
         qbittorrent-settings = import ./tests/qbittorrent-settings.nix { inherit lib pkgs; };
         syncthing-settings = import ./tests/syncthing-settings.nix { inherit lib pkgs; };
         policy = import ./tests/policy.nix { inherit lib pkgs; };
+        dns = import ./tests/dns.nix { inherit pkgs; };
+        dns-records = import ./tests/dns-records.nix { inherit lib pkgs; };
         caddy-remote = import ./tests/caddy-remote.nix { inherit lib pkgs; };
         caddy-audit = import ./tests/caddy-audit.nix {
           inherit

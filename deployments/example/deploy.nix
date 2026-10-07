@@ -51,6 +51,14 @@
     # Xiaomi BLE thermometers with a clock display, for lanbatPlugins.xiaomi-clock.
     xiaomiClocks = [ "A4:C1:38:00:00:01" ];
 
+    # LAN DNS, for hosts with lanbatPlugins.dns (modules/core/dns.nix):
+    # torrent.lan redirects to torrent.home.example.com, server.lan and
+    # mosquitto.lan name the host. Upstreams default to the gateway.
+    dns = {
+      shortSuffix = "lan";
+      extraRecords.router = "192.0.2.1";
+    };
+
     # Android TV boxes, for lanbatPlugins.android.
     androidDevices = {
       bedroom = {
@@ -81,6 +89,7 @@
         inputs.self.lanbatPlugins.services
         inputs.self.lanbatPlugins.android
         inputs.self.lanbatPlugins.xiaomi-clock
+        inputs.self.lanbatPlugins.dns
       ];
       # Merged last, so they override anything core, the role or a plugin set.
       modules = [
@@ -148,6 +157,7 @@
       plugins = [
         inputs.self.lanbatPlugins.tv
         inputs.self.lanbatPlugins.voice
+        inputs.self.lanbatPlugins.dns
       ];
     };
 

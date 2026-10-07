@@ -86,6 +86,7 @@ its tier in `lanbat.services.<name>.tier`; for workload-gated services it also l
 | llama.cpp (`llama-cpp`) | — | Local conversation model — pinned in the Nix store, no state; runs only when `haLlm` is on the loopback |
 | SearXNG | — | Search proxy — stateless |
 | Telegraf | — | Metrics collector — stateless |
+| CoreDNS (`lanbat-dns` plugin) | — | LAN DNS — must answer at boot; records are generated, stateless |
 | Redis | — | Ephemeral cache for Authentik and Immich — no persistent state |
 | Zigbee2MQTT | `/var/lib/zigbee2mqtt` | Zigbee bridge — automations must work at boot |
 | Homepage | — | Dashboard — stateless, useful before workload is up |

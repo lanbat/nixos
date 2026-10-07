@@ -40,6 +40,13 @@
     # Xiaomi BLE thermometers with a clock display (lanbatPlugins.xiaomi-clock).
     # xiaomiClocks = [ "A4:C1:38:00:00:01" ];
 
+    # LAN DNS, for hosts with lanbatPlugins.dns: short names (torrent.lan
+    # redirects to torrent.<domain>) and further LAN names.
+    # dns = {
+    #   shortSuffix = "lan";
+    #   extraRecords.router = "10.0.0.1";
+    # };
+
     # Android TV boxes, for lanbatPlugins.android.  Snapdroid needs no
     # configuration: snapserver publishes over mDNS (services/snapcast.nix).
     # androidDevices = {
@@ -105,6 +112,7 @@
       plugins = [
         inputs.self.lanbatPlugins.services
         # inputs.self.lanbatPlugins.xiaomi-clock
+        # inputs.self.lanbatPlugins.dns
         # inputs.lanbat-justpark-parking.lanbatPlugin
       ];
       # NixOS modules merged last. Frigate's cameras, zones and retention
@@ -169,6 +177,7 @@
       plugins = [
         inputs.self.lanbatPlugins.tv
         inputs.self.lanbatPlugins.voice
+        # inputs.self.lanbatPlugins.dns
       ];
     };
   };

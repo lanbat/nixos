@@ -118,6 +118,11 @@ in
         }
       ];
 
+      # CoreDNS metrics, on a host with the lanbat-dns plugin.
+      inputs.prometheus = lib.optionals config.services.coredns.enable [
+        { urls = [ "http://127.0.0.1:9153/metrics" ]; }
+      ];
+
       # NVMe SMART via smartctl/nvme-cli. telegraf is in the disk group so
       # use_sudo is not required.
       inputs.smart = [
