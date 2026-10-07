@@ -21,6 +21,7 @@ let
   lvaWakeupChime = pkgs.callPackage ../pkgs/lva-wakeup-chime { };
   lvaSnapcastDuck = pkgs.callPackage ../pkgs/lva-snapcast-duck { };
   lvaKodiCompanion = pkgs.callPackage ../pkgs/lva-kodi-companion { };
+  haDashboards = pkgs.callPackage ../pkgs/home-assistant-dashboards { };
   voiceId = pkgs.callPackage ../pkgs/voice-id { };
 in
 pkgs.runCommand "pkgs-build-smoke"
@@ -38,6 +39,7 @@ pkgs.runCommand "pkgs-build-smoke"
       linuxVoiceAssistant
       lvaSnapcastDuck
       lvaKodiCompanion
+      haDashboards
       voiceId
     ];
   }
@@ -61,6 +63,7 @@ pkgs.runCommand "pkgs-build-smoke"
     test -f ${lvaWakeupChime}/wakeup.flac
     command -v lva-snapcast-duck
     command -v lva-kodi-companion
+    home-assistant-dashboards --help >/dev/null
     voice-id --help >/dev/null
     touch $out
   ''
