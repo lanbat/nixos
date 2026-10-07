@@ -253,7 +253,12 @@ let
   lvaTvBox =
     (lanbatLib.mkProfile "example" (hostsWithModules {
       server = [ { lanbat.voiceSatellite.backend = "lva"; } ];
-      pi-storage = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+      pi-storage = [
+        {
+          lanbat.voiceSatellite.backend = "lva";
+          lanbat.voiceSatellite.lva.volume = 0.4;
+        }
+      ];
       pi-voice = [ { lanbat.voiceSatellite.backend = "lva"; } ];
     })).configurations.example-pi-storage.config;
   # The example Android TV box with apps to open by voice.
@@ -694,7 +699,7 @@ let
     ))
 
     (expect "lva: the wake words are set in prefs.json on every start" (
-      lib.any (lib.hasInfix "lva-set-wake-words") (lvaPre lvaServer)
+      lib.any (lib.hasInfix "lva-set-prefs") (lvaPre lvaServer)
       && lvaServer.lanbat.voiceSatellite.lva.wakeModels == [ "okay_nabu" ]
     ))
 
@@ -746,6 +751,28 @@ let
       )
     )
 
+    # The reply volume is set at every start, the wake words' way; without
+    # the option, the volume Home Assistant last set stays.
+    (expect "lva: the configured reply volume is written before LVA starts" (
+      lib.any (lib.hasInfix "lva-set-prefs 0.4") lvaTvBox.systemd.services.linux-voice-assistant.serviceConfig.ExecStartPre
+      && lib.any (lib.hasInfix "lva-set-prefs") lvaPi3Aec.systemd.services.linux-voice-assistant.serviceConfig.ExecStartPre
+      && !lib.any (lib.hasInfix "lva-set-prefs ") lvaPi3Aec.systemd.services.linux-voice-assistant.serviceConfig.ExecStartPre
+    ))
+
+    # They stop with LVA (partOf); starting LVA again (a restart by hand, the
+    # microphone plugged back in) must bring them back, or nothing pauses or
+    # ducks until a reboot.
+    (expect "lva: the ducker and the Kodi companion start with LVA" (
+      lib.all (u: lib.elem "linux-voice-assistant.service" lvaTvBox.systemd.services.${u}.wantedBy) [
+        "lva-snapcast-duck"
+        "lva-kodi-companion"
+      ]
+    ))
+
+    (expect "tv: the companion rewinds a film it paused for a question" (
+      lvaTvBox.systemd.services.lva-kodi-companion.environment.RESUME_REWIND_SECONDS == "3"
+    ))
+
     (expect "tv: a new Kodi stream doesn't inherit a ducked volume" (
       lvaTvBox.services.pipewire.wireplumber.extraConfig ? "51-kodi-volume"
     ))
@@ -771,6 +798,26 @@ let
       ) tvTriggers
       && !lib.any (t: (t.id or "") == "open") baseTv
       && lib.hasInfix "|Living Room" (postSetup tvApps)
+    ))
+
+    # Seeking, subtitles, what's on, stopping and episodes act on the film or
+    # show on the room's Kodi; none takes "play ...", which the video and
+    # music requests own.
+    (expect "tv: Kodi takes seek, subtitles, what's on, stop and episode requests" (
+      let
+        tvTriggers = (automationById base "lanbat_voice_tv").trigger;
+        ids = map (t: t.id or "") tvTriggers;
+        sentences = lib.concatMap (t: t.command or [ ]) tvTriggers;
+      in
+      lib.all (id: lib.elem id ids) [
+        "seek"
+        "subtitles"
+        "whats_on"
+        "stop_video"
+        "episode"
+      ]
+      && !lib.any (lib.hasPrefix "[play]") sentences
+      && !lib.any (lib.hasPrefix "play ") sentences
     ))
 
     # Home Assistant has no regex_escape filter; a template using one

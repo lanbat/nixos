@@ -54,11 +54,14 @@ let
     else
       null;
 
-  setWakeWords = pkgs.writeShellScript "lva-set-wake-words" ''
+  # The wake words, and the volume when one is given as the argument.
+  setPrefs = pkgs.writeShellScript "lva-set-prefs" ''
     prefs=${stateDir}/prefs.json
     [ -s "$prefs" ] || echo '{}' > "$prefs"
     ${lib.getExe pkgs.jq} --argjson words ${lib.escapeShellArg (builtins.toJSON lva.wakeModels)} \
-      '.active_wake_words = $words' "$prefs" > "$prefs.new"
+      --arg volume "''${1:-}" \
+      '.active_wake_words = $words | if $volume != "" then .volume = ($volume | tonumber) else . end' \
+      "$prefs" > "$prefs.new"
     mv "$prefs.new" "$prefs"
   '';
 
@@ -210,8 +213,9 @@ in
           ) cfg.mixer
           # --wake-model only applies while prefs.json names no wake words, and
           # LVA writes there whatever Home Assistant selects; setting them here
-          # on every start keeps this host's configuration in charge.
-          ++ [ "${setWakeWords}" ];
+          # on every start keeps this host's configuration in charge. The same
+          # goes for the volume, when this host sets one.
+          ++ [ "${setPrefs}${lib.optionalString (lva.volume != null) " ${toString lva.volume}"}" ];
         ExecCondition = "${micPresent}";
         ExecStart = "${lvaPackage}/bin/linux-voice-assistant ${lib.escapeShellArgs execStartArgs}";
         Restart = "on-failure";

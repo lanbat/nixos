@@ -348,10 +348,16 @@ in
         ];
         wants = [ "linux-voice-assistant.service" ];
         partOf = [ "linux-voice-assistant.service" ];
-        wantedBy = [ "multi-user.target" ];
+        # Stopped with LVA (partOf) and started with it again.
+        wantedBy = [
+          "multi-user.target"
+          "linux-voice-assistant.service"
+        ];
         environment = {
           LVA_PERIPHERAL_URL = "ws://127.0.0.1:${toString satellite.lva.peripheralPort}";
           KODI_PORT = toString kodiEventsPort;
+          # A film paused for a question resumes this far back.
+          RESUME_REWIND_SECONDS = "3";
         };
         serviceConfig = {
           ExecStart = lib.getExe lvaKodiCompanion;

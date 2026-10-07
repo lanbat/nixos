@@ -6,8 +6,10 @@ Follows LVA's peripheral WebSocket and the local Kodi's JSON-RPC TCP port:
 - Pause video while you talk: on the wake word, a video Kodi is playing is
   paused; when the conversation ends (idle) it resumes, but only if this
   paused it and nothing changed it since: a stop, a resume or a "pause the
-  TV" command (Home Assistant's Other.tv.hold) wins. Music Kodi plays is
-  ducked like Snapcast's (pkgs/lva-snapcast-duck), not paused.
+  TV" command (Home Assistant's Other.tv.hold) wins. It resumes a few
+  seconds back (RESUME_REWIND_SECONDS), so the line said over the wake word
+  isn't lost. Music Kodi plays is ducked like Snapcast's
+  (pkgs/lva-snapcast-duck), not paused.
 - Captions: "Listening", what you said and the reply, as Kodi notifications.
 - TV power: Home Assistant sends JSONRPC.NotifyAll with the message tv.on or
   tv.off (it arrives here as Other.tv.on / Other.tv.off) and this runs Kodi's
@@ -43,6 +45,7 @@ CAPTIONS = os.environ.get("CAPTIONS", "1") == "1"
 PAUSE_VIDEO = os.environ.get("PAUSE_VIDEO", "1") == "1"
 ASSISTANT_NAME = os.environ.get("ASSISTANT_NAME", "Assistant")
 CAPTION_MS = int(os.environ.get("CAPTION_MS", "5000"))
+REWIND_SECONDS = int(os.environ.get("RESUME_REWIND_SECONDS", "3"))
 
 END_EVENTS = frozenset({"idle", "pipeline_error", "disconnected"})
 # Kodi notifications after which a voice pause is no longer ours to undo.
@@ -200,6 +203,10 @@ class Companion:
             return
         props = await self.kodi.call("Player.GetProperties", {"playerid": pid, "properties": ["speed"]})
         if props is not None and props.get("speed", 1) == 0:
+            if REWIND_SECONDS > 0:
+                await self.kodi.call(
+                    "Player.Seek", {"playerid": pid, "value": {"seconds": -REWIND_SECONDS}}
+                )
             await self.kodi.call("Player.PlayPause", {"playerid": pid, "play": True})
 
     async def on_lva(self, event: str, data: dict) -> None:

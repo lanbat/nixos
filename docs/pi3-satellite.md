@@ -323,7 +323,8 @@ to set:
   them (the `kodi` and `kodi-events` endpoints). Home Assistant adds every Kodi and puts
   it in its host's `voiceRooms` room.
 - **A film pauses while you talk.** On the wake word, a video Kodi is playing pauses; when
-  the conversation ends it carries on, unless you said "pause", "stop" or started
+  the conversation ends (after the reply has played) it carries on three seconds back, so
+  the line said over the wake word isn't lost, unless you said "pause", "stop" or started
   something else meanwhile. Music Kodi plays fades down like Snapcast's.
 - **Captions.** "Listening…", what you said and the reply show on the TV as Kodi
   notifications.
@@ -332,6 +333,9 @@ to set:
 - **Films and episodes by voice.** "Watch The Matrix", "play the movie Heat", "play the
   next episode of Severance", "play the show The Bear" look in that room's Kodi library:
   a film first, then a show's first unwatched episode.
+- **The film or show on the room's Kodi.** "Skip back 30 seconds", "go forward 2 minutes",
+  "rewind" (30 seconds), "subtitles on/off", "what am I watching", "stop the film",
+  "next episode" / "previous episode". With nothing on, the reply says so.
 - **Echo cancellation for everything that plays.** Kodi plays PCM into the system
   PipeWire (passthrough off). With `echoCancellation.includeMusic`, Kodi and Snapcast
   play into the canceller's sink, so films and music are taken out of the microphone too.
@@ -340,3 +344,15 @@ to set:
 
 `pkgs/lva-kodi-companion` does the pausing, captions and CEC on the TV box; it follows
 LVA's peripheral WebSocket and talks to Kodi on the loopback only.
+
+**Reply volume.** Replies are mastered near full scale, a film's dialogue far below it, so
+at the same volume the assistant shouts over the film. Set the satellite's volume for the
+host, applied at every start (Home Assistant's volume for the satellite changes it until
+the next):
+
+```nix
+lanbat.voiceSatellite.lva.volume = 0.4;
+```
+
+For the film itself, keep Kodi's volume high and turn the speakers down: Kodi's scale is
+steep (50 % is about −30 dB), and a quiet signal turned up in the speaker is noisier.
