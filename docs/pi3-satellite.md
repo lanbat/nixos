@@ -192,18 +192,24 @@ follow-up turns, and fades back over 0.8 s
 **Commands over a speech station.** The microphone hears the speaker. With the radio at a
 quarter of its volume, a command came out as "two sides obviously turn off the radio": the
 presenter's words and yours in one transcript, which no command sentence matches, so it went to
-the LLM. Hence the near silence while listening.
+the LLM. Hence the near silence while listening. Stop commands also match at the end of such a
+transcript ("… stop the music", "… turn off the radio"); play commands don't, since a stray play
+would be worse than a missed one.
 
 **Every satellite with a speaker plays music.** A host running a Linux Voice Assistant
 satellite also runs a Snapcast client (`modules/core/snapclient.nix`), so its speaker is a
-Music Assistant player and ducks while the assistant listens and answers. The Pi roles run the
+Music Assistant player, and post-setup puts the satellite and that player in the host's
+`voiceRooms` area. "Play …", "stop the music" and volume commands act on the room that heard
+you; a satellite in a room with no player says "There's no speaker in here." The Pi roles run the
 client regardless; `lanbat.voiceSatellite.playMusic = false` keeps another host's satellite to
 spoken replies.
 
-**Ducking and the music's volume.** The music's own volume belongs to Snapserver and Music
-Assistant; ducking never touches it. It lowers the Snapcast stream in PipeWire, and keeps the
-levels to return to in `/run/lva-snapcast-duck/saved.json`, so a ducker stopped or restarted
-while the music is down (a deploy) still puts it back.
+**Volume by voice.** "Volume to 70 percent", "louder", "turn the music down", "increase the
+volume by 20 percent": these set the room's Music Assistant player, which is the music's volume.
+(Home Assistant's own volume sentences need a player's name; without one they reached the LLM,
+which can't set a volume.) Ducking never touches that volume: it lowers the Snapcast stream in
+PipeWire, and keeps the levels to return to in `/run/lva-snapcast-duck/saved.json`, so a ducker
+stopped or restarted while the music is down (a deploy) still puts it back.
 
 **Echo cancellation with the music (experiment).** `echoCancellation.includeMusic = true`
 (with `echoCancellation.enable`) plays Snapcast through the echo canceller's sink, so the music

@@ -68,6 +68,17 @@ let
     "wireplumber.service"
   ];
 
+  # LVA runs only while its microphone is plugged in: it starts at boot only if
+  # the microphone's sound card is there (ExecCondition: no restart loop on a
+  # satellite whose microphone isn't there yet, or was unplugged), and udev
+  # starts it when the microphone is plugged in later. A BindsTo= on the
+  # card's device unit would stop LVA on every deploy, since udev applies a
+  # new rule only to devices it processes again.
+  micUsbId = lib.splitString ":" cfg.microphone.usbId;
+  micPresent = pkgs.writeShellScript "lanbat-voice-microphone-present" ''
+    ${pkgs.gnugrep}/bin/grep -qsx '${cfg.microphone.usbId}' /proc/asound/card*/usbid
+  '';
+
   pulseRuntime = "/run/pulse/native";
   pipewireRuntime = "/run/pipewire";
   usesPipewire = config.services.pipewire.enable or false;
@@ -151,6 +162,10 @@ in
     networking.firewall.allowedTCPPorts = lib.mkAfter [ lva.port ];
     networking.firewall.allowedUDPPorts = lib.mkAfter [ 5353 ];
 
+    services.udev.extraRules = ''
+      SUBSYSTEM=="sound", KERNEL=="controlC*", ATTRS{idVendor}=="${lib.head micUsbId}", ATTRS{idProduct}=="${lib.last micUsbId}", TAG+="systemd", ENV{SYSTEMD_WANTS}+="linux-voice-assistant.service"
+    '';
+
     systemd.services.linux-voice-assistant = {
       description = "Linux Voice Assistant voice satellite (ESPHome)";
       wantedBy = [ "multi-user.target" ];
@@ -194,6 +209,7 @@ in
           # LVA writes there whatever Home Assistant selects; setting them here
           # on every start keeps this host's configuration in charge.
           ++ [ "${setWakeWords}" ];
+        ExecCondition = "${micPresent}";
         ExecStart = "${lvaPackage}/bin/linux-voice-assistant ${lib.escapeShellArgs execStartArgs}";
         Restart = "on-failure";
         RestartSec = "5s";

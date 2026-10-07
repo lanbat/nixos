@@ -66,6 +66,16 @@ let
         description = "This host's place on the overlay, or null if it does not join one.";
       };
 
+      pluginNames = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        internal = true;
+        description = ''
+          The names of the plugins this host's deploy entry lists (e.g.
+          "lanbat-tv"), so another host can tell statically what it runs.
+        '';
+      };
+
       services = mkOption {
         type = types.listOf types.str;
         default = [ ];
@@ -281,23 +291,50 @@ in
 
       haLlm = mkOption {
         type = types.nullOr (
-          types.submodule {
-            options = {
-              baseUrl = mkOption {
-                type = types.strMatching "https?://.+";
-                example = "https://api.runpod.ai/v2/<endpoint-id>/openai/v1";
-                description = "Base URL of the OpenAI-compatible API.";
+          types.submodule (
+            { config, ... }:
+            {
+              options = {
+                baseUrl = mkOption {
+                  type = types.strMatching "https?://.+";
+                  example = "https://api.runpod.ai/v2/<endpoint-id>/openai/v1";
+                  description = "Base URL of the OpenAI-compatible API.";
+                };
+                model = mkOption {
+                  type = types.str;
+                  example = "qwen3-8b-ha";
+                  description = "Name of the model the API serves.";
+                };
+                apiKey = mkOption {
+                  type = types.bool;
+                  default = !(import ../../lib/host.nix { inherit lib; }).haLlmIsLocal config;
+                  defaultText = lib.literalExpression "baseUrl is not on the loopback";
+                  description = ''
+                    Whether the API needs a key, read from the ha-llm-api-key
+                    secret. Off for the loopback; set it false for a server on the
+                    LAN that takes none, such as the Mac of the apple-silicon
+                    profile.
+                  '';
+                };
               };
-              model = mkOption {
-                type = types.str;
-                example = "qwen3-8b-ha";
-                description = "Name of the model the API serves.";
-              };
-            };
-          }
+            }
+          )
         );
         default = null;
         description = "Home Assistant conversation agent LLM. null uses HA's own agent.";
+      };
+
+      voiceCompute.profile = mkOption {
+        type = types.enum (import ../../lib/voice-compute.nix { inherit lib; }).names;
+        default = "low-spec";
+        description = ''
+          Where the voice assistant's heavy work runs; lib/voice-compute.nix
+          has each profile's goals. "low-spec": Home Assistant's server does
+          everything, a small LLM included (llama.cpp on the loopback, or
+          another API in haLlm). "apple-silicon": an Apple Silicon Mac on the
+          LAN serves the LLM (haLlm points at it), and the server spends the
+          freed cores on a larger speech-to-text model.
+        '';
       };
 
       haXiaomiBle = mkOption {
@@ -378,15 +415,20 @@ in
       };
 
       voiceRooms = mkOption {
-        type = types.attrsOf types.str;
+        type = types.attrsOf (types.either types.str (types.listOf types.str));
         default = { };
         example = {
-          "Office" = "server";
-          "Living Room" = "pi-storage";
+          "Office" = [
+            "server"
+            "pi-storage"
+          ];
+          "Living Room" = "pi-voice";
         };
         description = ''
-          Maps Home Assistant area names to host keys. Voice satellites on those
-          hosts speak replies on the area's Music Assistant players.
+          Maps Home Assistant area names to the host keys of the voice satellites
+          in them: one host, or a list when a room has several. Satellites and
+          their hosts' music players are put in that area, and voice commands
+          act on the area of the satellite that heard them.
         '';
       };
 

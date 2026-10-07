@@ -136,7 +136,8 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming and control ports (1704/1705) admit only declared clients (`services/snapcast.nix`) |
 | Wyoming satellites | No auth (Pi: firewall-restricted to server IP; server: localhost only) | Internal protocol; only HA connects |
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
-| Conversation LLM (`lanbat.haLlm`) | None for the local model (`services/llama-cpp.nix`, loopback only, port 8091); API key (agenix) for an external API | A `haLlm` on the loopback runs llama.cpp on the server; only HA calls it. Any other URL is an external OpenAI-compatible API, called outbound |
+| Speaker identification (`voice-id`, 10303) | No auth (localhost only) | Home Assistant's speech-to-text; a Wyoming proxy in front of faster-whisper |
+| Conversation LLM (`lanbat.haLlm`) | None for the local model (`services/llama-cpp.nix`, loopback only, port 8091); API key (agenix) for an external API | A `haLlm` on the loopback runs llama.cpp on the server; only HA calls it. Any other URL is an external OpenAI-compatible API, called outbound (with the `apple-silicon` voice profile, a Mac on the LAN; `apiKey = false` when it takes none) |
 
 The Authentik side of this matrix is generated: every `forward-auth` service gets a
 proxy provider, an application and a place on the embedded outpost, and every service

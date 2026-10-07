@@ -112,19 +112,27 @@ let
       voiceRooms = deploy.deployment.voiceRooms or { };
       hosts = deploy.hosts;
     in
-    lib.foldl' (
-      _: room:
-      let
-        hostKey = voiceRooms.${room};
-        ctx = "profile '${profileName}', voiceRooms.${room}";
-      in
-      if !(hosts ? ${hostKey}) then
-        builtins.throw "${ctx}: references unknown host '${hostKey}'"
-      else if !(hasVoiceCapability hosts.${hostKey}) then
-        builtins.throw "${ctx}: host '${hostKey}' must include lanbat-voice plugin or have role 'server'"
-      else
-        null
-    ) null (lib.attrNames voiceRooms);
+    lib.foldl'
+      (
+        _: entry:
+        let
+          inherit (entry) room hostKey;
+          ctx = "profile '${profileName}', voiceRooms.${room}";
+        in
+        if !(hosts ? ${hostKey}) then
+          builtins.throw "${ctx}: references unknown host '${hostKey}'"
+        else if !(hasVoiceCapability hosts.${hostKey}) then
+          builtins.throw "${ctx}: host '${hostKey}' must include lanbat-voice plugin or have role 'server'"
+        else
+          null
+      )
+      null
+      (
+        # One host key or a list per room.
+        lib.concatMap (room: map (hostKey: { inherit room hostKey; }) (lib.toList voiceRooms.${room})) (
+          lib.attrNames voiceRooms
+        )
+      );
 
   validatePrimaryHosts =
     profileName: deploy:

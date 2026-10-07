@@ -92,7 +92,7 @@ Services that stay up during Pi reboot (always-on tier):
 - SearXNG ✓
 - Music Assistant ✓ (library scans fail while Pi NFS is down; service stays up). Radio, podcasts and the video-channel bridge (`media-feed-bridge`) need only the internet (if GitHub is unreachable, or a new yt-dlp is no improvement on the channels, the bridge keeps the yt-dlp it has); its Audiobookshelf provider works only while Audiobookshelf does
 - Snapserver ✓
-- Wyoming pipeline (STT/TTS/wake word), the local conversation model (`llama-cpp`, when `haLlm` is on the loopback) and the server's voice satellite ✓
+- Wyoming pipeline (STT/TTS/wake word), the speaker-identification proxy (`voice-id`, which Home Assistant's speech-to-text goes through: if it is down, voice commands get no transcript until it restarts; switching the Voice pipeline's speech-to-text to faster-whisper in Home Assistant bypasses it), the local conversation model (`llama-cpp`, when `haLlm` is on the loopback) and the server's voice satellite ✓
 - Telegraf (server) ✓
 - Redis (Immich) ✓
 - Homepage ✓
@@ -118,7 +118,10 @@ start, or after the exposed entities change, because it has to read Home
 Assistant's whole prompt once (about 20 seconds for `qwen3-1.7b`). While the
 model is unavailable, or an external endpoint is unreachable or scaling up from
 zero, commands that Home Assistant's local intents understand ("turn on the
-kitchen light") still work; anything else fails or waits for the endpoint.
+kitchen light") still work; anything else fails or waits for the endpoint. With
+`voiceCompute.profile = "apple-silicon"` the LLM is on a Mac: when the Mac sleeps
+or is off, only the local intents answer; speech-to-text, TTS and the
+satellites are on the server and are unaffected.
 
 Pi Telegraf also goes down during a Pi reboot, causing a gap in Pi metrics.
 Server metrics continue uninterrupted.

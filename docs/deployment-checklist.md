@@ -738,7 +738,25 @@ The LLM is one of two kinds, chosen by `haLlm.baseUrl` in `deploy.nix`:
   `lanbat.services.llama-cpp.settings.model`. The first deploy compiles
   llama.cpp with AVX2, which takes about ten minutes on the server.
 - **External** (any other URL): an OpenAI-compatible API, with its key in
-  `ha-llm-api-key.age`.
+  `ha-llm-api-key.age`. Set `haLlm.apiKey = false` for a server on the LAN that
+  takes no key; then no secret is needed. Home Assistant pings an external
+  model every four minutes (`ha-llm-keepalive`) so it stays loaded.
+
+`voiceCompute.profile` in `deploy.nix` says where the heavy voice work runs,
+and sets the defaults that follow from it (`lib/voice-compute.nix` has each
+profile's goals):
+
+| | `low-spec` (default) | `apple-silicon` |
+|---|---|---|
+| Hardware | One small x86 server (e.g. an i5 office PC, no GPU) running everything | The same server, plus an Apple Silicon Mac on the LAN |
+| LLM | `haLlm` on the loopback (llama.cpp, `qwen3-1.7b`), an external API, or none | The Mac's OpenAI-compatible API in `haLlm` (mlx-lm, llama.cpp with Metal, LM Studio or Ollama); the loopback is rejected |
+| Speech-to-text | faster-whisper `base-int8` | faster-whisper `small-int8`, on the cores the model no longer uses |
+| Reply length | up to 150 tokens | up to 300 tokens |
+
+The Mac is not managed by this flake: install the model server there, bind it
+to the LAN, and keep it awake (or accept that a sleeping Mac leaves only the
+local intents working). A setting in `lanbat.services.wyoming.settings`
+overrides the profile's speech-to-text model.
 
 With `lanbat.voiceRooms` set, a satellite hands each reply to Home Assistant,
 which speaks it as an announcement on the Music Assistant players in the
