@@ -249,6 +249,27 @@ let
         }
       ];
     })).configurations.example-pi-voice.config;
+  # The example TV box (pi-storage, lanbat-tv plugin) with an LVA satellite.
+  lvaTvBox =
+    (lanbatLib.mkProfile "example" (hostsWithModules {
+      server = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+      pi-storage = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+      pi-voice = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+    })).configurations.example-pi-storage.config;
+  # The example Android TV box with apps to open by voice.
+  tvApps = serverWith [
+    {
+      androidDevices.bedroom = {
+        room = "Living Room";
+        apps = {
+          Netflix = "com.netflix.ninja";
+          YouTube = "com.google.android.youtube.tv";
+          "YouTube Music" = "com.google.android.youtube.tvmusic";
+        };
+      };
+    }
+  ];
+  automationById = config: id: lib.findFirst (a: a.id == id) null (haConfig config).automation;
   lvaExec = config: config.systemd.services.linux-voice-assistant.serviceConfig.ExecStart;
   lvaPre = config: config.systemd.services.linux-voice-assistant.serviceConfig.ExecStartPre;
 
@@ -692,6 +713,57 @@ let
       .success
     ))
 
+    (expect "tv: Home Assistant reaches each Kodi with its password and knows its room" (
+      lib.all (name: lib.elem name base.lanbat.services.home-assistant.consumes) [
+        "kodi"
+        "kodi-events"
+      ]
+      && base.lanbat.services.home-assistant.secrets.kodi-web-password.owner == "hass"
+      && lib.all (c: lib.elem c base.services.home-assistant.extraComponents) [
+        "kodi"
+        "androidtv"
+      ]
+      && lib.hasInfix "pi-storage|" (postSetup base)
+      && lib.hasInfix "|Living Room|" (postSetup base)
+      && lib.hasInfix "KODI_PASSWORD_FILE" (postSetup base)
+      && lib.hasInfix "ANDROID_TVS" (postSetup base)
+    ))
+
+    (expect
+      "tv: an LVA satellite on the TV box pauses Kodi, ducks its music and keeps the peripheral API"
+      (
+        lvaTvBox.systemd.services ? lva-kodi-companion
+        && lvaTvBox.systemd.services.lva-kodi-companion.serviceConfig.DynamicUser
+        && lvaTvBox.systemd.services.lva-kodi-companion.environment.KODI_PORT == "9090"
+        && lvaTvBox.systemd.services.lva-snapcast-duck.environment.DUCK_BINARIES == "snapclient,kodi.bin"
+        && lib.hasInfix "--peripheral-port" (lvaExec lvaTvBox)
+        && !(base.systemd.services ? lva-kodi-companion)
+      )
+    )
+
+    (expect "tv: Kodi's power is switched over CEC, library calls go through an event" (
+      (automationById base "lanbat_kodi_power").action != [ ]
+      && lib.hasInfix "tv.{{ trigger.id }}" (
+        builtins.toJSON (automationById base "lanbat_kodi_power").action
+      )
+      && lib.any (t: lib.elem "watch {query}" t.command) (automationById base "lanbat_voice_play").trigger
+      && lib.hasInfix "VideoLibrary.GetEpisodes" (
+        builtins.toJSON (automationById base "lanbat_voice_play")
+      )
+    ))
+
+    (expect "tv: an Android box opens its own apps by name, longest first, and nothing else" (
+      let
+        tvTriggers = (automationById tvApps "lanbat_voice_tv").trigger;
+        baseTv = (automationById base "lanbat_voice_tv").trigger;
+      in
+      lib.any (
+        t: (t.id or "") == "open" && lib.hasInfix "(YouTube Music|Netflix|YouTube)" (lib.head t.command)
+      ) tvTriggers
+      && !lib.any (t: (t.id or "") == "open") baseTv
+      && lib.hasInfix "|Living Room" (postSetup tvApps)
+    ))
+
     # Home Assistant has no regex_escape filter; a template using one
     # disables its whole automation at load.
     (expect "voice automations use only filters Home Assistant has" (
@@ -711,6 +783,9 @@ let
           "lanbat_voice_play"
           "lanbat_voice_stop"
           "lanbat_voice_volume"
+          "lanbat_voice_tv"
+          "lanbat_kodi_call"
+          "lanbat_kodi_power"
         ]
       &&
         haViews base == [
@@ -733,6 +808,9 @@ let
         "lanbat_voice_play"
         "lanbat_voice_stop"
         "lanbat_voice_volume"
+        "lanbat_voice_tv"
+        "lanbat_kodi_call"
+        "lanbat_kodi_power"
       ]
       && haViews haNoZigbee == [ "all" ]
     ))

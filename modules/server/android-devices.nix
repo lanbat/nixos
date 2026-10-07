@@ -41,6 +41,32 @@ let
 
   devices = lib.filterAttrs (_: d: d.enable) config.androidDevices;
 
+  # Home Assistant's Android TV integration uses the key the boxes already
+  # trust (the provisioner's), so they ask for no second authorisation. It
+  # gets a copy it owns; the provisioner's own stays root's.
+  adbkeyForHomeAssistant = lib.optionalAttrs (config.services.home-assistant.enable or false) {
+    android-adbkey-for-home-assistant = {
+      description = "Give Home Assistant the provisioning ADB key";
+      wantedBy = [ "multi-user.target" ];
+      before = [
+        "home-assistant.service"
+        "home-assistant-post-setup.service"
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      script = ''
+        src=/var/lib/android-provision/.android
+        dst=${config.services.home-assistant.configDir}/.android
+        [ -s "$src/adbkey" ] || { echo "no provisioning ADB key yet; run android-provision first"; exit 0; }
+        install -d -o hass -g hass -m 0700 "$dst"
+        install -o hass -g hass -m 0600 "$src/adbkey" "$dst/adbkey"
+        [ -s "$src/adbkey.pub" ] && install -o hass -g hass -m 0644 "$src/adbkey.pub" "$dst/adbkey.pub"
+      '';
+    };
+  };
+
   provisioner = pkgs.callPackage ../../pkgs/android-provision { };
 
   lock = lib.importJSON ../../pkgs/android-provision/apks.lock.json;
@@ -179,6 +205,31 @@ let
         description = "ADB over TCP port.";
       };
 
+      room = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "Living Room";
+        description = ''
+          Home Assistant area the box is in. Home Assistant controls it over ADB
+          (its Android TV integration, with the provisioning key), and voice
+          commands such as "open SmartTube" or "pause the TV" act on the box in
+          the room of the satellite that heard them.
+        '';
+      };
+
+      apps = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        example = {
+          SmartTube = "com.liskovsoft.smarttubetv.beta";
+          Netflix = "com.netflix.ninja";
+        };
+        description = ''
+          Apps by the name you say ("okay nabu, open SmartTube") and their
+          Android package. Home Assistant lists them as the box's sources.
+        '';
+      };
+
       abi = mkOption {
         type = types.str;
         default = "arm64-v8a";
@@ -304,6 +355,7 @@ in
   };
 
   config = lib.mkIf (devices != { }) {
+
     assertions =
       let
         # Group device names by "host:port" so a collision names every
@@ -392,14 +444,16 @@ in
 
     environment.systemPackages = [ provisioner ];
 
-    systemd.services = lib.listToAttrs (
-      lib.concatLists (
-        lib.mapAttrsToList (name: d: [
-          (unitFor name d false)
-          (unitFor name d true)
-          (captureUnitFor name d)
-        ]) devices
-      )
-    );
+    systemd.services =
+      adbkeyForHomeAssistant
+      // lib.listToAttrs (
+        lib.concatLists (
+          lib.mapAttrsToList (name: d: [
+            (unitFor name d false)
+            (unitFor name d true)
+            (captureUnitFor name d)
+          ]) devices
+        )
+      );
   };
 }

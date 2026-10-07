@@ -115,6 +115,38 @@ let
   voiceSatelliteHosts = voiceSatelliteEntry.hosts or [ ];
   voiceSatelliteRegistrations = voiceSatelliteEntry.registrations or { };
   voiceSatellitePort = voiceSatelliteEntry.endpoint.port or 10700;
+  # Hosts running Kodi (the lanbat-tv plugin), found from the deploy entries
+  # rather than the endpoint table: consumes below must not depend on it.
+  kodiHosts = lib.filter (
+    hostKey: lib.elem "lanbat-tv" (config.lanbat.hosts.${hostKey}.pluginNames or [ ])
+  ) (lib.attrNames config.lanbat.hosts);
+  hasKodi = kodiHosts != [ ];
+  # One line per Kodi: "hostKey|address|room|hostname" for post-setup, room
+  # being its host's voiceRooms room (empty outside one).
+  kodiHostsEnv = lib.concatStringsSep "\n" (
+    map (
+      hostKey:
+      let
+        room = lib.defaultTo "" (hostLib.voiceRoomForHost config.lanbat.deployment.voiceRooms hostKey);
+      in
+      "${hostKey}|${config.lanbat.endpointHost "kodi" hostKey}|${room}|${
+        config.lanbat.hosts.${hostKey}.networking.hostname or hostKey
+      }"
+    ) kodiHosts
+  );
+
+  # Android TV boxes (modules/server/android-devices.nix) that Home Assistant
+  # controls over ADB with the provisioning key, with their rooms and apps.
+  androidTvs = lib.filterAttrs (_: d: d.enable) (config.androidDevices or { });
+  hasAndroidTv = androidTvs != { };
+  androidTvsJson = builtins.toJSON (
+    lib.mapAttrsToList (name: d: {
+      inherit name;
+      inherit (d) host port apps;
+      room = if d.room == null then "" else d.room;
+    }) androidTvs
+  );
+
   hasLvaSatellite = lib.any (
     hostKey: (voiceSatelliteRegistrations.${hostKey}.backend or "wyoming") == "lva"
   ) voiceSatelliteHosts;
@@ -272,11 +304,16 @@ let
   # "stop the music [in the <room>]": the same area lookup, every player in it.
   voicePlayStopVariables = voicePlayVariables // {
     raw = "{{ 'x in ' ~ trigger.slots.query if trigger.slots.query is defined else '' }}";
+    # And a TV in the room (Kodi, an Android TV box) with something on it.
     players = ''
+      {%- set room = area_entities(area) if area else [] -%}
+      {%- set tvs = (integration_entities('kodi') + integration_entities('androidtv'))
+            | select('match', 'media_player\\.') | select('in', room)
+            | select('is_state', ['playing', 'paused']) | list -%}
       {{ integration_entities('music_assistant')
          | select('match', 'media_player\\.')
-         | select('in', area_entities(area) if area else [])
-         | list }}'';
+         | select('in', room)
+         | list + tvs }}'';
   };
 
   # "volume to 70 percent", "louder", "turn the music down", "increase the
@@ -288,9 +325,16 @@ let
       sentence
       named_area
       area
-      player
       place
       ;
+    # Kodi's own volume while it has something on (a film paused for the
+    # question counts), else the room's music player.
+    player = ''
+      {%- set room = area_entities(area) if area else [] -%}
+      {{ integration_entities('kodi') | select('match', 'media_player\\.') | select('in', room)
+         | select('is_state', ['playing', 'paused']) | first
+         | default(integration_entities('music_assistant') | select('match', 'media_player\\.')
+                   | select('in', room) | first | default(""), true) }}'';
     raw = "{{ \"\" }}";
     level = "{{ (trigger.slots.level | default(\"\") | regex_findall('\\d+') | first | default(\"\")) }}";
   };
@@ -314,6 +358,12 @@ let
     "players"
     "place"
     "level"
+    "video_kind"
+    "video_title"
+    "tv"
+    "tvs"
+    "androids"
+    "app"
   ];
   voicePlaySteps =
     vars:
@@ -391,6 +441,472 @@ let
     ];
   };
 
+  # Films and TV episodes from the room's Kodi library (a TV box with the
+  # lanbat-tv plugin). "watch <title>", "play the movie <title>", "play the
+  # (next) episode of <show>", "play the show <show>": the request is a video
+  # by its words, and plays on the Kodi in the satellite's room (or the room
+  # named) rather than on the music player. A film is looked for first, then a
+  # show, whose next unwatched episode plays.
+  voiceVideoVariables = {
+    video_kind = ''
+      {%- set r = request | lower -%}
+      {%- if r is match('(the\\s+)?(movie|film)\\s+') or r is search('\\s(movie|film)$') -%}movie
+      {%- elif r is match('(the\\s+)?((next|new|latest)\\s+)?episodes?\\s+of\\s+')
+            or r is match('(the\\s+)?(tv\\s+)?(show|series)\\s+') or r is search('\\s(tv show|show|series)$') -%}show
+      {%- elif sentence is match('(i want to |i.d like to |let.s |let me |can i |can we )?watch ') -%}any
+      {%- endif -%}'';
+    video_title = ''
+      {{ request
+         | regex_replace('(?i)^(the\\s+)?(((next|new|latest)\\s+)?episodes?\\s+of|movie|film|(tv\\s+)?show|series)\\s+', "")
+         | regex_replace('(?i)\\s+(movie|film|tv show|show|series)$', "") | trim }}'';
+    tv = ''
+      {{ integration_entities('kodi')
+         | select('match', 'media_player\\.')
+         | select('in', area_entities(area) if area else [])
+         | first | default("") }}'';
+  };
+
+  # One Kodi JSON-RPC call whose result the steps after it read as
+  # wait.trigger.event.data.result. kodi.call_method only reports its result as
+  # an event, fired before the call returns, so a wait after the call would
+  # miss it: the call is made by lanbat_kodi_call (below) on an event, and
+  # this waits for its result.
+  kodiCall = method: params: [
+    {
+      event = "lanbat_kodi_call";
+      event_data = {
+        entity_id = "{{ tv }}";
+        inherit method params;
+      };
+    }
+    {
+      wait_for_trigger = [
+        {
+          platform = "event";
+          event_type = "kodi_call_method_result";
+          event_data.entity_id = "{{ tv }}";
+        }
+      ];
+      timeout = "00:00:08";
+      continue_on_timeout = true;
+    }
+  ];
+  # The item of a library list named exactly as asked, else the first.
+  kodiPick = list: ''
+    {%- set items = (wait.trigger.event.data.result.${list} | default([])) if wait.trigger else [] -%}
+    {%- set ns = namespace(exact=[]) -%}
+    {%- for i in items if (i.label | lower) == (video_title | lower) -%}{%- set ns.exact = ns.exact + [i] -%}{%- endfor -%}
+    {{ (ns.exact + items) | first | default({}) }}'';
+  reply = text: { set_conversation_response = text; };
+  ifThen = test: thenSteps: elseSteps: {
+    "if" = [
+      {
+        condition = "template";
+        value_template = test;
+      }
+    ];
+    "then" = thenSteps;
+    "else" = elseSteps;
+  };
+
+  voiceShowSteps =
+    kodiCall "VideoLibrary.GetTVShows" {
+      filter = {
+        field = "title";
+        operator = "contains";
+        value = "{{ video_title }}";
+      };
+      limits = {
+        start = 0;
+        end = 10;
+      };
+    }
+    ++ [
+      { variables.show = kodiPick "tvshows"; }
+      (ifThen "{{ not show }}" [ (reply "I couldn't find {{ video_title }} in the library.") ] (
+        kodiCall "VideoLibrary.GetEpisodes" {
+          tvshowid = "{{ show.tvshowid }}";
+          properties = [
+            "season"
+            "episode"
+            "title"
+          ];
+          # The first unwatched episode, specials (season 0) aside.
+          filter.and = [
+            {
+              field = "playcount";
+              operator = "is";
+              value = "0";
+            }
+            {
+              field = "season";
+              operator = "greaterthan";
+              value = "0";
+            }
+          ];
+          sort = {
+            method = "episode";
+            order = "ascending";
+          };
+          limits = {
+            start = 0;
+            end = 1;
+          };
+        }
+        ++ [
+          {
+            variables.episode = "{{ ((wait.trigger.event.data.result.episodes | default([])) if wait.trigger else []) | first | default({}) }}";
+          }
+          (ifThen "{{ not episode }}"
+            [ (reply "You've seen every episode of {{ show.label }}.") ]
+            [
+              {
+                service = "media_player.play_media";
+                target.entity_id = "{{ tv }}";
+                data = {
+                  media_content_type = "episode";
+                  media_content_id = "{{ episode.episodeid }}";
+                };
+              }
+              (reply "Playing {{ show.label }}, season {{ episode.season }} episode {{ episode.episode }}: {{ episode.title }}.")
+            ]
+          )
+        ]
+      ))
+    ];
+
+  voiceVideoSteps = [
+    (ifThen "{{ not tv }}"
+      [ (reply "There's no Kodi {{ place }}.") ]
+      [
+        (ifThen "{{ video_kind == 'show' }}" voiceShowSteps (
+          kodiCall "VideoLibrary.GetMovies" {
+            filter = {
+              field = "title";
+              operator = "contains";
+              value = "{{ video_title }}";
+            };
+            limits = {
+              start = 0;
+              end = 10;
+            };
+          }
+          ++ [
+            { variables.movie = kodiPick "movies"; }
+            (ifThen "{{ not movie }}"
+              [
+                (ifThen "{{ video_kind == 'any' }}" voiceShowSteps [
+                  (reply "I couldn't find the film {{ video_title }} in the library.")
+                ])
+              ]
+              [
+                {
+                  service = "media_player.play_media";
+                  target.entity_id = "{{ tv }}";
+                  data = {
+                    media_content_type = "movie";
+                    media_content_id = "{{ movie.movieid }}";
+                  };
+                }
+                (reply "Playing {{ movie.label }}.")
+              ]
+            )
+          ]
+        ))
+      ]
+    )
+  ];
+
+  # Every app name the Android TV boxes open by voice, longest first so that
+  # "YouTube Music" is not taken for "YouTube".
+  androidApps = lib.sort (a: b: lib.stringLength a > lib.stringLength b) (
+    lib.unique (lib.concatMap (d: lib.attrNames d.apps) (lib.attrValues androidTvs))
+  );
+
+  # The TV in the satellite's room: power, pause and resume, and opening an
+  # app on an Android TV box. Kodi's "turn on/off" becomes CEC through the TV
+  # box (lanbat_kodi_power below and pkgs/lva-kodi-companion); an Android box
+  # takes its power key. Pause and resume act on whatever plays in the room,
+  # music included, and pausing tells a Kodi that the companion paused for the
+  # question to stay paused.
+  voiceTvVariables = {
+    inherit (voicePlayVariables)
+      sentence
+      named_area
+      area
+      place
+      ;
+    raw = "{{ \"\" }}";
+    tvs = ''
+      {{ (integration_entities('kodi') + integration_entities('androidtv'))
+         | select('match', 'media_player\\.')
+         | select('in', area_entities(area) if area else []) | list }}'';
+    androids = ''
+      {{ integration_entities('androidtv')
+         | select('match', 'media_player\\.')
+         | select('in', area_entities(area) if area else []) | list }}'';
+    app = ''
+      {%- set ns = namespace(app="") -%}
+      {%- for a in ${builtins.toJSON androidApps} -%}
+        {%- if not ns.app and (a | lower) in sentence -%}{%- set ns.app = a -%}{%- endif -%}
+      {%- endfor -%}
+      {{ ns.app }}'';
+    players = ''
+      {{ (integration_entities('music_assistant') + integration_entities('kodi') + integration_entities('androidtv'))
+         | select('match', 'media_player\\.')
+         | select('in', area_entities(area) if area else []) | list }}'';
+  };
+  tvWords = "(tv|television|telly)";
+  mediaWords = "(tv|television|telly|film|movie|show|video|music|radio|podcast|audiobook|song)";
+  voiceTvAutomation = {
+    alias = "Voice: the room's TV";
+    id = "lanbat_voice_tv";
+    mode = "parallel";
+    trigger = [
+      {
+        platform = "conversation";
+        id = "on";
+        command = [
+          "(turn|switch) on the ${tvWords} [please]"
+          "(turn|switch) the ${tvWords} on [please]"
+        ];
+      }
+      {
+        platform = "conversation";
+        id = "off";
+        command = [
+          "(turn|switch) off the ${tvWords} [please]"
+          "(turn|switch) the ${tvWords} off [please]"
+        ];
+      }
+      {
+        platform = "conversation";
+        id = "pause";
+        command = [ "pause [the] [${mediaWords}] [please]" ];
+      }
+      {
+        platform = "conversation";
+        id = "resume";
+        command = [
+          "(resume|continue|unpause) [the] [${mediaWords}] [please]"
+          "carry on [playing] [please]"
+        ];
+      }
+    ]
+    ++ lib.optional (androidApps != [ ]) {
+      platform = "conversation";
+      id = "open";
+      command = [
+        "(open|launch) (${lib.concatStringsSep "|" androidApps}) [on the ${tvWords}] [please]"
+      ];
+    };
+    action = voicePlaySteps voiceTvVariables ++ [
+      {
+        choose = [
+          {
+            conditions = [
+              {
+                condition = "trigger";
+                id = [
+                  "on"
+                  "off"
+                ];
+              }
+            ];
+            sequence = [
+              (ifThen "{{ tvs | length == 0 }}"
+                [ (reply "There's no TV {{ place }}.") ]
+                [
+                  {
+                    service = "media_player.turn_{{ trigger.id }}";
+                    target.entity_id = "{{ tvs }}";
+                    continue_on_error = true;
+                  }
+                  (reply "Turning the TV {{ trigger.id }}.")
+                ]
+              )
+            ];
+          }
+          {
+            conditions = [
+              {
+                condition = "trigger";
+                id = "pause";
+              }
+            ];
+            sequence = [
+              {
+                variables.kodis = "{{ players | select('in', integration_entities('kodi')) | select('is_state', ['playing', 'paused']) | list }}";
+              }
+              {
+                variables.playing = "{{ players | select('is_state', 'playing') | list }}";
+              }
+              {
+                repeat.for_each = "{{ kodis }}";
+                repeat.sequence = [
+                  {
+                    service = "kodi.call_method";
+                    target.entity_id = "{{ repeat.item }}";
+                    continue_on_error = true;
+                    data = {
+                      method = "JSONRPC.NotifyAll";
+                      sender = "lanbat";
+                      message = "tv.hold";
+                    };
+                  }
+                ];
+              }
+              (ifThen "{{ playing | length == 0 and kodis | length == 0 }}"
+                [ (reply "Nothing is playing {{ place }}.") ]
+                [
+                  # A film the companion paused for the question is already
+                  # paused, and stays so.
+                  (ifThen "{{ playing | length > 0 }}"
+                    [
+                      {
+                        service = "media_player.media_pause";
+                        target.entity_id = "{{ playing }}";
+                        continue_on_error = true;
+                      }
+                    ]
+                    [ ]
+                  )
+                  (reply "Paused.")
+                ]
+              )
+            ];
+          }
+          {
+            conditions = [
+              {
+                condition = "trigger";
+                id = "resume";
+              }
+            ];
+            sequence = [
+              { variables.paused = "{{ players | select('is_state', 'paused') | list }}"; }
+              (ifThen "{{ paused | length == 0 }}"
+                [ (reply "Nothing is paused {{ place }}.") ]
+                [
+                  {
+                    service = "media_player.media_play";
+                    target.entity_id = "{{ paused }}";
+                    continue_on_error = true;
+                  }
+                  (reply "Okay.")
+                ]
+              )
+            ];
+          }
+          {
+            conditions = [
+              {
+                condition = "trigger";
+                id = "open";
+              }
+            ];
+            sequence = [
+              # The box in the room that has the app, else any box in it.
+              {
+                variables.box = ''
+                  {%- set ns = namespace(box="") -%}
+                  {%- for b in androids -%}
+                    {%- if not ns.box and app in (state_attr(b, 'source_list') or []) -%}{%- set ns.box = b -%}{%- endif -%}
+                  {%- endfor -%}
+                  {{ ns.box or (androids | first | default("")) }}'';
+              }
+              (ifThen "{{ not box }}"
+                [ (reply "There's no TV {{ place }} that can open apps.") ]
+                [
+                  {
+                    "if" = [
+                      {
+                        condition = "template";
+                        value_template = "{{ is_state(box, 'off') }}";
+                      }
+                    ];
+                    "then" = [
+                      {
+                        service = "media_player.turn_on";
+                        target.entity_id = "{{ box }}";
+                        continue_on_error = true;
+                      }
+                    ];
+                  }
+                  {
+                    service = "media_player.select_source";
+                    target.entity_id = "{{ box }}";
+                    data.source = "{{ app }}";
+                    continue_on_error = true;
+                  }
+                  (reply "Opening {{ app }}.")
+                ]
+              )
+            ];
+          }
+        ];
+      }
+    ];
+  };
+
+  # The music steps, after a video branch when there is a Kodi to play on.
+  voiceWithVideo =
+    musicSteps:
+    if hasKodi then [ (ifThen "{{ video_kind != '' }}" voiceVideoSteps musicSteps) ] else musicSteps;
+
+  kodiAutomations = [
+    {
+      alias = "Kodi: a library call for a voice request";
+      id = "lanbat_kodi_call";
+      mode = "parallel";
+      trigger = [
+        {
+          platform = "event";
+          event_type = "lanbat_kodi_call";
+        }
+      ];
+      action = [
+        {
+          service = "kodi.call_method";
+          target.entity_id = "{{ trigger.event.data.entity_id }}";
+          data = "{{ dict(trigger.event.data.params, method=trigger.event.data.method) }}";
+          continue_on_error = true;
+        }
+      ];
+    }
+    {
+      # Kodi's "turn on/off" in Home Assistant only fires these events; the TV
+      # box's companion takes the notification and switches the TV over CEC.
+      alias = "Kodi: TV power over CEC";
+      id = "lanbat_kodi_power";
+      mode = "queued";
+      trigger = [
+        {
+          platform = "event";
+          event_type = "kodi.turn_on";
+          id = "on";
+        }
+        {
+          platform = "event";
+          event_type = "kodi.turn_off";
+          id = "off";
+        }
+      ];
+      action = [
+        {
+          service = "kodi.call_method";
+          target.entity_id = "{{ trigger.event.data.entity_id }}";
+          continue_on_error = true;
+          data = {
+            method = "JSONRPC.NotifyAll";
+            sender = "lanbat";
+            message = "tv.{{ trigger.id }}";
+          };
+        }
+      ];
+    }
+  ];
+
   voicePlayAutomations = [
     {
       alias = "Voice: play on the room's speaker";
@@ -406,102 +922,108 @@ let
             "(I want to|I'd like to|let me|can I) (listen to|hear) {query}"
             "listen to {query}"
             "tune in to {query}"
+          ]
+          ++ lib.optionals hasKodi [
+            "watch {query}"
+            "(I want to|I'd like to|let's|let me|can I|can we) watch {query}"
           ];
         }
       ];
-      action = voicePlaySteps voicePlayVariables ++ [
-        {
-          "if" = [
-            {
-              condition = "template";
-              value_template = "{{ not player }}";
-            }
-          ];
-          "then" = [
-            { set_conversation_response = "There's no speaker {{ place }}."; }
-          ];
-          "else" = [
-            # What the speaker had before, to tell the new item from it.
-            { variables.before = "{{ state_attr(player, 'media_content_id') or '' }}"; }
-            {
-              choose = [
-                {
-                  conditions = [
-                    {
-                      condition = "template";
-                      value_template = "{{ play_artist != '' }}";
-                    }
-                  ];
-                  sequence = [
-                    {
-                      service = "music_assistant.play_media";
-                      target.entity_id = "{{ player }}";
-                      continue_on_error = true;
-                      data = {
-                        media_id = "{{ play_id }}";
-                        media_type = "track";
-                        artist = "{{ play_artist }}";
-                        enqueue = "replace";
-                        radio_mode = "{{ similar }}";
-                      };
-                    }
-                  ];
-                }
-                {
-                  conditions = [
-                    {
-                      condition = "template";
-                      value_template = "{{ play_type != '' }}";
-                    }
-                  ];
-                  sequence = [
-                    {
-                      service = "music_assistant.play_media";
-                      target.entity_id = "{{ player }}";
-                      continue_on_error = true;
-                      data = {
-                        media_id = "{{ play_id }}";
-                        media_type = "{{ play_type }}";
-                        enqueue = "replace";
-                        radio_mode = "{{ similar }}";
-                      };
-                    }
-                  ];
-                }
-              ];
-              default = [
-                {
-                  service = "music_assistant.play_media";
-                  target.entity_id = "{{ player }}";
-                  continue_on_error = true;
-                  data = {
-                    media_id = "{{ play_id }}";
-                    enqueue = "replace";
-                    radio_mode = "{{ similar }}";
-                  };
-                }
-              ];
-            }
-            # Say what actually plays, or that nothing could be found: Music
-            # Assistant may fail, or pick something else than was meant.
-            {
-              wait_template = "{{ is_state(player, 'playing') and (state_attr(player, 'media_content_id') or '') != before }}";
-              timeout = "00:00:12";
-              continue_on_timeout = true;
-            }
-            {
-              set_conversation_response = ''
-                {%- if wait.completed -%}
-                  {%- set title = state_attr(player, 'media_title') or play_id -%}
-                  {%- set artist = state_attr(player, 'media_artist') -%}
-                  {{ 'Playing something like ' if (similar | string | lower) == 'true' else 'Playing ' }}{{ title }}{{ ' by ' ~ artist if artist and artist | lower not in title | lower else "" }}.
-                {%- else -%}
-                  Sorry, I couldn't find {{ play_id }}{{ ' by ' ~ play_artist if play_artist else "" }}.
-                {%- endif -%}'';
-            }
-          ];
-        }
-      ];
+      action =
+        voicePlaySteps (voicePlayVariables // lib.optionalAttrs hasKodi voiceVideoVariables)
+        ++ voiceWithVideo [
+          {
+            "if" = [
+              {
+                condition = "template";
+                value_template = "{{ not player }}";
+              }
+            ];
+            "then" = [
+              { set_conversation_response = "There's no speaker {{ place }}."; }
+            ];
+            "else" = [
+              # What the speaker had before, to tell the new item from it.
+              { variables.before = "{{ state_attr(player, 'media_content_id') or '' }}"; }
+              {
+                choose = [
+                  {
+                    conditions = [
+                      {
+                        condition = "template";
+                        value_template = "{{ play_artist != '' }}";
+                      }
+                    ];
+                    sequence = [
+                      {
+                        service = "music_assistant.play_media";
+                        target.entity_id = "{{ player }}";
+                        continue_on_error = true;
+                        data = {
+                          media_id = "{{ play_id }}";
+                          media_type = "track";
+                          artist = "{{ play_artist }}";
+                          enqueue = "replace";
+                          radio_mode = "{{ similar }}";
+                        };
+                      }
+                    ];
+                  }
+                  {
+                    conditions = [
+                      {
+                        condition = "template";
+                        value_template = "{{ play_type != '' }}";
+                      }
+                    ];
+                    sequence = [
+                      {
+                        service = "music_assistant.play_media";
+                        target.entity_id = "{{ player }}";
+                        continue_on_error = true;
+                        data = {
+                          media_id = "{{ play_id }}";
+                          media_type = "{{ play_type }}";
+                          enqueue = "replace";
+                          radio_mode = "{{ similar }}";
+                        };
+                      }
+                    ];
+                  }
+                ];
+                default = [
+                  {
+                    service = "music_assistant.play_media";
+                    target.entity_id = "{{ player }}";
+                    continue_on_error = true;
+                    data = {
+                      media_id = "{{ play_id }}";
+                      enqueue = "replace";
+                      radio_mode = "{{ similar }}";
+                    };
+                  }
+                ];
+              }
+              # Say what actually plays, or that nothing could be found: Music
+              # Assistant may fail, or pick something else than was meant.
+              {
+                wait_template = "{{ is_state(player, 'playing') and (state_attr(player, 'media_content_id') or '') != before }}";
+                timeout = "00:00:12";
+                continue_on_timeout = true;
+              }
+              {
+                set_conversation_response = ''
+                  {%- if wait.completed -%}
+                    {%- set title = state_attr(player, 'media_title') or play_id -%}
+                    {%- set artist = state_attr(player, 'media_artist') -%}
+                    {{ 'Playing something like ' if (similar | string | lower) == 'true' else 'Playing ' }}{{ title }}{{ ' by ' ~ artist if artist and artist | lower not in title | lower else "" }}.
+                  {%- else -%}
+                    Sorry, I couldn't find {{ play_id }}{{ ' by ' ~ play_artist if play_artist else "" }}.
+                  {%- endif -%}'';
+              }
+            ];
+          }
+        ];
     }
     {
       alias = "Voice: stop the room's speaker";
@@ -655,7 +1177,13 @@ in
       # passes disagree, so the table recorded no edge and the satellite's host
       # generated a drop with no accept. voiceRooms is static, so both passes
       # see the same answer.
-      consumes = lib.optional voiceRooms "voice-satellite";
+      consumes =
+        lib.optional voiceRooms "voice-satellite"
+        # Kodi's web server/JSON-RPC and its notification port, on the TV host.
+        ++ lib.optionals hasKodi [
+          "kodi"
+          "kodi-events"
+        ];
       # home-assistant-post-setup configures MQTT with the password that
       # mosquitto.nix declares for Home Assistant.
       readsSecrets = lib.optional (config.lanbat.hasService "mosquitto") "mosquitto-ha-pass";
@@ -677,6 +1205,11 @@ in
           owner = "hass";
         };
         # The record of the voice satellites' token, for home-assistant-post-setup.
+        # The Kodi web server's password (the TV host's Kodi sets the same one).
+        kodi-web-password = {
+          enable = hasKodi;
+          owner = "hass";
+        };
         ha-voice-refresh-token = {
           enable = voiceRooms;
           owner = "root";
@@ -798,6 +1331,14 @@ in
         export SERVER_HOST_KEY="${config.lanbat.hostKey}"
         export PRIMARY_STORAGE_KEY="${if storageKey == null then "" else storageKey}"
         export VOICE_SATELLITE_REGISTRATIONS=${lib.escapeShellArg voiceSatelliteRegistrationsEnv}
+        ${lib.optionalString hasAndroidTv ''
+          export ANDROID_TVS=${lib.escapeShellArg androidTvsJson}
+          export ANDROID_ADBKEY="${config.services.home-assistant.configDir}/.android/adbkey"
+        ''}
+        ${lib.optionalString hasKodi ''
+          export KODI_HOSTS=${lib.escapeShellArg kodiHostsEnv}
+          export KODI_PASSWORD_FILE="${config.lanbat.secrets.kodi-web-password.path}"
+        ''}
         ${lib.optionalString satellite.enable ''
           export LOCAL_SATELLITE_PORT="${
             if satellite.backend == "lva" then
@@ -876,6 +1417,8 @@ in
         # Wyoming voice assistant protocol
         "wyoming"
       ]
+      ++ lib.optionals hasKodi [ "kodi" ]
+      ++ lib.optionals hasAndroidTv [ "androidtv" ]
       ++ lib.optionals hasLvaSatellite [
         "esphome"
       ]
@@ -1011,7 +1554,9 @@ in
           lib.optionals cfg.zigbee2mqttBridge zigbeeAutomations
           ++ lib.optionals (config.lanbat.hasService "music-assistant" && voiceSatelliteHosts != [ ]) (
             voicePlayAutomations ++ [ voiceVolumeAutomation ]
-          );
+          )
+          ++ lib.optionals (voiceSatelliteHosts != [ ] && (hasKodi || hasAndroidTv)) [ voiceTvAutomation ]
+          ++ lib.optionals hasKodi kodiAutomations;
       };
 
       lovelaceConfig = {

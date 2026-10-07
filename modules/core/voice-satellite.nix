@@ -210,6 +210,19 @@ in
           default = 0.8;
           description = "Seconds the music takes to fade back up when the conversation ends.";
         };
+
+        programs = mkOption {
+          type = types.listOf types.str;
+          default = [ "snapclient" ];
+          example = [
+            "snapclient"
+            "kodi.bin"
+          ];
+          description = ''
+            Programs whose PipeWire playback streams fade, by their process
+            binary name. A TV box adds Kodi (modules/storage/tv-box.nix).
+          '';
+        };
       };
 
       peripheralPort = mkOption {
@@ -285,8 +298,16 @@ in
         description = ''
           Disable LVA's peripheral WebSocket (``peripheralPort``, loopback
           only). Set false to attach HAT buttons or LEDs. Snapcast ducking
-          keeps the API enabled even when this is true.
+          and the services in ``peripheralApiUsers`` keep the API enabled
+          even when this is true.
         '';
+      };
+
+      peripheralApiUsers = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        internal = true;
+        description = "Units on this host that follow LVA's peripheral WebSocket (the TV box's lva-kodi-companion); any keeps it enabled.";
       };
     };
 
@@ -329,9 +350,11 @@ in
         type = types.bool;
         default = false;
         description = ''
-          Experimental: play Snapcast into the echo-cancel sink as well, so
-          the music is part of the reference and WebRTC AEC takes it out of
-          the microphone too, not only the assistant's own voice. Costs CPU on
+          Experimental: play Snapcast (and Kodi, on a TV box) into the
+          echo-cancel sink as well, so the music and films are part of the
+          reference and WebRTC AEC takes them out of the microphone too, not
+          only the assistant's own voice. They then play only while the
+          microphone is plugged in, since the canceller runs off it. Costs CPU on
           every second of music (measure it on a Pi 3 first). Needs
           ``echoCancellation.enable``.
         '';

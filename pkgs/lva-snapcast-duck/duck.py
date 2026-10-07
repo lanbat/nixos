@@ -48,6 +48,11 @@ MAX_DUCK = float(os.environ.get("MAX_DUCK_SECONDS", "120"))
 # restarted ducker (a deploy, a crash) puts them back instead of leaving the
 # music at a fraction of its volume for good.
 STATE_FILE = os.environ.get("STATE_FILE")
+# The programs whose streams fade: Snapcast's client, and on a TV box Kodi's
+# own music.
+DUCK_BINARIES = frozenset(
+    b for b in os.environ.get("DUCK_BINARIES", "snapclient").split(",") if b
+)
 STEP = 0.05
 
 
@@ -60,8 +65,8 @@ def run(*args: str) -> str:
 
 
 def snapcast_nodes() -> list[int]:
-    """PipeWire node ids of snapclient's streams (the process binary is a
-    property of its client, not of the nodes)."""
+    """PipeWire node ids of the ducked programs' playback streams (the process
+    binary is a property of its client, not of the nodes)."""
     try:
         objects = json.loads(run(PW_DUMP) or "[]")
     except json.JSONDecodeError:
@@ -71,13 +76,14 @@ def snapcast_nodes() -> list[int]:
         for o in objects
         if o.get("type") == "PipeWire:Interface:Client"
         and o.get("info", {}).get("props", {}).get("application.process.binary")
-        == "snapclient"
+        in DUCK_BINARIES
     }
     return [
         o["id"]
         for o in objects
         if o.get("type") == "PipeWire:Interface:Node"
         and o.get("info", {}).get("props", {}).get("client.id") in clients
+        and o.get("info", {}).get("props", {}).get("media.class") == "Stream/Output/Audio"
     ]
 
 

@@ -26,7 +26,8 @@
 # its replies into the other, so its own voice is cancelled. Snapcast plays
 # straight to the speaker, so music is not in the reference and is not
 # cancelled, unless echoCancellation.includeMusic sends it through the sink too
-# (an experiment: it costs CPU for every second of music).
+# (an experiment: it costs CPU for every second of music). On a TV box Kodi
+# follows includeMusic too (modules/storage/tv-box.nix).
 {
   config,
   lib,
@@ -140,6 +141,7 @@ in
             WPCTL = "${config.services.pipewire.wireplumber.package}/bin/wpctl";
             DUCK_VOLUME = cfg.lva.snapcastDucking.volume;
             DUCK_LISTEN_VOLUME = cfg.lva.snapcastDucking.listenVolume;
+            DUCK_BINARIES = lib.concatStringsSep "," cfg.lva.snapcastDucking.programs;
             # Kept across restarts of the unit (not reboots): a ducker stopped
             # with the music down finds the volumes to put back here.
             STATE_FILE = "/run/lva-snapcast-duck/saved.json";
