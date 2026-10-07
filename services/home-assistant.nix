@@ -83,6 +83,46 @@ let
   authHeaderComponent = pkgs.callPackage ../pkgs/home-assistant-auth-header { };
   bootstrap = pkgs.callPackage ../pkgs/home-assistant-bootstrap { };
   postSetup = pkgs.callPackage ../pkgs/home-assistant-post-setup { };
+  haDashboards = pkgs.callPackage ../pkgs/home-assistant-dashboards { };
+  # The link buttons on the generated System and Cameras dashboards: the web
+  # UIs of the services on this profile, from their descriptions.
+  dashboardLinks = builtins.toJSON (
+    lib.listToAttrs (
+      lib.concatMap
+        (
+          { name, title }:
+          let
+            svc = config.lanbat.services.${name} or null;
+          in
+          lib.optional (config.lanbat.hasService name && svc.subdomain != null) {
+            name = title;
+            value = "https://${svc.subdomain}.${config.lanbat.deployment.domain}";
+          }
+        )
+        [
+          {
+            name = "grafana";
+            title = "Grafana";
+          }
+          {
+            name = "frigate";
+            title = "Frigate";
+          }
+          {
+            name = "music-assistant";
+            title = "Music Assistant";
+          }
+          {
+            name = "zigbee2mqtt";
+            title = "Zigbee2MQTT";
+          }
+          {
+            name = "homepage";
+            title = "Homepage";
+          }
+        ]
+    )
+  );
   llm = config.lanbat.deployment.haLlm;
   # An LLM on this host's loopback (services/llama-cpp.nix) needs no API key,
   # and no keepalive to hold off a scale-to-zero cold start.
@@ -195,9 +235,24 @@ let
       defaultText = lib.literalExpression ''config.lanbat.hasService "zigbee2mqtt"'';
       description = ''
         Watch the Zigbee2MQTT bridge: a persistent notification while it has
-        lost its MQTT connection, and a card on the Overview dashboard with its
-        state and permit-join switch. The default follows whether Zigbee2MQTT
-        runs on this host.
+        lost its MQTT connection. (The generated System dashboard shows its
+        state and permit-join switch whenever the bridge is in Home
+        Assistant.) The default follows whether Zigbee2MQTT runs on this host.
+      '';
+    };
+    options.deviceAreas = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      example = {
+        "livingroom_lamp" = "Living Room";
+        "switch.0x00124b0012345678" = "Hall";
+      };
+      description = ''
+        Rooms for devices, set by home-assistant-post-setup on every run: a
+        device's name as Home Assistant shows it (or the id of one of its
+        entities, for devices whose names repeat) → the name of its area. An
+        area that does not exist yet is created. The generated dashboards
+        (pkgs/home-assistant-dashboards) group by these rooms.
       '';
     };
   };
@@ -1115,21 +1170,6 @@ let
     }
   ];
 
-  zigbeeView = {
-    title = "Overview";
-    path = "home";
-    cards = [
-      {
-        type = "entities";
-        title = "Zigbee bridge";
-        entities = [
-          "switch.zigbee2mqtt_bridge_permit_join"
-          "binary_sensor.zigbee2mqtt_bridge_connection_state"
-          "binary_sensor.zigbee2mqtt_bridge_restart_required"
-        ];
-      }
-    ];
-  };
 in
 {
   options.lanbat.homeAssistant = {
@@ -1372,8 +1412,22 @@ in
         ${lib.optionalString xiaomiBle ''
           export XIAOMI_BLE_KEYS_FILE="${config.lanbat.secrets.ha-xiaomi-ble.path}"
         ''}
+        # Rooms for devices, and the dashboards generated from the registries.
+        export DEVICE_AREAS=${lib.escapeShellArg (builtins.toJSON cfg.deviceAreas)}
+        export HA_DASHBOARDS="${lib.getExe haDashboards}"
+        export DASHBOARD_LINKS=${lib.escapeShellArg dashboardLinks}
         exec home-assistant-post-setup
       '';
+    };
+
+    # Devices paired since the last deploy reach the dashboards overnight;
+    # post-setup restarts Home Assistant only when something changed.
+    systemd.timers.home-assistant-post-setup = {
+      wantedBy = [ "timers.target" ];
+      timerConfig = {
+        OnCalendar = "*-*-* 03:30:00";
+        RandomizedDelaySec = "10m";
+      };
     };
 
     services.home-assistant = {
@@ -1559,25 +1613,9 @@ in
           ++ lib.optionals hasKodi kodiAutomations;
       };
 
-      lovelaceConfig = {
-        title = "Home";
-        views = lib.optional cfg.zigbee2mqttBridge zigbeeView ++ [
-          {
-            # Everything else, from Home Assistant's built-in "original-states"
-            # view strategy: it generates the cards from the entity and area
-            # registries when the view is rendered, grouped by area.  Nothing
-            # deployment-specific (IEEE-derived entity IDs, area names) is
-            # committed here, and new devices appear without a config change.
-            # type is the only required key; areas, hide_entities_without_area
-            # and hide_energy are optional.
-            title = "All";
-            path = "all";
-            strategy = {
-              type = "original-states";
-            };
-          }
-        ];
-      };
+      # No lovelaceConfig: the dashboards are in storage mode, written by
+      # home-assistant-post-setup from the registries
+      # (pkgs/home-assistant-dashboards, docs/dashboards.md).
     };
 
     # Keeps a model elsewhere warm between voice commands: a scale-to-zero API

@@ -85,6 +85,15 @@
       # Merged last, so they override anything core, the role or a plugin set.
       modules = [
         ./frigate.nix
+        # Rooms for Home Assistant devices that have none, by the name Home
+        # Assistant shows (or an entity id); the generated dashboards group by
+        # room (docs/dashboards.md).
+        {
+          lanbat.services.home-assistant.settings.deviceAreas = {
+            livingroom_lamp = "Living Room";
+            "switch.0x00124b0012345678" = "Hall";
+          };
+        }
         # Syncthing's devices and folders (services/syncthing.nix). Folder IDs
         # are the ones the other devices already use.
         {

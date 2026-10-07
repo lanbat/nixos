@@ -136,7 +136,15 @@
       #       channels.computerphile.url = "https://www.youtube.com/@Computerphile/videos";
       #     };
       #   }
-      modules = [ ./frigate.nix ];
+      modules = [
+        ./frigate.nix
+        # Rooms for Home Assistant devices that have none (docs/dashboards.md).
+        {
+          lanbat.services.home-assistant.settings.deviceAreas = {
+            livingroom_lamp = "Living Room";
+          };
+        }
+      ];
     };
 
     pi-storage = {

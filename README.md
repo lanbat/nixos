@@ -147,6 +147,13 @@ Going from a fresh clone to a running site. The full step-by-step — disk layou
    deploy --skip-checks path:.#homelab-pi-storage
    ```
 
+## Dashboards
+
+Home Assistant's dashboards build themselves from the devices connected to it: a Home
+tab with a section per room (lights, plugs, climate, media, the voice satellite),
+media, climate, garden and energy tabs, live cameras with what they have seen, and a
+system view. See [docs/dashboards.md](docs/dashboards.md).
+
 ## Services
 
 Services run in two tiers. See [docs/secure-layers.md](docs/secure-layers.md) for the full design.

@@ -953,6 +953,146 @@ wyoming_needed() {
   return 0
 }
 
+# ── Rooms for devices (settings.deviceAreas) ─────────────────────────────
+# DEVICE_AREAS is {"<device name or entity id>": "<room>"}. A room with no
+# area yet becomes one; each device named (or owning the entity named) goes
+# in its room, on every run. Names compare case-insensitively.
+DEVICE_AREAS="${DEVICE_AREAS:-}"
+[[ -n "$DEVICE_AREAS" ]] || DEVICE_AREAS='{}'
+ENTITY_REGISTRY="${HASS_CONFIG}/.storage/core.entity_registry"
+
+# The rooms of DEVICE_AREAS that have no area yet.
+device_areas_missing_rooms() {
+  [[ -f "$AREA_REGISTRY" ]] || return 0
+  jq -r --argjson want "$DEVICE_AREAS" '
+    ([.data.areas[].name | ascii_downcase]) as $have
+    | [$want[]] | unique[] | select((ascii_downcase) as $n | $have | index($n) | not)
+  ' "$AREA_REGISTRY"
+}
+
+# The device registry with DEVICE_AREAS applied (to the area registry in $1);
+# .unmatched lists the keys that name no device.
+device_areas_wanted() {
+  local areas="$1"
+  jq --argjson want "$DEVICE_AREAS" --slurpfile areas "$areas" \
+    --slurpfile ents "$ENTITY_REGISTRY" '
+    ($areas[0].data.areas | map({key: (.name | ascii_downcase), value: .id}) | from_entries) as $ids
+    | ([$ents[0].data.entities[] | select(.device_id != null) | {key: .entity_id, value: .device_id}]
+       | from_entries) as $dev_of
+    | ($want | to_entries) as $w
+    | ([.data.devices[] | (.name_by_user // .name // "") | ascii_downcase]) as $names
+    | def room_of($d):
+        [$w[] | select((.key | ascii_downcase) == (($d.name_by_user // $d.name // "") | ascii_downcase)
+                       or $dev_of[.key] == $d.id)] | .[0];
+    .unmatched = [$w[] | .key
+                  | select($dev_of[.] == null and ((ascii_downcase) as $k | $names | index($k) | not))]
+    | .data.devices |= map(room_of(.) as $m
+        | if $m != null and $ids[$m.value | ascii_downcase] != null
+          then .area_id = $ids[$m.value | ascii_downcase] else . end)
+  ' "$DEVICE_REGISTRY"
+}
+
+device_areas_needed() {
+  [[ "$DEVICE_AREAS" != '{}' && -f "$DEVICE_REGISTRY" && -f "$ENTITY_REGISTRY" ]] || return 1
+  [[ -n "$(device_areas_missing_rooms)" ]] && return 0
+  [[ "$(device_areas_wanted "$AREA_REGISTRY" | jq -S '.data.devices')" \
+     != "$(jq -S '.data.devices' "$DEVICE_REGISTRY")" ]]
+}
+
+ensure_device_areas() {
+  device_areas_needed || return 0
+  local tmp now room wanted key
+  now="$(now_utc)"
+  tmp="$(mktemp)"
+  cp "$AREA_REGISTRY" "$tmp"
+  while IFS= read -r room; do
+    [[ -n "$room" ]] || continue
+    log "adding area ${room}"
+    jq --arg now "$now" --arg name "$room" --arg id "$(area_id)" '
+      .data.areas += [{
+        aliases: [], floor_id: null, icon: null, id: $id, labels: [], name: $name,
+        picture: null, humidity_entity_id: null, temperature_entity_id: null,
+        created_at: $now, modified_at: $now
+      }]' "$tmp" > "$tmp.new"
+    mv "$tmp.new" "$tmp"
+  done < <(device_areas_missing_rooms)
+  install -o hass -g hass -m 0600 "$tmp" "$AREA_REGISTRY"
+  wanted="$(device_areas_wanted "$AREA_REGISTRY")"
+  while IFS= read -r key; do
+    [[ -n "$key" ]] && log "deviceAreas: no device or entity named ${key}"
+  done < <(jq -r '.unmatched[]' <<< "$wanted")
+  log "putting devices in their rooms"
+  jq 'del(.unmatched)' <<< "$wanted" > "$tmp"
+  install -o hass -g hass -m 0600 "$tmp" "$DEVICE_REGISTRY"
+  rm -f "$tmp"
+}
+
+# ── Generated dashboards (pkgs/home-assistant-dashboards) ─────────────────
+# The Overview (storage key "lovelace.lovelace", listed as "lovelace") and the
+# lanbat-* dashboards are
+# rewritten from the registries; other dashboards and the Energy dashboard's
+# grid and solar sources are left alone.
+HA_DASHBOARDS="${HA_DASHBOARDS:-}"
+DASHBOARD_LINKS="${DASHBOARD_LINKS:-}"
+[[ -n "$DASHBOARD_LINKS" ]] || DASHBOARD_LINKS='{}'
+STORAGE_DIR="${HASS_CONFIG}/.storage"
+GENERATED_STORES=(lovelace.lovelace lovelace.lanbat-cameras lovelace.lanbat-system)
+
+# Generate into $1 and add the merged lovelace_dashboards and energy stores.
+dashboards_render() {
+  local out="$1"
+  "$HA_DASHBOARDS" --storage "$STORAGE_DIR" --out "$out" --links "$DASHBOARD_LINKS"
+  if [[ -f "$STORAGE_DIR/lovelace_dashboards" ]]; then
+    cat "$STORAGE_DIR/lovelace_dashboards"
+  else
+    echo '{"version": 1, "minor_version": 1, "key": "lovelace_dashboards", "data": {"items": []}}'
+  fi | jq --slurpfile ours "$out/dashboards.json" '
+    .data.items = ([.data.items[] | select(.id != "lovelace" and (.id | startswith("lanbat-") | not))] + $ours[0])
+  ' > "$out/lovelace_dashboards"
+  if [[ -f "$STORAGE_DIR/energy" ]]; then
+    cat "$STORAGE_DIR/energy"
+  else
+    echo '{"version": 1, "minor_version": 3, "key": "energy", "data": {"energy_sources": [], "device_consumption": [], "device_consumption_water": []}}'
+  fi | jq --slurpfile ours "$out/energy-devices.json" '
+    ($ours[0] | map(.stat_consumption)) as $mine
+    | .data.device_consumption = ($ours[0]
+        + [(.data.device_consumption // [])[] | select(.stat_consumption as $s | $mine | index($s) | not)])
+  ' > "$out/energy"
+}
+
+# Whether a generated store differs from Home Assistant's.
+dashboards_differ() {
+  local out="$1" name
+  for name in "${GENERATED_STORES[@]}" lovelace_dashboards energy; do
+    [[ -f "$STORAGE_DIR/$name" ]] || return 0
+    [[ "$(jq -S . "$out/$name")" == "$(jq -S . "$STORAGE_DIR/$name")" ]] || return 0
+  done
+  return 1
+}
+
+dashboards_needed() {
+  [[ -n "$HA_DASHBOARDS" && -f "$DEVICE_REGISTRY" && -f "$ENTITY_REGISTRY" ]] || return 1
+  local out rc=1
+  out="$(mktemp -d)"
+  dashboards_render "$out" && dashboards_differ "$out" && rc=0
+  rm -rf "$out"
+  return "$rc"
+}
+
+ensure_dashboards() {
+  [[ -n "$HA_DASHBOARDS" && -f "$DEVICE_REGISTRY" && -f "$ENTITY_REGISTRY" ]] || return 0
+  local out name
+  out="$(mktemp -d)"
+  dashboards_render "$out"
+  if dashboards_differ "$out"; then
+    log "writing the generated dashboards"
+    for name in "${GENERATED_STORES[@]}" lovelace_dashboards energy; do
+      install -o hass -g hass -m 0600 "$out/$name" "$STORAGE_DIR/$name"
+    done
+  fi
+  rm -rf "$out"
+}
+
 needs_work=false
 [[ -f "$CONFIG_ENTRIES" ]] || { log "waiting for Home Assistant storage"; exit 0; }
 
@@ -986,6 +1126,8 @@ if ! state_done "$(satellite_vad_state_key)"; then needs_work=true; fi
 if voice_token_needed; then needs_work=true; fi
 if bluetooth_needed; then needs_work=true; fi
 if xiaomi_ble_needed; then needs_work=true; fi
+if device_areas_needed; then needs_work=true; fi
+if dashboards_needed; then needs_work=true; fi
 
 if [[ "$needs_work" != true ]]; then
   log "post-setup already complete"
@@ -1025,6 +1167,8 @@ ensure_voice_token
 ensure_bluetooth
 ensure_xiaomi_ble
 ensure_areas
+ensure_device_areas
+ensure_dashboards
 
 systemctl start home-assistant.service
 log "post-setup complete"

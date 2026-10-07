@@ -507,6 +507,11 @@ automatically and registers the Authentik provider.  No further steps needed.
 4. Grant users access to the **Home Assistant** application in Authentik
    (Applications → Home Assistant → Policy / group bindings).
 
+5. Give every device a room: the dashboards are generated per room from Home
+   Assistant's registries. Set `lanbat.services.home-assistant.settings.deviceAreas`
+   for the devices the post-setup log or the Home tab's "Not in a room yet" lists,
+   and deploy again (see [dashboards.md](dashboards.md)).
+
 #### Jellyfin — automatic setup
 
 `jellyfin-bootstrap` completes first-run onboarding on deploy:
