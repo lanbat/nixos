@@ -648,6 +648,10 @@ let
       && !(lib.hasInfix "--soundcard" lvaServer.systemd.services.snapclient.serviceConfig.ExecStart or "")
     ))
 
+    (expect "lva: replies play into the echo-cancel sink through mpv's pulse driver" (
+      lib.hasInfix "--audio-output-device pulse/lanbat_aec_playback" lvaPi3Aec.systemd.services.linux-voice-assistant.serviceConfig.ExecStart
+    ))
+
     (expect "lva: stop works at the end of a transcript that caught the radio" (
       let
         stop = lib.findFirst (a: a.id == "lanbat_voice_stop") null (haConfig lvaServer).automation;
@@ -741,6 +745,10 @@ let
         && !(base.systemd.services ? lva-kodi-companion)
       )
     )
+
+    (expect "tv: a new Kodi stream doesn't inherit a ducked volume" (
+      lvaTvBox.services.pipewire.wireplumber.extraConfig ? "51-kodi-volume"
+    ))
 
     (expect "tv: Kodi's power is switched over CEC, library calls go through an event" (
       (automationById base "lanbat_kodi_power").action != [ ]

@@ -24,7 +24,9 @@ let
   psEyeInput = "lanbat_ps_eye_capture";
 
   aecInput = cfg.echoCancellation.pulseSourceName;
-  aecOutput = cfg.echoCancellation.pulseSinkName;
+  # LVA hands the output device to mpv, which wants it with its driver: a bare
+  # sink name is no device to mpv, and the replies play nowhere.
+  aecOutput = "pulse/${cfg.echoCancellation.pulseSinkName}";
 
   audioInputDevice =
     if lva.audioInputDevice != null then

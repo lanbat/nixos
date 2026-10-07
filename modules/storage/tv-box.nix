@@ -277,6 +277,17 @@ in
     lanbat.voiceSatellite.lva.snapcastDucking.programs = lib.mkIf lvaHere (
       lib.mkOptionDefault [ "kodi.bin" ]
     );
+    # Kodi opens a new stream for each film, and WirePlumber gave it the last
+    # one's volume: a film that ended or a Kodi that restarted while ducked
+    # left the next one at the duck level, and each duck took it lower, to
+    # 0.000003 measured on the Pi 5, 2026-10-07 (as Snapcast's, in
+    # modules/core/snapclient.nix). Kodi's own volume is the one to turn.
+    services.pipewire.wireplumber.extraConfig."51-kodi-volume"."stream.rules" = lib.mkIf lvaHere [
+      {
+        matches = [ { "application.name" = "Kodi"; } ];
+        actions.update-props."state.restore-props" = false;
+      }
+    ];
 
     users.users.media = {
       uid = 1000;
