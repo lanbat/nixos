@@ -24,6 +24,20 @@
 # the other media on drive B: /mnt/storage-b/media/roms/<system>.
 # Emulator BIOS files go in roms/bios.
 #
+# Remote control: Kodi's web server (8080, JSON-RPC over HTTP, user "kodi" and
+# the kodi-web-password secret) and its TCP notification port (9090) are on,
+# for Home Assistant's Kodi integration. They are described as the "kodi" and
+# "kodi-events" endpoints, which Home Assistant consumes, so the firewall admits
+# only Home Assistant's host. Kodi rewrites guisettings.xml when it exits, so
+# tv-kodi sets these settings in it before every start, as root, while Kodi is
+# not running.
+#
+# Audio: Kodi plays PCM into the system PipeWire (passthrough off), so with a
+# voice satellite on the box its films and music meet the satellite's ducking
+# and echo canceller. The satellite's companion (pkgs/lva-kodi-companion)
+# pauses a film while you talk, shows what you said and the reply on screen,
+# and switches the TV on and off over CEC when Home Assistant asks.
+#
 # Controllers: wired Xbox pads use the kernel's xpad driver, Bluetooth Xbox
 # pads use xpadneo (pair once with bluetoothctl), and USB arcade encoders are
 # generic HID joysticks. RetroArch maps them with its autoconfig profiles.
@@ -42,6 +56,54 @@ let
     lib.attrNames (config.lanbat.hosts.${config.lanbat.hostKey}.storage.drives or { })
   );
   home = config.users.users.media.home;
+
+  kodiWebPort = 8080;
+  kodiEventsPort = 9090;
+  # Settings tv-kodi puts in guisettings.xml before Kodi starts (see the top).
+  kodiRemote = pkgs.writeShellScript "kodi-remote-control" ''
+    set -euo pipefail
+    xml=${lib.getExe pkgs.xmlstarlet}
+    f=${home}/.kodi/userdata/guisettings.xml
+    mkdir -p "$(dirname "$f")"
+    [ -s "$f" ] || printf '<settings version="2">\n</settings>\n' > "$f"
+    set_setting() {
+      local id="$1" value="$2"
+      if $xml sel -t -c "/settings/setting[@id='$id']" "$f" >/dev/null 2>&1; then
+        $xml ed -L -u "/settings/setting[@id='$id']" -v "$value" \
+          -d "/settings/setting[@id='$id']/@default" "$f"
+      else
+        $xml ed -L -s /settings -t elem -n lanbatnew -v "$value" \
+          -i //lanbatnew -t attr -n id -v "$id" -r //lanbatnew -v setting "$f"
+      fi
+    }
+    set_setting services.webserver true
+    set_setting services.webserverport ${toString kodiWebPort}
+    set_setting services.webserverauthentication true
+    set_setting services.webserverusername kodi
+    set_setting services.webserverpassword "$(cat ${config.lanbat.secrets.kodi-web-password.path})"
+    set_setting services.webserverssl false
+    set_setting services.esenabled true
+    set_setting services.esallinterfaces true
+    # Kodi plays through the system PipeWire, as PCM, so the music, films and
+    # the assistant's replies share the speakers and the echo canceller.
+    set_setting audiooutput.audiodevice ${kodiAudioDevice}
+    set_setting audiooutput.passthrough false
+    chown -R media:media ${home}/.kodi/userdata
+    chmod 0600 "$f"
+  '';
+  # A Linux Voice Assistant satellite on this host: Kodi pauses its video and
+  # shows captions while you talk, ducks its music, and switches the TV over
+  # CEC for Home Assistant (pkgs/lva-kodi-companion). With the satellite's
+  # echoCancellation.includeMusic, Kodi plays into the echo canceller's sink so
+  # films and music are taken out of the microphone too.
+  satellite = config.lanbat.voiceSatellite;
+  lvaHere = satellite.enable && satellite.backend == "lva";
+  kodiAudioDevice =
+    if lvaHere && satellite.echoCancellation.enable && satellite.echoCancellation.includeMusic then
+      "PIPEWIRE:${satellite.echoCancellation.pulseSinkName}"
+    else
+      "PIPEWIRE:Default";
+  lvaKodiCompanion = pkgs.callPackage ../../pkgs/lva-kodi-companion { };
   kodiTvConfig = pkgs.callPackage ../../pkgs/kodi-tv-config { };
   kodiBootstrap = pkgs.callPackage ../../pkgs/kodi-bootstrap { };
 
@@ -198,6 +260,24 @@ let
 in
 {
   config = {
+    # Kodi's remote control, for Home Assistant (see the top).
+    lanbat.services.kodi = {
+      endpoint = {
+        scheme = "http";
+        port = kodiWebPort;
+      };
+      secrets.kodi-web-password.owner = "root";
+    };
+    lanbat.services.kodi-events.endpoint = {
+      scheme = "tcp";
+      port = kodiEventsPort;
+    };
+
+    lanbat.voiceSatellite.lva.peripheralApiUsers = lib.mkIf lvaHere [ "lva-kodi-companion" ];
+    lanbat.voiceSatellite.lva.snapcastDucking.programs = lib.mkIf lvaHere (
+      lib.mkOptionDefault [ "kodi.bin" ]
+    );
+
     users.users.media = {
       uid = 1000;
       isNormalUser = true;
@@ -237,16 +317,47 @@ in
       "getty@tty1".enable = false;
       "autovt@tty1".enable = false;
 
-      tv-kodi = session {
+      tv-kodi = lib.recursiveUpdate (session {
         description = "Kodi on the TV";
         other = "tv-games.service";
         command = "${kodi}/bin/kodi-standalone";
         extraAfter = [ "kodi-bootstrap.service" ] ++ unlockUnits;
-      };
+      }) { serviceConfig.ExecStartPre = [ "+${kodiRemote}" ]; };
       tv-games = session {
         description = "EmulationStation on the TV";
         other = "tv-kodi.service";
         command = "${lib.getExe pkgs.cage} -s -- ${lib.getExe es-de}";
+      };
+
+      lva-kodi-companion = lib.mkIf lvaHere {
+        description = "Kodi's side of the voice satellite: pause, captions, TV power";
+        after = [
+          "linux-voice-assistant.service"
+          "tv-kodi.service"
+        ];
+        wants = [ "linux-voice-assistant.service" ];
+        partOf = [ "linux-voice-assistant.service" ];
+        wantedBy = [ "multi-user.target" ];
+        environment = {
+          LVA_PERIPHERAL_URL = "ws://127.0.0.1:${toString satellite.lva.peripheralPort}";
+          KODI_PORT = toString kodiEventsPort;
+        };
+        serviceConfig = {
+          ExecStart = lib.getExe lvaKodiCompanion;
+          DynamicUser = true;
+          Restart = "on-failure";
+          RestartSec = "5s";
+          # Loopback only: LVA's WebSocket, Kodi's JSON-RPC and EventServer.
+          IPAddressDeny = "any";
+          IPAddressAllow = "localhost";
+          RestrictAddressFamilies = [
+            "AF_INET"
+            "AF_INET6"
+          ];
+          ProtectHome = true;
+          PrivateDevices = true;
+          NoNewPrivileges = true;
+        };
       };
 
       kodi-bootstrap = {

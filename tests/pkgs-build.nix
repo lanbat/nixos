@@ -20,6 +20,7 @@ let
   lvaHeyNabu = pkgs.callPackage ../pkgs/lva-wakewords-hey-nabu { };
   lvaWakeupChime = pkgs.callPackage ../pkgs/lva-wakeup-chime { };
   lvaSnapcastDuck = pkgs.callPackage ../pkgs/lva-snapcast-duck { };
+  lvaKodiCompanion = pkgs.callPackage ../pkgs/lva-kodi-companion { };
   voiceId = pkgs.callPackage ../pkgs/voice-id { };
 in
 pkgs.runCommand "pkgs-build-smoke"
@@ -36,6 +37,7 @@ pkgs.runCommand "pkgs-build-smoke"
       maSources
       linuxVoiceAssistant
       lvaSnapcastDuck
+      lvaKodiCompanion
       voiceId
     ];
   }
@@ -58,6 +60,7 @@ pkgs.runCommand "pkgs-build-smoke"
     test -f ${lvaHeyNabu}/hey_nabu.json
     test -f ${lvaWakeupChime}/wakeup.flac
     command -v lva-snapcast-duck
+    command -v lva-kodi-companion
     voice-id --help >/dev/null
     touch $out
   ''

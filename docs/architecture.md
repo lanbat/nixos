@@ -230,6 +230,10 @@ Two things sit outside this deliberately:
 - **Tang**, because it publishes no endpoint. The Pi reaches it to unlock its
   LUKS storage, and that path must not depend on generated policy.
 
+A TV box's Kodi publishes its web server (8080) and TCP notification port (9090) as the
+`kodi` and `kodi-events` endpoints, and Home Assistant consumes both, so only Home
+Assistant's host is admitted to them.
+
 The Pi's own clients use the same edges. Its Telegraf consumes `influxdb` and its
 snapclient consumes `snapcast`, and each takes the provider's host from the
 profile-wide endpoint table rather than assuming the server, so either provider can

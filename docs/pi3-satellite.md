@@ -312,3 +312,31 @@ satellite per room, or use different `lva.wakeModels` per device.
 **After deploy, try:** "okay nabu" → a command; ask something that ends in "?" and speak again
 without the wake phrase (follow-up); say "stop" during a long reply (barge-in); play Snapcast
 music and repeat (ducking + optional AEC).
+
+## 9. A satellite on the TV box (Kodi)
+
+A host with the `tv` plugin (Kodi on the TV) and an LVA satellite gets more, with nothing
+to set:
+
+- **Kodi in Home Assistant.** Kodi's web server and its TCP notification port are on,
+  with the `kodi-web-password` secret, and only the Home Assistant host is admitted to
+  them (the `kodi` and `kodi-events` endpoints). Home Assistant adds every Kodi and puts
+  it in its host's `voiceRooms` room.
+- **A film pauses while you talk.** On the wake word, a video Kodi is playing pauses; when
+  the conversation ends it carries on, unless you said "pause", "stop" or started
+  something else meanwhile. Music Kodi plays fades down like Snapcast's.
+- **Captions.** "Listening…", what you said and the reply show on the TV as Kodi
+  notifications.
+- **TV power over CEC.** "Turn the TV off/on" switches the TV through Kodi's CEC adapter
+  (`CECStandby` / `CECActivateSource`), sent through Kodi's EventServer on the loopback.
+- **Films and episodes by voice.** "Watch The Matrix", "play the movie Heat", "play the
+  next episode of Severance", "play the show The Bear" look in that room's Kodi library:
+  a film first, then a show's first unwatched episode.
+- **Echo cancellation for everything that plays.** Kodi plays PCM into the system
+  PipeWire (passthrough off). With `echoCancellation.includeMusic`, Kodi and Snapcast
+  play into the canceller's sink, so films and music are taken out of the microphone too.
+  It runs off the microphone, so they play only while the microphone is plugged in, and
+  it costs CPU for every second that plays: measure it with a film on before keeping it.
+
+`pkgs/lva-kodi-companion` does the pausing, captions and CEC on the TV box; it follows
+LVA's peripheral WebSocket and talks to Kodi on the loopback only.

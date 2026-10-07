@@ -22,6 +22,14 @@ LOCAL_SATELLITE_PORT="${LOCAL_SATELLITE_PORT:-}"
 EXTRA_SATELLITES="${EXTRA_SATELLITES:-}"
 # Space-separated "hostKey|address|port|backend|displayName" from the endpoint table.
 VOICE_SATELLITE_REGISTRATIONS="${VOICE_SATELLITE_REGISTRATIONS:-}"
+# Kodi on the TV hosts: one "hostKey|address|room|hostname" line each, and the
+# web server password they all use.
+KODI_HOSTS="${KODI_HOSTS:-}"
+KODI_PASSWORD_FILE="${KODI_PASSWORD_FILE:-}"
+# Android TV boxes, a JSON list of {name, host, port, room, apps: {spoken name:
+# package}}, and the ADB key Home Assistant uses for them (the provisioner's).
+ANDROID_TVS="${ANDROID_TVS:-[]}"
+ANDROID_ADBKEY="${ANDROID_ADBKEY:-}"
 SERVER_HOST_KEY="${SERVER_HOST_KEY:-}"
 PRIMARY_STORAGE_KEY="${PRIMARY_STORAGE_KEY:-}"
 
@@ -104,6 +112,8 @@ add_entry() {
   local subentries_json="${5:-[]}"
   local unique_id="${6:-}"
   local source="${7:-user}"
+  local options_json="${8:-{\}}"
+  local minor_version="${9:-1}"
   local now entry_id tmp
   now="$(now_utc)"
   entry_id="$(new_entry_id)"
@@ -116,7 +126,9 @@ add_entry() {
     --arg title "$title" \
     --slurpfile data <(printf '%s' "$data_json") \
     --slurpfile subentries <(printf '%s' "$subentries_json") \
+    --slurpfile options <(printf '%s' "$options_json") \
     --argjson version "$version" \
+    --argjson minor_version "$minor_version" \
     --arg source "$source" \
     --arg unique_id "$unique_id" \
     '.data.entries += [{
@@ -126,9 +138,9 @@ add_entry() {
       discovery_keys: {},
       domain: $domain,
       entry_id: $id,
-      minor_version: 1,
+      minor_version: $minor_version,
       modified_at: $now,
-      options: {},
+      options: $options[0],
       pref_disable_new_entities: false,
       pref_disable_polling: false,
       source: $source,
@@ -326,11 +338,19 @@ DEVICE_REGISTRY="${HASS_CONFIG}/.storage/core.device_registry"
 
 satellite_areas_json() {
   local hostKey host port backend title room hostname
-  while IFS='|' read -r hostKey host port backend title room hostname; do
-    [[ -n "$hostKey" && -n "$room" ]] || continue
-    jq -n --arg title "$title" --arg room "$room" --arg hostname "$hostname" \
-      '{title: $title, room: $room, hostname: $hostname}'
-  done <<< "$VOICE_SATELLITE_REGISTRATIONS" | jq -s .
+  {
+    while IFS='|' read -r hostKey host port backend title room hostname; do
+      [[ -n "$hostKey" && -n "$room" ]] || continue
+      jq -n --arg title "$title" --arg room "$room" --arg hostname "$hostname" \
+        '{title: $title, room: $room, hostname: $hostname}'
+    done <<< "$VOICE_SATELLITE_REGISTRATIONS"
+    # The TVs: every device under a Kodi or Android TV entry for that host.
+    jq -c '.[] | select(.room != "") | {room, domain: "androidtv", host}' <<< "$ANDROID_TVS"
+    while IFS='|' read -r hostKey host room hostname; do
+      [[ -n "$hostKey" && -n "$room" ]] || continue
+      jq -n --arg room "$room" --arg host "$host" '{room: $room, domain: "kodi", host: $host}'
+    done <<< "$KODI_HOSTS"
+  } | jq -s .
 }
 
 # The device registry with the areas set; .unknown_rooms lists rooms with no
@@ -342,10 +362,14 @@ SATELLITE_AREAS_JQ='
   | .unknown_rooms = ($want | map(select(($ids[.room | ascii_downcase]) == null) | .room) | unique)
   | reduce ($want[] | select($ids[.room | ascii_downcase] != null)) as $w (.;
       ($ids[$w.room | ascii_downcase]) as $area
-      | ($all | map(select(.domain == "esphome" and .title == $w.title) | .entry_id)) as $sat
+      | ($all | map(select(.domain == "esphome" and .title == ($w.title // null)) | .entry_id)) as $sat
+      | ($all | map(select($w.domain != null and .domain == $w.domain and .data.host == $w.host)
+          | .entry_id)) as $tv
       | .data.devices |= map(
           if ((.config_entries | any(. as $e | $sat | index($e)))
-              or (.name == $w.hostname and (.config_entries | any(. as $e | $ma | index($e)))))
+              or (.config_entries | any(. as $e | $tv | index($e)))
+              or ($w.hostname != null and .name == $w.hostname
+                  and (.config_entries | any(. as $e | $ma | index($e)))))
           then .area_id = $area else . end))'
 
 satellite_areas_wanted() {
@@ -355,7 +379,8 @@ satellite_areas_wanted() {
 }
 
 satellite_areas_needed() {
-  [[ -n "$VOICE_SATELLITE_REGISTRATIONS" && -f "$DEVICE_REGISTRY" && -f "$AREA_REGISTRY" ]] || return 1
+  [[ -n "$VOICE_SATELLITE_REGISTRATIONS$KODI_HOSTS" || "$ANDROID_TVS" != "[]" ]] || return 1
+  [[ -f "$DEVICE_REGISTRY" && -f "$AREA_REGISTRY" ]] || return 1
   [[ "$(satellite_areas_wanted | jq -S '.data.devices')" != "$(jq -S '.data.devices' "$DEVICE_REGISTRY")" ]]
 }
 
@@ -366,11 +391,92 @@ ensure_satellite_areas() {
   while IFS= read -r room; do
     [[ -n "$room" ]] && log "no Home Assistant area named ${room}; its satellite keeps its area"
   done < <(jq -r '.unknown_rooms[]' <<< "$wanted")
-  log "putting voice satellites and their speakers in their rooms"
+  log "putting voice satellites, their speakers and the TVs in their rooms"
   tmp="$(mktemp)"
   jq 'del(.unknown_rooms)' <<< "$wanted" > "$tmp"
   install -o hass -g hass -m 0600 "$tmp" "$DEVICE_REGISTRY"
   rm "$tmp"
+}
+
+# Home Assistant's Kodi integration for each TV host: one entry per Kodi, found
+# by its address, with the web server's user and password (the password is
+# updated when the secret changes).
+kodi_password() { tr -d '\n' < "$KODI_PASSWORD_FILE"; }
+
+kodi_needed() {
+  [[ -n "$KODI_HOSTS" && -s "$KODI_PASSWORD_FILE" ]] || return 1
+  local hostKey host room hostname
+  while IFS='|' read -r hostKey host room hostname; do
+    [[ -n "$hostKey" ]] || continue
+    jq -e --arg host "$host" --rawfile pw <(kodi_password) \
+      '[.data.entries[] | select(.domain == "kodi" and .data.host == $host and .data.password == $pw)]
+       | length > 0' "$CONFIG_ENTRIES" >/dev/null || return 0
+  done <<< "$KODI_HOSTS"
+  return 1
+}
+
+ensure_kodi() {
+  kodi_needed || return 0
+  local hostKey host room hostname tmp
+  while IFS='|' read -r hostKey host room hostname; do
+    [[ -n "$hostKey" ]] || continue
+    if jq -e --arg host "$host" '[.data.entries[] | select(.domain == "kodi" and .data.host == $host)]
+        | length > 0' "$CONFIG_ENTRIES" >/dev/null; then
+      log "updating the kodi password for ${hostname}"
+      tmp="$(mktemp)"
+      jq --arg host "$host" --rawfile pw <(kodi_password) \
+        '.data.entries |= map(if .domain == "kodi" and .data.host == $host then .data.password = $pw else . end)' \
+        "$CONFIG_ENTRIES" > "$tmp"
+      install -o hass -g hass -m 0600 "$tmp" "$CONFIG_ENTRIES"
+      rm "$tmp"
+    else
+      log "adding kodi on ${hostname} (${host})"
+      add_entry kodi "Kodi (${hostname})" "$(jq -n --arg name "Kodi (${hostname})" --arg host "$host" \
+        --rawfile pw <(kodi_password) \
+        '{name: $name, host: $host, port: 8080, ws_port: 9090, username: "kodi",
+          password: $pw, ssl: false, timeout: 5}')"
+    fi
+  done <<< "$KODI_HOSTS"
+}
+
+# Home Assistant's Android TV (ADB) integration for each box, with the
+# provisioning key and the configured apps as its sources ({package: name}).
+ANDROIDTV_WANTED_JQ='
+  .[] | {host, port, name,
+         options: {apps: (.apps | to_entries | map({key: .value, value: .key}) | from_entries),
+                   get_sources: true, exclude_unnamed_apps: false}}'
+
+androidtv_needed() {
+  [[ "$ANDROID_TVS" != "[]" && -s "$ANDROID_ADBKEY" ]] || return 1
+  local tv
+  while IFS= read -r tv; do
+    jq -e --argjson tv "$tv" '[.data.entries[] | select(.domain == "androidtv" and .data.host == $tv.host
+        and .options.apps == $tv.options.apps)] | length > 0' "$CONFIG_ENTRIES" >/dev/null || return 0
+  done < <(jq -c "$ANDROIDTV_WANTED_JQ" <<< "$ANDROID_TVS")
+  return 1
+}
+
+ensure_androidtv() {
+  androidtv_needed || return 0
+  local tv host name tmp
+  while IFS= read -r tv; do
+    host="$(jq -r .host <<< "$tv")"; name="$(jq -r .name <<< "$tv")"
+    if jq -e --arg host "$host" '[.data.entries[] | select(.domain == "androidtv" and .data.host == $host)]
+        | length > 0' "$CONFIG_ENTRIES" >/dev/null; then
+      log "updating the apps of android tv ${name}"
+      tmp="$(mktemp)"
+      jq --argjson tv "$tv" '.data.entries |= map(if .domain == "androidtv" and .data.host == $tv.host
+          then .options = (.options + $tv.options) else . end)' "$CONFIG_ENTRIES" > "$tmp"
+      install -o hass -g hass -m 0600 "$tmp" "$CONFIG_ENTRIES"
+      rm "$tmp"
+    else
+      log "adding android tv ${name} (${host})"
+      add_entry androidtv "Android TV (${name})" \
+        "$(jq -n --argjson tv "$tv" --arg key "$ANDROID_ADBKEY" \
+          '{host: $tv.host, port: $tv.port, device_class: "androidtv", adbkey: $key}')" \
+        1 "[]" "" "user" "$(jq -c .options <<< "$tv")" 2
+    fi
+  done < <(jq -c "$ANDROIDTV_WANTED_JQ" <<< "$ANDROID_TVS")
 }
 
 llm_enabled() {
@@ -871,6 +977,8 @@ else
     wyoming_needed "satellite-${entry%%=*}" && needs_work=true
   done
 fi
+if kodi_needed; then needs_work=true; fi
+if androidtv_needed; then needs_work=true; fi
 if satellite_areas_needed; then needs_work=true; fi
 if llm_needed; then needs_work=true; fi
 if ! state_done "$(pipeline_state_key)"; then needs_work=true; fi
@@ -907,6 +1015,8 @@ else
     ensure_wyoming "satellite-${entry%%=*}" "${entry#*=}" 10700
   done
 fi
+ensure_kodi
+ensure_androidtv
 ensure_satellite_areas
 ensure_llm
 ensure_pipeline

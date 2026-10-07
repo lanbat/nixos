@@ -381,11 +381,27 @@ Every field of `androidDevices.<name>`, with its default:
 | `homeActivity` | `null` | Activity to make the default home screen, as `package/activity`. Set after the apps are installed; a box that refuses is reported `failed`. |
 | `deviceOwner.enable` | `false` | Set a Device Owner via `dpm set-device-owner`. Only succeeds on a box with no configured accounts. |
 | `deviceOwner.component` | `null` | DPC admin receiver component, e.g. `"com.example.dpc/.AdminReceiver"`. Required when `deviceOwner.enable` is set. |
+| `room` | `null` | The Home Assistant area the box is in. The voice assistant controls the TV of the room it hears the request in. |
+| `apps` | `{ }` | Apps the voice assistant opens, as spoken name → package, e.g. `{ SmartTube = "app.smarttube.fdroid"; }`. List a box's packages with `adb shell pm list packages -3`. |
 
 Evaluation rejects two devices sharing a `host:port`, `deviceOwner.enable` without a
 `deviceOwner.component`, a `homeActivity` that isn't of the form `package/activity`, and
 any `packages`/`github` entry missing from `apks.lock.json` (with a pointer to
 `nix run .#android-update`) or lacking an APK variant for the device's `abi`.
+
+## Home Assistant and the voice assistant
+
+Every enabled device is also added to Home Assistant's Android TV integration over ADB,
+with the provisioning key: `android-adbkey-for-home-assistant` copies the key pair to
+Home Assistant's `.android/` directory before its post-setup runs, so the box needs no
+second authorization. The post-setup puts the box in its `room` and gives the
+integration the `apps` as its app list. By voice, in that room:
+
+- "turn the TV on/off" sends the box's power key;
+- "open SmartTube", "launch Netflix": the names in `apps`, and no others, so "open the
+  blinds" still reaches the blinds;
+- "pause", "resume", "stop" and the volume act on whatever plays in the room, the box
+  included.
 
 ## Snapcast needs no configuration
 

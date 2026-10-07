@@ -60,7 +60,8 @@ let
     mv "$prefs.new" "$prefs"
   '';
 
-  peripheralApiEnabled = !lva.disablePeripheralApi || lva.snapcastDucking.enable;
+  peripheralApiEnabled =
+    !lva.disablePeripheralApi || lva.snapcastDucking.enable || lva.peripheralApiUsers != [ ];
 
   audioUnits = lib.optionals usesPipewire [
     "pipewire.service"
