@@ -265,6 +265,30 @@ let
 
   exposed = local // remote;
 
+  # Short LAN names (modules/core/dns.nix) redirect to the full one, so logins,
+  # cookies and the apps' own URLs only ever see <subdomain>.<domain>. Plain
+  # HTTP redirects straight there too, so typing the short name is one hop.
+  shortSuffix = config.lanbat.deployment.dns.shortSuffix;
+  shortRedirects = lib.optionalAttrs (shortSuffix != null) (
+    lib.concatMapAttrs (
+      _: svc:
+      let
+        target = "https://${svc.subdomain}.${domain}{uri}";
+      in
+      {
+        "${svc.subdomain}.${shortSuffix}".extraConfig = ''
+          tls internal {
+            on_demand
+          }
+          redir ${target} 308
+        '';
+        "http://${svc.subdomain}.${shortSuffix}".extraConfig = ''
+          redir ${target} 308
+        '';
+      }
+    ) exposed
+  );
+
   subdomainClashes =
     lib.mapAttrsToList
       (sub: owners: "lanbat: subdomain ${sub} is used by ${lib.concatStringsSep ", " owners}")
@@ -277,26 +301,28 @@ let
       );
 in
 {
-  services.caddy.virtualHosts = lib.mapAttrs' (
-    _: svc:
-    let
-      hostName = "${svc.subdomain}.${domain}";
-    in
-    lib.nameValuePair hostName (
-      {
-        extraConfig = vhost svc;
-      }
-      # The module's default log file, with the retention stated rather than
-      # left to Caddy's default.
-      // lib.optionalAttrs svc.caddy.auditLog {
-        logFormat = ''
-          output file ${config.services.caddy.logDir}/access-${hostName}.log {
-            roll_keep_for 90d
-          }
-        '';
-      }
-    )
-  ) exposed;
+  services.caddy.virtualHosts =
+    lib.mapAttrs' (
+      _: svc:
+      let
+        hostName = "${svc.subdomain}.${domain}";
+      in
+      lib.nameValuePair hostName (
+        {
+          extraConfig = vhost svc;
+        }
+        # The module's default log file, with the retention stated rather than
+        # left to Caddy's default.
+        // lib.optionalAttrs svc.caddy.auditLog {
+          logFormat = ''
+            output file ${config.services.caddy.logDir}/access-${hostName}.log {
+              roll_keep_for 90d
+            }
+          '';
+        }
+      )
+    ) exposed
+    // shortRedirects;
 
   # Local subdomain clashes are reported by modules/wiring/checks.nix; only a
   # clash involving a remote service is new here.

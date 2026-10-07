@@ -23,7 +23,7 @@ env:
   CHECK_GROUPS: |
     system deploy-rs-fixture
     vm-services music-assistant postgresql
-    vm-host overlay-mesh workload-gate
+    vm-host overlay-mesh workload-gate dns
     settings frigate-settings llama-cpp-settings service-settings service-settings-2 service-settings-3 settings-guard settings-schema storage-drives
 
 jobs:

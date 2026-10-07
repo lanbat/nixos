@@ -414,6 +414,53 @@ in
         '';
       };
 
+      dns = mkOption {
+        type = types.submodule {
+          options = {
+            shortSuffix = mkOption {
+              type = types.nullOr (types.strMatching "[a-z0-9-]+(\\.[a-z0-9-]+)*");
+              default = null;
+              example = "lan";
+              description = ''
+                Suffix of the short LAN names: <subdomain>.<shortSuffix> for every
+                web service, <service>.<shortSuffix> for every other service on
+                one host, and <hostname>.<shortSuffix> for every host. Caddy
+                redirects a short web name to <subdomain>.<domain>, which stays
+                the name logins and apps use. Null means no short names.
+              '';
+            };
+            upstreams = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              example = [ "192.0.2.1" ];
+              description = ''
+                Resolvers CoreDNS forwards every other name to, in any form the
+                forward plugin accepts (an address, address:port, tls://...).
+                Empty means the gateway.
+              '';
+            };
+            extraRecords = mkOption {
+              type = types.attrsOf ipv4;
+              default = { };
+              example = {
+                router = "192.0.2.1";
+                printer = "192.0.2.30";
+              };
+              description = ''
+                Further LAN names, served under deployment.domain and, when set,
+                shortSuffix. A name must not clash with a host, service or
+                subdomain name.
+              '';
+            };
+          };
+        };
+        default = { };
+        description = ''
+          LAN DNS, for hosts with the lanbat-dns plugin (modules/core/dns.nix).
+          Profile-wide, so that every CoreDNS host answers alike.
+        '';
+      };
+
       voiceRooms = mkOption {
         type = types.attrsOf (types.either types.str (types.listOf types.str));
         default = { };

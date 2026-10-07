@@ -35,6 +35,15 @@ let
   # "home.example.com" → "home\.example\.com" for the regex below.
   domainRe = builtins.replaceStrings [ "." ] [ "\\." ] domain;
 
+  # The short LAN names Caddy redirects from (modules/wiring/caddy.nix) get
+  # certificates too.
+  shortSuffix = config.lanbat.deployment.dns.shortSuffix;
+  allowedRe =
+    if shortSuffix == null then
+      domainRe
+    else
+      "(${domainRe}|${builtins.replaceStrings [ "." ] [ "\\." ] shortSuffix})";
+
   caRootCert = config.lanbat.deployment.secrets.caCertificate;
   caRootCertPath = "/etc/caddy/ca-root.crt";
   caRootKeyPath = config.lanbat.secrets.caddy-ca-root-key.path;
@@ -93,7 +102,7 @@ in
         }
       }
 
-      # Allow on-demand TLS issuance for *.${domain}.
+      # Allow on-demand TLS issuance for *.${domain} (and the short names).
       on_demand_tls {
         ask http://localhost:9999/on-demand-check
       }
@@ -111,7 +120,7 @@ in
       ExecStart = pkgs.writeShellScript "od-check" ''
                 exec ${pkgs.python3}/bin/python3 -c "
         import http.server, re, sys
-        ALLOWED = re.compile(r'^[a-z0-9-]+\.${domainRe}$')
+        ALLOWED = re.compile(r'^[a-z0-9-]+\.${allowedRe}$')
         class H(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
                 from urllib.parse import urlparse, parse_qs
