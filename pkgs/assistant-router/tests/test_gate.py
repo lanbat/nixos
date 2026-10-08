@@ -1,0 +1,47 @@
+import pytest
+from assistant_router.gate import gate
+
+
+@pytest.mark.parametrize("text", ["Turn.", "Play.", "Turn off.", "Turn on, bye.", "Done.", "please",
+                                  "Okay. Okay. Okay.", "Thank you.", "Blame.", "What?", "", "   "])
+def test_fragments_and_fillers_rejected(text):
+    assert gate(text, "") == "reject"
+
+
+def test_bleed_rejected():
+    long = ("except the evil out of them. Well, the old term for personality disorders, "
+            "and this goes into the way we think about people today.")
+    assert gate(long, "") == "reject"
+
+
+def test_echo_of_last_reply_rejected():
+    assert gate("Okay, it's on done.", "Okay, it's on. Done.") == "reject"
+    assert gate("I can't play and stop the radios. Let me know if you need anything else.",
+                "I can't play and stop the radio. Let me know if you need anything else.") == "reject"
+
+
+@pytest.mark.parametrize("text", ["Stop.", "Stop! Stop!", "Please stop.", "Cancel.", "Never mind."])
+def test_stop_words(text):
+    assert gate(text, "") == "stop"
+
+
+@pytest.mark.parametrize("text", ["Tell me something about Varna Bulgaria.", "Can you read the news for me please?",
+                                  "Why is the heating on?", "Remind me to call mum", "Set the Remind for 730",
+                                  "Play the Dark Net Diary podcast.", "Play La Isla Bonita by Madonna",
+                                  "Play something relaxing", "turn off all lights", "Lights off everywhere"])
+def test_fast_path_to_cloud(text):
+    assert gate(text, "") == "escalate"
+
+
+@pytest.mark.parametrize("text", ["Turn off the office light.", "volume up", "Pause the video", "Turn on bedroom or sunlight."])
+def test_device_commands_pass_to_triage(text):
+    assert gate(text, "") == "pass"
+
+
+def test_a_repeated_command_is_not_an_echo():
+    assert gate("Turn off the office light.", "Turned off the office light.") == "pass"
+
+
+def test_radio_requests_go_to_the_cloud():
+    # Deliberate: "the radio" is a Music Assistant matter (search, stations), not a local device.
+    assert gate("Turn off the radio.", "") == "escalate"
