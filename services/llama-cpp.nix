@@ -162,7 +162,11 @@ in
     (lib.mkIf enabled {
       assertions = [
         {
-          assertion = config.lanbat.deployment.haLlm.model == cfg.model;
+          # Behind the router, Home Assistant asks for "assistant" and the
+          # router asks llama.cpp for this model by name.
+          assertion =
+            hostLib.haLlmIsRouter config.lanbat.deployment.haLlm
+            || config.lanbat.deployment.haLlm.model == cfg.model;
           message =
             "lanbat: lanbat.deployment.haLlm.model is \"${config.lanbat.deployment.haLlm.model}\", but the llama-cpp"
             + " service serves \"${cfg.model}\" (lanbat.services.llama-cpp.settings.model); set both to the same name.";

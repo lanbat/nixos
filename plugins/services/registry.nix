@@ -12,6 +12,7 @@
 # voice-satellite is described by modules/core/voice-satellite.nix, which every
 # host imports, so it is not selectable here.
 {
+  assistant-router = ../../services/assistant-router.nix;
   audiobookshelf = ../../services/audiobookshelf.nix;
   authentik = ../../services/authentik;
   bitmagnet = ../../services/bitmagnet.nix;
@@ -26,6 +27,7 @@
   jellyfin = ../../services/jellyfin.nix;
   llama-cpp = ../../services/llama-cpp.nix;
   mosquitto = ../../services/mosquitto.nix;
+  llm-gateway = ../../services/llm-gateway.nix;
   music-assistant = ../../services/music-assistant.nix;
   nextcloud = ../../services/nextcloud.nix;
   postgresql = ../../services/postgresql.nix;

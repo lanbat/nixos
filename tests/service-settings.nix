@@ -261,6 +261,16 @@ let
       ];
       pi-voice = [ { lanbat.voiceSatellite.backend = "lva"; } ];
     })).configurations.example-pi-storage.config;
+  # A server whose Home Assistant agent talks to the assistant router.
+  routerServer = serverWith [
+    {
+      lanbat.deployment.haLlm = lib.mkForce {
+        baseUrl = "http://127.0.0.1:8092/v1";
+        model = "assistant";
+      };
+      lanbat.services.llama-cpp.settings.model = "qwen3-4b";
+    }
+  ];
   # The TV box with its shows in another directory.
   tvShowsElsewhere =
     (lanbatLib.mkProfile "example" (hostsWithModules {
@@ -819,6 +829,23 @@ let
       && lib.hasInfix ''<cleanstrings action="append">'' (
         builtins.readFile ../pkgs/kodi-tv-config/advancedsettings.xml
       )
+    ))
+
+    (expect "router: HA's agent behind the router starts it, llama.cpp and the gateway" (
+      routerServer.systemd.services ? assistant-router
+      && routerServer.systemd.services ? llm-gateway
+      && routerServer.services.llama-cpp.enable
+      && routerServer.services.litellm.enable
+      && lib.hasInfix "--local-model qwen3-4b" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+      && lib.hasInfix "--mode local-first" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+      && routerServer.lanbat.services.llm-gateway.secrets ? llm-gateway-env
+      && failedAssertions routerServer == [ ]
+    ))
+
+    (expect "router: a server without it runs as before" (
+      !(base.systemd.services ? assistant-router)
+      && !(base.systemd.services ? llm-gateway)
+      && !(base.services.litellm.enable or false)
     ))
 
     (expect "tv: the companion rewinds a film it paused for a question" (

@@ -36,10 +36,18 @@ let
     haLlm != null
     && builtins.match "https?://(127\\.0\\.0\\.1|localhost)([/:].*)?" haLlm.baseUrl != null;
 
+  # The assistant router's address (services/assistant-router.nix): Home
+  # Assistant's agent pointed here gets the router, its local model and the
+  # LLM gateway.
+  routerBaseUrl = "http://127.0.0.1:8092/v1";
+  haLlmIsRouter = haLlm: haLlm != null && haLlm.baseUrl == routerBaseUrl;
+
 in
 {
   inherit
     haLlmIsLocal
+    haLlmIsRouter
+    routerBaseUrl
     hostsWithRole
     primaryHost
     hostIp
