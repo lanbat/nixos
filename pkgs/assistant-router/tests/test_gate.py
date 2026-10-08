@@ -25,7 +25,7 @@ def test_stop_words(text):
     assert gate(text, "") == "stop"
 
 
-@pytest.mark.parametrize("text", ["Tell me something about Varna Bulgaria.", "Can you read the news for me please?",
+@pytest.mark.parametrize("text", ["Tell me something about Lisbon Portugal.", "Can you read the news for me please?",
                                   "Why is the heating on?", "Remind me to call mum", "Set the Remind for 730",
                                   "Play the Dark Net Diary podcast.", "Play La Isla Bonita by Madonna",
                                   "Play something relaxing", "turn off all lights", "Lights off everywhere"])
@@ -45,3 +45,28 @@ def test_a_repeated_command_is_not_an_echo():
 def test_radio_requests_go_to_the_cloud():
     # Deliberate: "the radio" is a Music Assistant matter (search, stations), not a local device.
     assert gate("Turn off the radio.", "") == "escalate"
+
+
+def test_bare_pause_is_a_command():
+    assert gate("Pause.", "") == "pass"
+
+
+@pytest.mark.parametrize("text", ["to melt the bathroom light.", "that we can even hold out of it.",
+                                  "Whenever a neutrino interacts with one of the billions of ideals, that interaction is big.",
+                                  "and then the lights went out"])
+def test_continuations_of_someone_elses_sentence_rejected(text):
+    assert gate(text, "") == "reject"
+
+
+@pytest.mark.parametrize("text", ["Okay, it's on done.", "I can't play that. Let me know if you need anything else."])
+def test_assistant_phrasing_rejected_without_memory(text):
+    # Another satellite's reply has no entry in this satellite's memory.
+    assert gate(text, "") == "reject"
+
+
+def test_two_sentences_of_speech_rejected():
+    assert gate("Stop the music, stay back, please. So, maybe you can't be able to eat some of that.", "") == "reject"
+
+
+def test_short_two_sentence_command_passes():
+    assert gate("Louder. Okay, louder.", "") == "pass"

@@ -16,7 +16,7 @@ Verdict = Literal["reject", "escalate", "stop", "pass"]
 _WORD = re.compile(r"[a-z0-9']+")
 FILLERS = {"okay", "ok", "yes", "no", "please", "thanks", "thank", "you", "hello", "hi", "bye", "what", "done",
            "blame", "hmm", "um", "uh", "right", "level"}
-ACTION_ONLY = {"turn", "play", "stop", "pause", "on", "off", "switch", "set", "start"}
+ACTION_ONLY = {"turn", "play", "stop", "on", "off", "switch", "set", "start"}
 STOP_PHRASES = {"stop", "please stop", "stop stop", "cancel", "never mind", "nevermind", "be quiet", "shut up"}
 ALL_WORDS = re.compile(r"\b(all|every|everything|everywhere|whole house|all of the)\b")
 CLOUD = re.compile(
@@ -24,6 +24,13 @@ CLOUD = re.compile(
     r"set (a |the )?remind|wake me|what happened)\b|\b(news|weather tomorrow|this weekend|recipe|podcast|"
     r"by [a-z]+|something (like|relaxing|upbeat|calm)|radio [a-z]+|[a-z]+ radio)\b")
 MAX_COMMAND_WORDS = 18
+# The middle of someone else's sentence (radio, TV, a conversation): nobody
+# starts a request with these words.
+CONTINUATION = {"to", "that", "and", "but", "so", "except", "because", "which", "than", "then", "of", "as",
+                "or", "nor", "whenever", "while", "whereas", "although"}
+# How the assistant talks, heard back from a satellite whose reply this one
+# never made (the kitchen hears the bedroom).
+ASSISTANT_PHRASES = re.compile(r"\blet me know if\b|\bit's (on|off)\b|\bdone[.!]?$")
 # A request someone makes starts with one of these; the assistant's replies
 # ("Turned off...", "Okay, it's on") don't, so a request is never an echo.
 COMMAND_START = {"turn", "switch", "play", "pause", "stop", "set", "open", "close", "put", "start", "skip",
@@ -56,9 +63,11 @@ def gate(text: str, last_reply: str) -> Verdict:
     # A bare verb, or a verb and a goodbye: nothing to act on.
     if all(w in ACTION_ONLY | FILLERS for w in words):
         return "reject"
+    if words[0] in CONTINUATION or ASSISTANT_PHRASES.search(text.lower().strip()):
+        return "reject"
     # Several sentences of speech: the radio or a film, not a command.
     sentences = text.count(".") + text.count("?") + text.count("!")
-    if len(words) > MAX_COMMAND_WORDS or (sentences >= 3 and len(words) > 10):
+    if len(words) > MAX_COMMAND_WORDS or (sentences >= 2 and len(words) >= 12) or (sentences >= 3 and len(words) > 10):
         return "reject"
     if ALL_WORDS.search(joined) or CLOUD.search(joined):
         return "escalate"
