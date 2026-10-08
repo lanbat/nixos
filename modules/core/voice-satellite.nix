@@ -235,6 +235,19 @@ in
         '';
       };
 
+      volume = mkOption {
+        type = types.nullOr (types.numbers.between 0 1);
+        default = null;
+        example = 0.4;
+        description = ''
+          Volume of the replies, chime and timers (0–1), set before every start.
+          Home Assistant's volume for the satellite changes it until the next
+          restart. Replies are mastered near full scale, well above a film's
+          dialogue, so a TV box wants it lower. Null keeps whatever volume was
+          last set (LVA starts at 1).
+        '';
+      };
+
       micVolume = mkOption {
         type = types.ints.between 1 100;
         default = lib.min 100 (lib.max 1 (lib.floor (cfg.microphone.volumeMultiplier * (100.0 / 6.0))));

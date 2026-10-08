@@ -57,6 +57,122 @@ let
   );
   home = config.users.users.media.home;
 
+  # Kodi's library sources (kodi-bootstrap writes them into its databases on
+  # every boot). The defaults are the repository's media layout; a profile
+  # sets only what differs, e.g. lanbat.services.kodi.settings.videoSources.tv.path.
+  scrapers = {
+    movies = "metadata.themoviedb.org.python";
+    tvshows = "metadata.tvshows.themoviedb.org.python";
+    musicvideos = "metadata.local";
+  };
+  videoSourceDefaults = {
+    movies = {
+      path = "/mnt/storage-a/media/movies/";
+      content = "movies";
+    };
+    tv = {
+      path = "/mnt/storage-a/media/tv/";
+      content = "tvshows";
+    };
+    music-videos = {
+      path = "/mnt/storage-a/media/music-videos/";
+      content = "musicvideos";
+    };
+    documentaries = {
+      path = "/mnt/storage-b/media/documentaries/";
+      content = "movies";
+    };
+    documentary-series = {
+      path = "/mnt/storage-b/media/documentary-series/";
+      content = "tvshows";
+    };
+    gym = {
+      path = "/mnt/storage-b/media/gym/";
+      content = "movies";
+    };
+    games = {
+      path = "/mnt/storage-b/media/games/";
+      content = "movies";
+    };
+    misc = {
+      path = "/mnt/storage-b/media/misc/";
+      content = "movies";
+    };
+  };
+  musicSourceDefaults = {
+    Music = "/mnt/storage-b/media/music/";
+    Audiobooks = "/mnt/storage-b/media/audiobooks/";
+  };
+  kodiSettings = {
+    options = {
+      videoSources = lib.mkOption {
+        type = lib.types.attrsOf (
+          lib.types.submodule (
+            { config, ... }:
+            {
+              options = {
+                path = lib.mkOption {
+                  type = lib.types.strMatching "/.*/";
+                  description = "Directory of the source, with a trailing slash.";
+                };
+                content = lib.mkOption {
+                  type = lib.types.enum (lib.attrNames scrapers);
+                  description = ''
+                    What the source holds. Shows are one folder each, directly in
+                    the source's directory; films and music videos may be nested.
+                  '';
+                };
+                scraper = lib.mkOption {
+                  type = lib.types.str;
+                  default = scrapers.${config.content};
+                  defaultText = lib.literalExpression "the content's usual scraper";
+                  description = "Kodi scraper add-on for the source.";
+                };
+              };
+            }
+          )
+        );
+        default = { };
+        example = lib.literalExpression ''{ tv.path = "/mnt/storage-a/media/tv/misc/"; }'';
+        description = ''
+          Kodi's video library sources by name. The repository's layout is set
+          by default; set a field to change one, or add a source.
+        '';
+      };
+      musicSources = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.strMatching "/.*/");
+        default = { };
+        example = lib.literalExpression ''{ Music = "/mnt/storage-b/media/music/"; }'';
+        description = ''
+          Kodi's music library sources, name to directory (with a trailing
+          slash). The repository's layout is set by default. Each is scanned
+          once after Kodi starts if Kodi has never scanned it.
+        '';
+      };
+    };
+  };
+  kodiCfg = config.lanbat.services.kodi.settings;
+  # name|path|content|scraper|recursive|useFolderNames, one per line. Shows
+  # are a folder each and not recursive; the rest are scanned recursively.
+  # useFolderNames stays off: for shows it is Kodi's "Selected folder
+  # contains a single TV show", which made the source itself one show.
+  videoSourcesEnv = lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (
+      name: v:
+      lib.concatStringsSep "|" [
+        name
+        v.path
+        v.content
+        v.scraper
+        (if v.content == "tvshows" then "0" else "1")
+        "0"
+      ]
+    ) kodiCfg.videoSources
+  );
+  musicSourcesEnv = lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (name: path: "${name}|${path}") kodiCfg.musicSources
+  );
+
   kodiWebPort = 8080;
   kodiEventsPort = 9090;
   # Settings tv-kodi puts in guisettings.xml before Kodi starts (see the top).
@@ -260,6 +376,15 @@ let
 in
 {
   config = {
+    # The schema is merged into lanbat.services.kodi.settings (checks.nix
+    # rejects undeclared keys); the defaults are set field by field, so a
+    # profile's change to one field keeps the rest.
+    lanbat.settingsSchema.kodi = kodiSettings;
+    lanbat.services.kodi.settings = {
+      videoSources = lib.mapAttrs (_: lib.mapAttrs (_: lib.mkDefault)) videoSourceDefaults;
+      musicSources = lib.mapAttrs (_: lib.mkDefault) musicSourceDefaults;
+    };
+
     # Kodi's remote control, for Home Assistant (see the top).
     lanbat.services.kodi = {
       endpoint = {
@@ -277,6 +402,17 @@ in
     lanbat.voiceSatellite.lva.snapcastDucking.programs = lib.mkIf lvaHere (
       lib.mkOptionDefault [ "kodi.bin" ]
     );
+    # Kodi opens a new stream for each film, and WirePlumber gave it the last
+    # one's volume: a film that ended or a Kodi that restarted while ducked
+    # left the next one at the duck level, and each duck took it lower, to
+    # 0.000003 measured on the Pi 5, 2026-10-07 (as Snapcast's, in
+    # modules/core/snapclient.nix). Kodi's own volume is the one to turn.
+    services.pipewire.wireplumber.extraConfig."51-kodi-volume"."stream.rules" = lib.mkIf lvaHere [
+      {
+        matches = [ { "application.name" = "Kodi"; } ];
+        actions.update-props."state.restore-props" = false;
+      }
+    ];
 
     users.users.media = {
       uid = 1000;
@@ -337,10 +473,16 @@ in
         ];
         wants = [ "linux-voice-assistant.service" ];
         partOf = [ "linux-voice-assistant.service" ];
-        wantedBy = [ "multi-user.target" ];
+        # Stopped with LVA (partOf) and started with it again.
+        wantedBy = [
+          "multi-user.target"
+          "linux-voice-assistant.service"
+        ];
         environment = {
           LVA_PERIPHERAL_URL = "ws://127.0.0.1:${toString satellite.lva.peripheralPort}";
           KODI_PORT = toString kodiEventsPort;
+          # A film paused for a question resumes this far back.
+          RESUME_REWIND_SECONDS = "3";
         };
         serviceConfig = {
           ExecStart = lib.getExe lvaKodiCompanion;
@@ -370,8 +512,34 @@ in
           User = "root";
         };
         path = [ kodiBootstrap ];
-        environment.KODI_HOME = home;
+        environment = {
+          KODI_HOME = home;
+          KODI_VIDEO_SOURCES = videoSourcesEnv;
+          KODI_MUSIC_SOURCES = musicSourcesEnv;
+        };
         script = "exec kodi-bootstrap";
+      };
+
+      # Kodi's startup update rescans only the music folders it has scanned
+      # before, so a music source nothing scanned stays empty: this runs the
+      # first scan of each, through Kodi's JSON-RPC on the loopback.
+      kodi-music-scan = {
+        description = "First scan of the music sources Kodi hasn't scanned";
+        wantedBy = [ "tv-kodi.service" ];
+        after = [ "tv-kodi.service" ];
+        partOf = [ "tv-kodi.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          # Reads the media user's music database.
+          User = "root";
+        };
+        path = [ kodiBootstrap ];
+        environment = {
+          KODI_HOME = home;
+          KODI_PORT = toString kodiEventsPort;
+          KODI_MUSIC_SOURCES = musicSourcesEnv;
+        };
+        script = "exec kodi-bootstrap music-scan";
       };
 
       tv-session = {
@@ -416,7 +584,9 @@ in
 
       "d ${home}/.kodi 0755 media media -"
       "d ${home}/.kodi/userdata 0755 media media -"
-      "C ${home}/.kodi/userdata/advancedsettings.xml - - - - ${kodiTvConfig}/advancedsettings.xml"
+      # Kodi never writes advancedsettings.xml: a link keeps it the
+      # repository's (a copy made once never saw a later change).
+      "L+ ${home}/.kodi/userdata/advancedsettings.xml - - - - ${kodiTvConfig}/advancedsettings.xml"
       "C ${home}/.kodi/userdata/sources.xml - - - - ${kodiTvConfig}/sources.xml"
       "C ${home}/.kodi/userdata/favourites.xml - - - - ${kodiFavourites}"
       "z ${home}/.kodi/userdata/favourites.xml 0644 media media -"

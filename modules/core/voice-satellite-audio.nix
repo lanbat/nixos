@@ -134,7 +134,11 @@ in
           ];
           wants = [ "linux-voice-assistant.service" ];
           partOf = [ "linux-voice-assistant.service" ];
-          wantedBy = [ "multi-user.target" ];
+          # Stopped with LVA (partOf) and started with it again.
+          wantedBy = [
+            "multi-user.target"
+            "linux-voice-assistant.service"
+          ];
           environment = {
             PIPEWIRE_RUNTIME_DIR = "/run/pipewire";
             PW_DUMP = "${config.services.pipewire.package}/bin/pw-dump";

@@ -417,6 +417,7 @@ let
     "video_title"
     "tv"
     "tvs"
+    "kodi"
     "androids"
     "app"
   ];
@@ -696,6 +697,12 @@ let
       {{ (integration_entities('kodi') + integration_entities('androidtv'))
          | select('match', 'media_player\\.')
          | select('in', area_entities(area) if area else []) | list }}'';
+    # The room's Kodi with a film or show on (one paused for the question
+    # counts), for seeking, subtitles and the like.
+    kodi = ''
+      {{ integration_entities('kodi') | select('match', 'media_player\\.')
+         | select('in', area_entities(area) if area else [])
+         | select('is_state', ['playing', 'paused']) | first | default("") }}'';
     androids = ''
       {{ integration_entities('androidtv')
          | select('match', 'media_player\\.')
@@ -712,6 +719,7 @@ let
          | select('in', area_entities(area) if area else []) | list }}'';
   };
   tvWords = "(tv|television|telly)";
+  videoWords = "(film|movie|show|video|episode)";
   mediaWords = "(tv|television|telly|film|movie|show|video|music|radio|podcast|audiobook|song)";
   voiceTvAutomation = {
     alias = "Voice: the room's TV";
@@ -745,6 +753,54 @@ let
         command = [
           "(resume|continue|unpause) [the] [${mediaWords}] [please]"
           "carry on [playing] [please]"
+        ];
+      }
+      # Kodi only, on the film or show on in the room.
+      {
+        platform = "conversation";
+        id = "seek";
+        command = [
+          "(skip|jump|go) (forward|forwards|ahead|back|backward|backwards) [by] {amount}"
+          "(fast forward|rewind) [by] {amount}"
+          "(skip|jump|go) (forward|forwards|ahead|back|backward|backwards) [please]"
+          "rewind [a bit] [please]"
+        ];
+      }
+      {
+        platform = "conversation";
+        id = "subtitles";
+        command = [
+          "(turn|switch) (on|off) [the] (subtitles|captions)"
+          "(turn|switch) [the] (subtitles|captions) (on|off)"
+          "(subtitles|captions) (on|off) [please]"
+          "(show|hide) [the] (subtitles|captions)"
+        ];
+      }
+      {
+        platform = "conversation";
+        id = "whats_on";
+        command = [
+          "what am I watching"
+          "(what is|what's) (this|on) [the ${tvWords}]"
+          "what (film|movie|show|episode) is this"
+        ];
+      }
+      {
+        platform = "conversation";
+        id = "stop_video";
+        command = [
+          "stop [the] ${videoWords} [please]"
+          "stop watching [please]"
+        ];
+      }
+      {
+        platform = "conversation";
+        id = "episode";
+        # Not "play the next episode": that is "play the next episode of
+        # <show>" (voiceVideoVariables) and the music's "play {query}".
+        command = [
+          "(next|previous) episode [please]"
+          "(skip|go) to the (next|previous) episode [please]"
         ];
       }
     ]
@@ -849,6 +905,135 @@ let
                     continue_on_error = true;
                   }
                   (reply "Okay.")
+                ]
+              )
+            ];
+          }
+          {
+            conditions = [
+              {
+                condition = "trigger";
+                id = [
+                  "seek"
+                  "subtitles"
+                  "whats_on"
+                  "stop_video"
+                  "episode"
+                ];
+              }
+            ];
+            sequence = [
+              (ifThen "{{ not kodi }}"
+                [ (reply "Nothing is on the TV {{ place }}.") ]
+                [
+                  {
+                    choose = [
+                      {
+                        conditions = [
+                          {
+                            condition = "trigger";
+                            id = "seek";
+                          }
+                        ];
+                        sequence = [
+                          # "skip back 2 minutes", "go forward 30 seconds",
+                          # "rewind": 30 seconds unless a number is said.
+                          {
+                            variables.seconds = ''
+                              {%- set n = (trigger.slots.amount | default("") | regex_findall('\\d+') | first | default(30)) | int -%}
+                              {%- set n = n * 60 if 'minute' in sentence else n -%}
+                              {{ -n if (sentence is search('\\b(back|backward|backwards|rewind)\\b')) else n }}'';
+                          }
+                          {
+                            service = "kodi.call_method";
+                            target.entity_id = "{{ kodi }}";
+                            data = {
+                              method = "Player.Seek";
+                              playerid = 1;
+                              value.seconds = "{{ seconds | int }}";
+                            };
+                          }
+                          (reply "{{ 'Back' if (seconds | int) < 0 else 'Forward' }} {{ (seconds | int) | abs }} seconds.")
+                        ];
+                      }
+                      {
+                        conditions = [
+                          {
+                            condition = "trigger";
+                            id = "subtitles";
+                          }
+                        ];
+                        sequence = [
+                          {
+                            variables.on = "{{ sentence is search('\\b(on|show)\\b') }}";
+                          }
+                          {
+                            service = "kodi.call_method";
+                            target.entity_id = "{{ kodi }}";
+                            data = {
+                              method = "Player.SetSubtitle";
+                              playerid = 1;
+                              subtitle = "{{ 'on' if on else 'off' }}";
+                            };
+                          }
+                          (reply "Subtitles {{ 'on' if on else 'off' }}.")
+                        ];
+                      }
+                      {
+                        conditions = [
+                          {
+                            condition = "trigger";
+                            id = "whats_on";
+                          }
+                        ];
+                        sequence = [
+                          (reply ''
+                            {%- set title = state_attr(kodi, 'media_title') or 'something without a title' -%}
+                            {%- set series = state_attr(kodi, 'media_series_title') -%}
+                            {%- if series -%}
+                              {{ series }}, season {{ state_attr(kodi, 'media_season') }}, episode {{ state_attr(kodi, 'media_episode') }}: {{ title }}.
+                            {%- else -%}
+                              {{ title }}.
+                            {%- endif -%}'')
+                        ];
+                      }
+                      {
+                        conditions = [
+                          {
+                            condition = "trigger";
+                            id = "stop_video";
+                          }
+                        ];
+                        sequence = [
+                          {
+                            service = "media_player.media_stop";
+                            target.entity_id = "{{ kodi }}";
+                            continue_on_error = true;
+                          }
+                          (reply "Stopped.")
+                        ];
+                      }
+                      {
+                        conditions = [
+                          {
+                            condition = "trigger";
+                            id = "episode";
+                          }
+                        ];
+                        sequence = [
+                          {
+                            variables.next = "{{ 'next' in sentence }}";
+                          }
+                          {
+                            service = "media_player.media_{{ 'next' if next else 'previous' }}_track";
+                            target.entity_id = "{{ kodi }}";
+                            continue_on_error = true;
+                          }
+                          (reply "{{ 'Next' if next else 'Previous' }} episode.")
+                        ];
+                      }
+                    ];
+                  }
                 ]
               )
             ];

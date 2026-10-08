@@ -253,8 +253,20 @@ let
   lvaTvBox =
     (lanbatLib.mkProfile "example" (hostsWithModules {
       server = [ { lanbat.voiceSatellite.backend = "lva"; } ];
-      pi-storage = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+      pi-storage = [
+        {
+          lanbat.voiceSatellite.backend = "lva";
+          lanbat.voiceSatellite.lva.volume = 0.4;
+        }
+      ];
       pi-voice = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+    })).configurations.example-pi-storage.config;
+  # The TV box with its shows in another directory.
+  tvShowsElsewhere =
+    (lanbatLib.mkProfile "example" (hostsWithModules {
+      pi-storage = [
+        { lanbat.services.kodi.settings.videoSources.tv.path = "/mnt/storage-a/media/tv/shows/"; }
+      ];
     })).configurations.example-pi-storage.config;
   # The example Android TV box with apps to open by voice.
   tvApps = serverWith [
@@ -648,6 +660,10 @@ let
       && !(lib.hasInfix "--soundcard" lvaServer.systemd.services.snapclient.serviceConfig.ExecStart or "")
     ))
 
+    (expect "lva: replies play into the echo-cancel sink through mpv's pulse driver" (
+      lib.hasInfix "--audio-output-device pulse/lanbat_aec_playback" lvaPi3Aec.systemd.services.linux-voice-assistant.serviceConfig.ExecStart
+    ))
+
     (expect "lva: stop works at the end of a transcript that caught the radio" (
       let
         stop = lib.findFirst (a: a.id == "lanbat_voice_stop") null (haConfig lvaServer).automation;
@@ -690,7 +706,7 @@ let
     ))
 
     (expect "lva: the wake words are set in prefs.json on every start" (
-      lib.any (lib.hasInfix "lva-set-wake-words") (lvaPre lvaServer)
+      lib.any (lib.hasInfix "lva-set-prefs") (lvaPre lvaServer)
       && lvaServer.lanbat.voiceSatellite.lva.wakeModels == [ "okay_nabu" ]
     ))
 
@@ -742,6 +758,77 @@ let
       )
     )
 
+    # The reply volume is set at every start, the wake words' way; without
+    # the option, the volume Home Assistant last set stays.
+    (expect "lva: the configured reply volume is written before LVA starts" (
+      lib.any (lib.hasInfix "lva-set-prefs 0.4") lvaTvBox.systemd.services.linux-voice-assistant.serviceConfig.ExecStartPre
+      && lib.any (lib.hasInfix "lva-set-prefs") lvaPi3Aec.systemd.services.linux-voice-assistant.serviceConfig.ExecStartPre
+      && !lib.any (lib.hasInfix "lva-set-prefs ") lvaPi3Aec.systemd.services.linux-voice-assistant.serviceConfig.ExecStartPre
+    ))
+
+    # They stop with LVA (partOf); starting LVA again (a restart by hand, the
+    # microphone plugged back in) must bring them back, or nothing pauses or
+    # ducks until a reboot.
+    (expect "lva: the ducker and the Kodi companion start with LVA" (
+      lib.all (u: lib.elem "linux-voice-assistant.service" lvaTvBox.systemd.services.${u}.wantedBy) [
+        "lva-snapcast-duck"
+        "lva-kodi-companion"
+      ]
+    ))
+
+    # Kodi's startup update rescans only folders it has scanned before; a music
+    # source nothing scanned stayed empty (9,784 songs on the Pi 5, 2026-10-08).
+    (expect "tv: Kodi's first music scan runs after Kodi starts" (
+      let
+        scan = lvaTvBox.systemd.services.kodi-music-scan;
+      in
+      lib.elem "tv-kodi.service" scan.wantedBy
+      && lib.elem "tv-kodi.service" scan.after
+      && lib.hasInfix "music-scan" scan.script
+    ))
+
+    # The library sources come from settings: the repository's layout by
+    # default, and a profile changes one field without losing the others.
+    (expect "tv: Kodi's library sources are settings, the layout by default" (
+      let
+        env = c: c.systemd.services.kodi-bootstrap.environment;
+        lines = c: lib.splitString "\n" (env c).KODI_VIDEO_SOURCES;
+      in
+      lib.elem "tv|/mnt/storage-a/media/tv/|tvshows|metadata.tvshows.themoviedb.org.python|0|0" (
+        lines lvaTvBox
+      )
+      && lib.elem "movies|/mnt/storage-a/media/movies/|movies|metadata.themoviedb.org.python|1|0" (
+        lines lvaTvBox
+      )
+      && lib.elem "music-videos|/mnt/storage-a/media/music-videos/|musicvideos|metadata.local|1|0" (
+        lines lvaTvBox
+      )
+      && lib.hasInfix "Music|/mnt/storage-b/media/music/" (env lvaTvBox).KODI_MUSIC_SOURCES
+      && lib.elem "tv|/mnt/storage-a/media/tv/shows/|tvshows|metadata.tvshows.themoviedb.org.python|0|0" (
+        lines tvShowsElsewhere
+      )
+      && lib.length (lines tvShowsElsewhere) == lib.length (lines lvaTvBox)
+      && tvShowsElsewhere.systemd.services.kodi-music-scan.environment ? KODI_MUSIC_SOURCES
+    ))
+
+    # Kodi never writes advancedsettings.xml, so it follows the repository;
+    # a copy made once ("C") never saw a later change. Show folders named
+    # like "Pantheon.S01.1080p..." are looked up without the season tag.
+    (expect "tv: Kodi's advancedsettings.xml is the repository's, season tags cleaned" (
+      lib.any (lib.hasPrefix "L+ /home/media/.kodi/userdata/advancedsettings.xml") lvaTvBox.systemd.tmpfiles.rules
+      && lib.hasInfix ''<cleanstrings action="append">'' (
+        builtins.readFile ../pkgs/kodi-tv-config/advancedsettings.xml
+      )
+    ))
+
+    (expect "tv: the companion rewinds a film it paused for a question" (
+      lvaTvBox.systemd.services.lva-kodi-companion.environment.RESUME_REWIND_SECONDS == "3"
+    ))
+
+    (expect "tv: a new Kodi stream doesn't inherit a ducked volume" (
+      lvaTvBox.services.pipewire.wireplumber.extraConfig ? "51-kodi-volume"
+    ))
+
     (expect "tv: Kodi's power is switched over CEC, library calls go through an event" (
       (automationById base "lanbat_kodi_power").action != [ ]
       && lib.hasInfix "tv.{{ trigger.id }}" (
@@ -763,6 +850,26 @@ let
       ) tvTriggers
       && !lib.any (t: (t.id or "") == "open") baseTv
       && lib.hasInfix "|Living Room" (postSetup tvApps)
+    ))
+
+    # Seeking, subtitles, what's on, stopping and episodes act on the film or
+    # show on the room's Kodi; none takes "play ...", which the video and
+    # music requests own.
+    (expect "tv: Kodi takes seek, subtitles, what's on, stop and episode requests" (
+      let
+        tvTriggers = (automationById base "lanbat_voice_tv").trigger;
+        ids = map (t: t.id or "") tvTriggers;
+        sentences = lib.concatMap (t: t.command or [ ]) tvTriggers;
+      in
+      lib.all (id: lib.elem id ids) [
+        "seek"
+        "subtitles"
+        "whats_on"
+        "stop_video"
+        "episode"
+      ]
+      && !lib.any (lib.hasPrefix "[play]") sentences
+      && !lib.any (lib.hasPrefix "play ") sentences
     ))
 
     # Home Assistant has no regex_escape filter; a template using one

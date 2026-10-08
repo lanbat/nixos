@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
-# Wait for Pi storage, then seed Kodi library sources with content types.
+# Wait for Pi storage, then seed Kodi library sources with content types
+# (every boot, before Kodi starts: the sources are upserts, so a folder made
+# since, or a source added here, joins the library).
+#
+# kodi-bootstrap music-scan (after Kodi starts): the first scan of each music
+# source. Kodi's startup update only rescans folders it has scanned before, so
+# a music source nothing has scanned stays empty.
 set -euo pipefail
 
 KODI_HOME="${KODI_HOME:?KODI_HOME must be set}"
 USERDATA="${KODI_HOME}/.kodi/userdata"
 STORAGE_STAMP="${STORAGE_STAMP:-${KODI_HOME}/.lanbat-kodi-storage-ready}"
-LIBRARY_STAMP="${LIBRARY_STAMP:-${KODI_HOME}/.lanbat-kodi-library-configured}"
+KODI_PORT="${KODI_PORT:-9090}"
+
+# The sources, from the NixOS module (lanbat.services.kodi.settings), one per
+# line: name|path|content|scraper|recursive|useFolderNames for video,
+# name|path for music.
+mapfile -t VIDEO_SOURCES <<< "${KODI_VIDEO_SOURCES:-}"
+mapfile -t MUSIC_SOURCES <<< "${KODI_MUSIC_SOURCES:-}"
 
 log() {
   echo "kodi-bootstrap: $*"
@@ -32,7 +44,8 @@ find_db() {
   if ((${#matches[@]} == 0)); then
     return 1
   fi
-  printf '%s\n' "${matches[0]}"
+  # The newest schema: Kodi leaves the old database behind when it upgrades.
+  printf '%s\n' "${matches[@]}" | sort -V | tail -n 1
 }
 
 ensure_storage() {
@@ -52,21 +65,6 @@ ensure_storage() {
   touch "$STORAGE_STAMP"
   chown media:media "$STORAGE_STAMP"
   log "storage ready"
-}
-
-ensure_scan_on_startup() {
-  local settings="${USERDATA}/advancedsettings.xml"
-  [[ -f "$settings" ]] || return 0
-
-  if grep -q '<scanonstartup>true</scanonstartup>' "$settings"; then
-    return 0
-  fi
-
-  sed -i \
-    -e 's|<scanonstartup>false</scanonstartup>|<scanonstartup>true</scanonstartup>|g' \
-    "$settings"
-  chown media:media "$settings"
-  log "enabled library scan on startup"
 }
 
 upsert_video_source() {
@@ -102,21 +100,12 @@ configure_video_library() {
     return 1
   }
 
-  # name|path|content|scraper|recursive|useFolderNames
-  local specs=(
-    "movies|/mnt/storage-a/media/movies/|movies|metadata.themoviedb.org.python|1|0"
-    "tv|/mnt/storage-a/media/tv/|tvshows|metadata.tvshows.themoviedb.org.python|0|1"
-    "music-videos|/mnt/storage-a/media/music-videos/|musicvideos|metadata.local|1|0"
-    "documentaries|/mnt/storage-b/media/documentaries/|movies|metadata.themoviedb.org.python|1|0"
-    "documentary-series|/mnt/storage-b/media/documentary-series/|tvshows|metadata.tvshows.themoviedb.org.python|0|1"
-    "gym|/mnt/storage-b/media/gym/|movies|metadata.themoviedb.org.python|1|0"
-    "games|/mnt/storage-b/media/games/|movies|metadata.themoviedb.org.python|1|0"
-    "misc|/mnt/storage-b/media/misc/|movies|metadata.themoviedb.org.python|1|0"
-  )
-
   local spec name path content scraper recursive folder_names
-  for spec in "${specs[@]}"; do
+  local configured=()
+  for spec in "${VIDEO_SOURCES[@]}"; do
+    [[ -n "$spec" ]] || continue
     IFS='|' read -r name path content scraper recursive folder_names <<< "$spec"
+    configured+=("'${path}'")
     if [[ ! -d "$path" ]]; then
       log "skipping ${name} (${path} not mounted yet)"
       continue
@@ -125,11 +114,12 @@ configure_video_library() {
     log "configured video source ${name} -> ${path} (${content})"
   done
 
-  local missing
-  missing="$(sqlite3 "$db" "SELECT COUNT(*) FROM path WHERE strPath LIKE '/mnt/storage-%' AND (strContent IS NULL OR strContent = '' OR strScraper IS NULL OR strScraper = '');")"
-  if [[ "$missing" != "0" ]]; then
-    log "${missing} video source(s) still missing content types"
-    return 1
+  # A source no longer configured (moved to another directory, removed) stops
+  # being one; Kodi's clean on update then drops what it held.
+  if ((${#configured[@]} > 0)); then
+    local list
+    list="$(IFS=,; echo "${configured[*]}")"
+    sqlite3 "$db" "UPDATE path SET strContent = '', strScraper = '' WHERE strContent != '' AND strPath LIKE '/mnt/%' AND strPath NOT IN (${list});"
   fi
 
   return 0
@@ -156,13 +146,9 @@ configure_music_library() {
     return 1
   }
 
-  local specs=(
-    "Music|/mnt/storage-b/media/music/"
-    "Audiobooks|/mnt/storage-b/media/audiobooks/"
-  )
-
   local spec name path
-  for spec in "${specs[@]}"; do
+  for spec in "${MUSIC_SOURCES[@]}"; do
+    [[ -n "$spec" ]] || continue
     IFS='|' read -r name path <<< "$spec"
     if [[ ! -d "$path" ]]; then
       log "skipping ${name} (${path} not mounted yet)"
@@ -175,29 +161,73 @@ configure_music_library() {
   return 0
 }
 
-library_populated() {
-  local video_db music_db movies songs
-  video_db="$(find_db 'MyVideos*.db')" || return 1
-  music_db="$(find_db 'MyMusic*.db')" || return 1
-
-  movies="$(sqlite3 "$video_db" "SELECT COUNT(*) FROM movie;")"
-  songs="$(sqlite3 "$music_db" "SELECT COUNT(*) FROM song;")"
-  [[ "$movies" -gt 0 || "$songs" -gt 0 ]]
+# One JSON-RPC call on Kodi's TCP port (loopback, no password); prints the
+# reply. Kodi keeps the connection open, so the read ends on a timeout.
+rpc() {
+  local reply
+  # Refused until Kodi is up; the caller retries.
+  { exec 3<>"/dev/tcp/127.0.0.1/${KODI_PORT}"; } 2>/dev/null || return 1
+  printf '%s' "$1" >&3
+  reply="$(timeout 2 cat <&3 || true)"
+  exec 3>&-
+  printf '%s' "$reply"
 }
 
-ensure_storage
-ensure_scan_on_startup
+scanning_music() {
+  rpc '{"jsonrpc":"2.0","id":1,"method":"XBMC.GetInfoBooleans","params":{"booleans":["Library.IsScanningMusic"]}}' |
+    grep -q '"Library.IsScanningMusic":true'
+}
 
-if [[ -f "$LIBRARY_STAMP" ]] && library_populated; then
+wait_for_music_scan() {
+  # A scan already running (Kodi's startup update) refuses another.
+  while scanning_music; do
+    sleep 10
+  done
+}
+
+music_scan() {
+  local attempt
+  for attempt in $(seq 1 60); do
+    if rpc '{"jsonrpc":"2.0","id":1,"method":"JSONRPC.Ping"}' | grep -q pong; then
+      break
+    fi
+    sleep 5
+  done
+
+  local db spec name path scanned
+  db="$(find_db 'MyMusic*.db')" || {
+    log "Kodi has no music library database yet"
+    return 0
+  }
+  for spec in "${MUSIC_SOURCES[@]}"; do
+    [[ -n "$spec" ]] || continue
+    IFS='|' read -r name path <<< "$spec"
+    [[ -d "$path" ]] || continue
+    scanned="$(sqlite3 -readonly -cmd '.timeout 5000' "$db" "SELECT COUNT(*) FROM path WHERE strPath LIKE '${path}%';")"
+    if [[ "$scanned" != "0" ]]; then
+      continue
+    fi
+    wait_for_music_scan
+    log "first music scan of ${name} (${path})"
+    rpc "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"AudioLibrary.Scan\",\"params\":{\"directory\":\"${path}\",\"showdialogs\":false}}" >/dev/null
+    sleep 5
+    wait_for_music_scan
+  done
+}
+
+if [[ "${1:-}" == "music-scan" ]]; then
+  music_scan
   exit 0
 fi
 
-if configure_video_library && configure_music_library; then
-  install -d -m 0755 -o media -g media "$(dirname "$LIBRARY_STAMP")"
-  touch "$LIBRARY_STAMP"
-  chown media:media "$LIBRARY_STAMP"
-  log "library sources configured; restart Kodi to scan"
+ensure_storage
+
+# Each on its own: a music source isn't held up by the video library.
+status=0
+configure_video_library || status=1
+configure_music_library || status=1
+if ((status == 0)); then
+  log "library sources configured"
 else
   log "library setup incomplete (waiting for Kodi databases or media paths)"
-  exit 0
 fi

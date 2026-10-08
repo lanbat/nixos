@@ -179,6 +179,9 @@
         inputs.self.lanbatPlugins.voice
         # inputs.self.lanbatPlugins.dns
       ];
+      # A satellite on the TV box: replies below full volume, so they don't
+      # shout over a film (docs/pi3-satellite.md, section 9).
+      # modules = [ { lanbat.voiceSatellite.lva.volume = 0.4; } ];
     };
   };
 }

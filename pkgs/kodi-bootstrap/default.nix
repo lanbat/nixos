@@ -3,6 +3,7 @@
   stdenv,
   makeWrapper,
   coreutils,
+  gnugrep,
   sqlite,
   util-linux,
 }:
@@ -23,6 +24,7 @@ stdenv.mkDerivation {
       --prefix PATH : "${
         lib.makeBinPath [
           coreutils
+          gnugrep
           sqlite
           util-linux
         ]
