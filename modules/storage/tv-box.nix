@@ -153,8 +153,9 @@ let
   };
   kodiCfg = config.lanbat.services.kodi.settings;
   # name|path|content|scraper|recursive|useFolderNames, one per line. Shows
-  # are a folder each (not recursive, folder names); the rest are scanned
-  # recursively.
+  # are a folder each and not recursive; the rest are scanned recursively.
+  # useFolderNames stays off: for shows it is Kodi's "Selected folder
+  # contains a single TV show", which made the source itself one show.
   videoSourcesEnv = lib.concatStringsSep "\n" (
     lib.mapAttrsToList (
       name: v:
@@ -164,7 +165,7 @@ let
         v.content
         v.scraper
         (if v.content == "tvshows" then "0" else "1")
-        (if v.content == "tvshows" then "1" else "0")
+        "0"
       ]
     ) kodiCfg.videoSources
   );
@@ -583,7 +584,9 @@ in
 
       "d ${home}/.kodi 0755 media media -"
       "d ${home}/.kodi/userdata 0755 media media -"
-      "C ${home}/.kodi/userdata/advancedsettings.xml - - - - ${kodiTvConfig}/advancedsettings.xml"
+      # Kodi never writes advancedsettings.xml: a link keeps it the
+      # repository's (a copy made once never saw a later change).
+      "L+ ${home}/.kodi/userdata/advancedsettings.xml - - - - ${kodiTvConfig}/advancedsettings.xml"
       "C ${home}/.kodi/userdata/sources.xml - - - - ${kodiTvConfig}/sources.xml"
       "C ${home}/.kodi/userdata/favourites.xml - - - - ${kodiFavourites}"
       "z ${home}/.kodi/userdata/favourites.xml 0644 media media -"

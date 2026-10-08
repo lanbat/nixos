@@ -28,6 +28,11 @@
       </override>
     </adjustrefreshrate>
     <displaylatency>100</displaylatency>
+    <!-- Added to Kodi's own: a title ends at a season tag, so a show folder
+         named "Pantheon.S01.1080p.WEBRip" is looked up as "Pantheon". -->
+    <cleanstrings action="append">
+      <regexp>[ _\,\.\(\)\[\]\-](s[0-9]{1,2}(e[0-9]{1,3})?|season[ _\.]?[0-9]{1,2})([ _\,\.\(\)\[\]\-]|$)</regexp>
+    </cleanstrings>
   </video>
 
   <cache>

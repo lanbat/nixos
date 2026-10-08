@@ -67,21 +67,6 @@ ensure_storage() {
   log "storage ready"
 }
 
-ensure_scan_on_startup() {
-  local settings="${USERDATA}/advancedsettings.xml"
-  [[ -f "$settings" ]] || return 0
-
-  if grep -q '<scanonstartup>true</scanonstartup>' "$settings"; then
-    return 0
-  fi
-
-  sed -i \
-    -e 's|<scanonstartup>false</scanonstartup>|<scanonstartup>true</scanonstartup>|g' \
-    "$settings"
-  chown media:media "$settings"
-  log "enabled library scan on startup"
-}
-
 upsert_video_source() {
   local db="$1"
   local path="$2"
@@ -235,7 +220,6 @@ if [[ "${1:-}" == "music-scan" ]]; then
 fi
 
 ensure_storage
-ensure_scan_on_startup
 
 # Each on its own: a music source isn't held up by the video library.
 status=0

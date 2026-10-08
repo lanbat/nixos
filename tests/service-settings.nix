@@ -794,7 +794,7 @@ let
         env = c: c.systemd.services.kodi-bootstrap.environment;
         lines = c: lib.splitString "\n" (env c).KODI_VIDEO_SOURCES;
       in
-      lib.elem "tv|/mnt/storage-a/media/tv/|tvshows|metadata.tvshows.themoviedb.org.python|0|1" (
+      lib.elem "tv|/mnt/storage-a/media/tv/|tvshows|metadata.tvshows.themoviedb.org.python|0|0" (
         lines lvaTvBox
       )
       && lib.elem "movies|/mnt/storage-a/media/movies/|movies|metadata.themoviedb.org.python|1|0" (
@@ -804,11 +804,21 @@ let
         lines lvaTvBox
       )
       && lib.hasInfix "Music|/mnt/storage-b/media/music/" (env lvaTvBox).KODI_MUSIC_SOURCES
-      && lib.elem "tv|/mnt/storage-a/media/tv/shows/|tvshows|metadata.tvshows.themoviedb.org.python|0|1" (
+      && lib.elem "tv|/mnt/storage-a/media/tv/shows/|tvshows|metadata.tvshows.themoviedb.org.python|0|0" (
         lines tvShowsElsewhere
       )
       && lib.length (lines tvShowsElsewhere) == lib.length (lines lvaTvBox)
       && tvShowsElsewhere.systemd.services.kodi-music-scan.environment ? KODI_MUSIC_SOURCES
+    ))
+
+    # Kodi never writes advancedsettings.xml, so it follows the repository;
+    # a copy made once ("C") never saw a later change. Show folders named
+    # like "Pantheon.S01.1080p..." are looked up without the season tag.
+    (expect "tv: Kodi's advancedsettings.xml is the repository's, season tags cleaned" (
+      lib.any (lib.hasPrefix "L+ /home/media/.kodi/userdata/advancedsettings.xml") lvaTvBox.systemd.tmpfiles.rules
+      && lib.hasInfix ''<cleanstrings action="append">'' (
+        builtins.readFile ../pkgs/kodi-tv-config/advancedsettings.xml
+      )
     ))
 
     (expect "tv: the companion rewinds a film it paused for a question" (
