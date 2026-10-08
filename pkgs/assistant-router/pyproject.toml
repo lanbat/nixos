@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "assistant-router"
+version = "1.0"
+requires-python = ">=3.11"
+dependencies = ["aiohttp"]
+
+[project.scripts]
+assistant-router = "assistant_router.__main__:main"
+
+[tool.setuptools]
+packages = ["assistant_router"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
