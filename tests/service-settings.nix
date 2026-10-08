@@ -769,6 +769,17 @@ let
       ]
     ))
 
+    # Kodi's startup update rescans only folders it has scanned before; a music
+    # source nothing scanned stayed empty (9,784 songs on the Pi 5, 2026-10-08).
+    (expect "tv: Kodi's first music scan runs after Kodi starts" (
+      let
+        scan = lvaTvBox.systemd.services.kodi-music-scan;
+      in
+      lib.elem "tv-kodi.service" scan.wantedBy
+      && lib.elem "tv-kodi.service" scan.after
+      && lib.hasInfix "music-scan" scan.script
+    ))
+
     (expect "tv: the companion rewinds a film it paused for a question" (
       lvaTvBox.systemd.services.lva-kodi-companion.environment.RESUME_REWIND_SECONDS == "3"
     ))

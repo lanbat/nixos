@@ -391,6 +391,27 @@ in
         script = "exec kodi-bootstrap";
       };
 
+      # Kodi's startup update rescans only the music folders it has scanned
+      # before, so a music source nothing scanned stays empty: this runs the
+      # first scan of each, through Kodi's JSON-RPC on the loopback.
+      kodi-music-scan = {
+        description = "First scan of the music sources Kodi hasn't scanned";
+        wantedBy = [ "tv-kodi.service" ];
+        after = [ "tv-kodi.service" ];
+        partOf = [ "tv-kodi.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          # Reads the media user's music database.
+          User = "root";
+        };
+        path = [ kodiBootstrap ];
+        environment = {
+          KODI_HOME = home;
+          KODI_PORT = toString kodiEventsPort;
+        };
+        script = "exec kodi-bootstrap music-scan";
+      };
+
       tv-session = {
         description = "Start the last TV session";
         wantedBy = [ "multi-user.target" ];
