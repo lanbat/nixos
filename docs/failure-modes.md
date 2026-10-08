@@ -111,6 +111,13 @@ voice commands to it will be unavailable until the Pi is back up.
 The server-side Wyoming pipeline (STT/TTS/wake word) and the server's own
 satellite stay running throughout.
 
+With the assistant router (`haLlm.baseUrl = "http://127.0.0.1:8092/v1"`), noise is
+dropped and clear device commands are acted on by the local model even when the
+internet, the gateway or the cloud provider is down, or the monthly budget is spent;
+requests that need the cloud get "I can't reach the online assistant right now."
+instead of a guess. If the router itself is down, the agent has no LLM: Home
+Assistant's local intents still answer what they understand.
+
 The conversation agent's LLM (`lanbat.haLlm`) is the `llama-cpp` service on the
 server when its address is on the loopback, and an external API otherwise. The
 local model needs neither the Pi nor the internet, but it is slow right after a

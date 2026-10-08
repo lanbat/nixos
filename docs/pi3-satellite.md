@@ -282,7 +282,32 @@ The conversation agent runs on the server (`lanbat.deployment.haLlm`, see
 LLM: point `lanbat.deployment.haLlm.baseUrl` and `.model` at any OpenAI-compatible API
 (local `http://127.0.0.1:8091/v1` from `services/llama-cpp.nix`, or e.g. a Mac running
 llama.cpp, LM Studio or Ollama behind `/v1`). External APIs use the `ha-llm-api-key` secret
-(`secrets/README.md`). The Pi 3 streams audio and plays replies; with LVA it also runs the
+(`secrets/README.md`).
+
+**The assistant router.** With `haLlm.baseUrl = "http://127.0.0.1:8092/v1"` and
+`model = "assistant"`, what Home Assistant's intents miss goes through
+`services/assistant-router.nix`:
+
+1. A noise gate, with no model: fragments ("Turn.", "Play."), the assistant's own words
+   heard back (from this satellite's last reply or in its usual phrasing), the middle of
+   someone else's sentence and several sentences of radio or film speech get "Sorry?";
+   "stop", "cancel" and "never mind" stop. Questions, news, music to find, reminders and
+   anything for "all" or "everywhere" go straight to the cloud.
+2. The local model (`lanbat.services.llama-cpp.settings.model`, `qwen3-4b` recommended)
+   answers in a few tokens whether it is a clear command for one device ("act"), which it
+   then does through Home Assistant's tools, or needs a question, the cloud or nothing.
+3. The cloud, through the LLM gateway (`services/llm-gateway.nix`): Claude Haiku by default,
+   with fallbacks and a monthly budget (`lanbat.services.llm-gateway.settings`), keys in
+   `llm-gateway-env`. A reply that claims an action no tool confirmed is replaced by
+   "I didn't change anything."
+
+`lanbat.services.assistant-router.settings.mode` picks `local-first` (the above),
+`cloud-first` (no local model step) or `local-only` (no cloud: "I can't do that offline").
+Every request is a JSON line in `/var/lib/assistant-router/requests.jsonl` (what was heard,
+tier, route, milliseconds): `jq -r '[.tier, .route, .ms, .text] | @tsv'` on it shows what
+the assistant does with real speech.
+
+The Pi 3 streams audio and plays replies; with LVA it also runs the
 wake word locally (~18–30% CPU idle in testing, more with AEC).
 
 ## 8. The same satellite on every machine

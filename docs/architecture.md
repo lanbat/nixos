@@ -96,8 +96,10 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 - MQTT broker
 - Tang trust anchor
 - Voice assistant pipeline (Wyoming: wake word, STT, TTS; Home Assistant's
-  conversation agent, backed by a small local LLM served by llama.cpp, or an
-  external OpenAI-compatible API) and a voice satellite (microphone + internal
+  conversation agent, backed by a small local LLM served by llama.cpp, an
+  external OpenAI-compatible API, or the assistant router, which filters noise,
+  lets the local model act on clear device commands and passes the rest to cloud
+  models through an LLM gateway) and a voice satellite (microphone + internal
   speaker)
 - Metrics storage (InfluxDB) and dashboards (Grafana)
 - Metrics collection from both machines (Telegraf)
@@ -136,6 +138,8 @@ a `profiles` wrapper uses unprefixed names (`server`, `pi-storage`).
 | Snapcast | Caddy forward-auth (Authentik) | No native auth; streaming and control ports (1704/1705) admit only declared clients (`services/snapcast.nix`) |
 | Wyoming satellites | No auth (Pi: firewall-restricted to server IP; server: localhost only) | Internal protocol; only HA connects |
 | Wyoming pipeline (STT/TTS/wake word) | No auth (localhost only) | Never exposed outside server |
+| Assistant router (`assistant-router`, 8092) | No auth (localhost only) | Home Assistant's conversation agent when `haLlm.baseUrl` is `http://127.0.0.1:8092/v1`; calls llama.cpp and the gateway |
+| LLM gateway (`llm-gateway`, LiteLLM, 8093) | No auth (localhost only); provider keys in `llm-gateway-env` (agenix) | Only the assistant router calls it; it calls cloud LLM APIs outbound, with fallbacks and a monthly budget |
 | Speaker identification (`voice-id`, 10303) | No auth (localhost only) | Home Assistant's speech-to-text; a Wyoming proxy in front of faster-whisper |
 | Conversation LLM (`lanbat.haLlm`) | None for the local model (`services/llama-cpp.nix`, loopback only, port 8091); API key (agenix) for an external API | A `haLlm` on the loopback runs llama.cpp on the server; only HA calls it. Any other URL is an external OpenAI-compatible API, called outbound (with the `apple-silicon` voice profile, a Mac on the LAN; `apiKey = false` when it takes none) |
 

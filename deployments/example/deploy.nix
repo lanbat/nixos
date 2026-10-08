@@ -38,6 +38,11 @@
       baseUrl = "https://llm.example.com/v1";
       model = "example-model";
     };
+    # Or the assistant router (services/assistant-router.nix): a noise gate, the
+    # local model for clear device commands, cloud models for the rest, with
+    # the keys in llm-gateway-env and lanbat.services.llama-cpp.settings.model
+    # = "qwen3-4b" in the server's modules:
+    # haLlm = { baseUrl = "http://127.0.0.1:8092/v1"; model = "assistant"; };
     # Where the voice assistant's heavy work runs (lib/voice-compute.nix):
     # "low-spec" does it all on the server; "apple-silicon" takes the LLM from
     # a Mac on the LAN (haLlm.baseUrl), with apiKey = false if it needs none.
