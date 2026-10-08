@@ -842,6 +842,14 @@ let
       && failedAssertions routerServer == [ ]
     ))
 
+    (expect "router: Home Assistant's agent prompt is the router's context block, with tools" (
+      lib.hasInfix ''export LLM_ROUTER="1"'' (postSetup routerServer)
+      && lib.hasInfix ''export LLM_USE_TOOLS="true"'' (postSetup routerServer)
+      && !(lib.hasInfix ''export LLM_ROUTER="1"'' (postSetup base))
+      && lib.hasInfix "LANBAT-CONTEXT v1" (builtins.readFile ../pkgs/home-assistant-post-setup/setup-ha.sh)
+      && lib.hasInfix "name: media_control" (builtins.readFile ../pkgs/home-assistant-post-setup/setup-ha.sh)
+    ))
+
     (expect "router: a server without it runs as before" (
       !(base.systemd.services ? assistant-router)
       && !(base.systemd.services ? llm-gateway)
