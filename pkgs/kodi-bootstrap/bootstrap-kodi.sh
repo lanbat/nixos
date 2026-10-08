@@ -13,11 +13,11 @@ USERDATA="${KODI_HOME}/.kodi/userdata"
 STORAGE_STAMP="${STORAGE_STAMP:-${KODI_HOME}/.lanbat-kodi-storage-ready}"
 KODI_PORT="${KODI_PORT:-9090}"
 
-# name|path
-MUSIC_SOURCES=(
-  "Music|/mnt/storage-b/media/music/"
-  "Audiobooks|/mnt/storage-b/media/audiobooks/"
-)
+# The sources, from the NixOS module (lanbat.services.kodi.settings), one per
+# line: name|path|content|scraper|recursive|useFolderNames for video,
+# name|path for music.
+mapfile -t VIDEO_SOURCES <<< "${KODI_VIDEO_SOURCES:-}"
+mapfile -t MUSIC_SOURCES <<< "${KODI_MUSIC_SOURCES:-}"
 
 log() {
   echo "kodi-bootstrap: $*"
@@ -115,21 +115,12 @@ configure_video_library() {
     return 1
   }
 
-  # name|path|content|scraper|recursive|useFolderNames
-  local specs=(
-    "movies|/mnt/storage-a/media/movies/|movies|metadata.themoviedb.org.python|1|0"
-    "tv|/mnt/storage-a/media/tv/|tvshows|metadata.tvshows.themoviedb.org.python|0|1"
-    "music-videos|/mnt/storage-a/media/music-videos/|musicvideos|metadata.local|1|0"
-    "documentaries|/mnt/storage-b/media/documentaries/|movies|metadata.themoviedb.org.python|1|0"
-    "documentary-series|/mnt/storage-b/media/documentary-series/|tvshows|metadata.tvshows.themoviedb.org.python|0|1"
-    "gym|/mnt/storage-b/media/gym/|movies|metadata.themoviedb.org.python|1|0"
-    "games|/mnt/storage-b/media/games/|movies|metadata.themoviedb.org.python|1|0"
-    "misc|/mnt/storage-b/media/misc/|movies|metadata.themoviedb.org.python|1|0"
-  )
-
   local spec name path content scraper recursive folder_names
-  for spec in "${specs[@]}"; do
+  local configured=()
+  for spec in "${VIDEO_SOURCES[@]}"; do
+    [[ -n "$spec" ]] || continue
     IFS='|' read -r name path content scraper recursive folder_names <<< "$spec"
+    configured+=("'${path}'")
     if [[ ! -d "$path" ]]; then
       log "skipping ${name} (${path} not mounted yet)"
       continue
@@ -137,6 +128,14 @@ configure_video_library() {
     upsert_video_source "$db" "$path" "$content" "$scraper" "$recursive" "$folder_names"
     log "configured video source ${name} -> ${path} (${content})"
   done
+
+  # A source no longer configured (moved to another directory, removed) stops
+  # being one; Kodi's clean on update then drops what it held.
+  if ((${#configured[@]} > 0)); then
+    local list
+    list="$(IFS=,; echo "${configured[*]}")"
+    sqlite3 "$db" "UPDATE path SET strContent = '', strScraper = '' WHERE strContent != '' AND strPath LIKE '/mnt/%' AND strPath NOT IN (${list});"
+  fi
 
   return 0
 }
@@ -164,6 +163,7 @@ configure_music_library() {
 
   local spec name path
   for spec in "${MUSIC_SOURCES[@]}"; do
+    [[ -n "$spec" ]] || continue
     IFS='|' read -r name path <<< "$spec"
     if [[ ! -d "$path" ]]; then
       log "skipping ${name} (${path} not mounted yet)"
@@ -214,6 +214,7 @@ music_scan() {
     return 0
   }
   for spec in "${MUSIC_SOURCES[@]}"; do
+    [[ -n "$spec" ]] || continue
     IFS='|' read -r name path <<< "$spec"
     [[ -d "$path" ]] || continue
     scanned="$(sqlite3 -readonly -cmd '.timeout 5000' "$db" "SELECT COUNT(*) FROM path WHERE strPath LIKE '${path}%';")"

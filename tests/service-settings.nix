@@ -261,6 +261,13 @@ let
       ];
       pi-voice = [ { lanbat.voiceSatellite.backend = "lva"; } ];
     })).configurations.example-pi-storage.config;
+  # The TV box with its shows in another directory.
+  tvShowsElsewhere =
+    (lanbatLib.mkProfile "example" (hostsWithModules {
+      pi-storage = [
+        { lanbat.services.kodi.settings.videoSources.tv.path = "/mnt/storage-a/media/tv/shows/"; }
+      ];
+    })).configurations.example-pi-storage.config;
   # The example Android TV box with apps to open by voice.
   tvApps = serverWith [
     {
@@ -778,6 +785,30 @@ let
       lib.elem "tv-kodi.service" scan.wantedBy
       && lib.elem "tv-kodi.service" scan.after
       && lib.hasInfix "music-scan" scan.script
+    ))
+
+    # The library sources come from settings: the repository's layout by
+    # default, and a profile changes one field without losing the others.
+    (expect "tv: Kodi's library sources are settings, the layout by default" (
+      let
+        env = c: c.systemd.services.kodi-bootstrap.environment;
+        lines = c: lib.splitString "\n" (env c).KODI_VIDEO_SOURCES;
+      in
+      lib.elem "tv|/mnt/storage-a/media/tv/|tvshows|metadata.tvshows.themoviedb.org.python|0|1" (
+        lines lvaTvBox
+      )
+      && lib.elem "movies|/mnt/storage-a/media/movies/|movies|metadata.themoviedb.org.python|1|0" (
+        lines lvaTvBox
+      )
+      && lib.elem "music-videos|/mnt/storage-a/media/music-videos/|musicvideos|metadata.local|1|0" (
+        lines lvaTvBox
+      )
+      && lib.hasInfix "Music|/mnt/storage-b/media/music/" (env lvaTvBox).KODI_MUSIC_SOURCES
+      && lib.elem "tv|/mnt/storage-a/media/tv/shows/|tvshows|metadata.tvshows.themoviedb.org.python|0|1" (
+        lines tvShowsElsewhere
+      )
+      && lib.length (lines tvShowsElsewhere) == lib.length (lines lvaTvBox)
+      && tvShowsElsewhere.systemd.services.kodi-music-scan.environment ? KODI_MUSIC_SOURCES
     ))
 
     (expect "tv: the companion rewinds a film it paused for a question" (

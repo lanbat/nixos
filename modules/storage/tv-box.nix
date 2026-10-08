@@ -57,6 +57,121 @@ let
   );
   home = config.users.users.media.home;
 
+  # Kodi's library sources (kodi-bootstrap writes them into its databases on
+  # every boot). The defaults are the repository's media layout; a profile
+  # sets only what differs, e.g. lanbat.services.kodi.settings.videoSources.tv.path.
+  scrapers = {
+    movies = "metadata.themoviedb.org.python";
+    tvshows = "metadata.tvshows.themoviedb.org.python";
+    musicvideos = "metadata.local";
+  };
+  videoSourceDefaults = {
+    movies = {
+      path = "/mnt/storage-a/media/movies/";
+      content = "movies";
+    };
+    tv = {
+      path = "/mnt/storage-a/media/tv/";
+      content = "tvshows";
+    };
+    music-videos = {
+      path = "/mnt/storage-a/media/music-videos/";
+      content = "musicvideos";
+    };
+    documentaries = {
+      path = "/mnt/storage-b/media/documentaries/";
+      content = "movies";
+    };
+    documentary-series = {
+      path = "/mnt/storage-b/media/documentary-series/";
+      content = "tvshows";
+    };
+    gym = {
+      path = "/mnt/storage-b/media/gym/";
+      content = "movies";
+    };
+    games = {
+      path = "/mnt/storage-b/media/games/";
+      content = "movies";
+    };
+    misc = {
+      path = "/mnt/storage-b/media/misc/";
+      content = "movies";
+    };
+  };
+  musicSourceDefaults = {
+    Music = "/mnt/storage-b/media/music/";
+    Audiobooks = "/mnt/storage-b/media/audiobooks/";
+  };
+  kodiSettings = {
+    options = {
+      videoSources = lib.mkOption {
+        type = lib.types.attrsOf (
+          lib.types.submodule (
+            { config, ... }:
+            {
+              options = {
+                path = lib.mkOption {
+                  type = lib.types.strMatching "/.*/";
+                  description = "Directory of the source, with a trailing slash.";
+                };
+                content = lib.mkOption {
+                  type = lib.types.enum (lib.attrNames scrapers);
+                  description = ''
+                    What the source holds. Shows are one folder each, directly in
+                    the source's directory; films and music videos may be nested.
+                  '';
+                };
+                scraper = lib.mkOption {
+                  type = lib.types.str;
+                  default = scrapers.${config.content};
+                  defaultText = lib.literalExpression "the content's usual scraper";
+                  description = "Kodi scraper add-on for the source.";
+                };
+              };
+            }
+          )
+        );
+        default = { };
+        example = lib.literalExpression ''{ tv.path = "/mnt/storage-a/media/tv/misc/"; }'';
+        description = ''
+          Kodi's video library sources by name. The repository's layout is set
+          by default; set a field to change one, or add a source.
+        '';
+      };
+      musicSources = lib.mkOption {
+        type = lib.types.attrsOf (lib.types.strMatching "/.*/");
+        default = { };
+        example = lib.literalExpression ''{ Music = "/mnt/storage-b/media/music/"; }'';
+        description = ''
+          Kodi's music library sources, name to directory (with a trailing
+          slash). The repository's layout is set by default. Each is scanned
+          once after Kodi starts if Kodi has never scanned it.
+        '';
+      };
+    };
+  };
+  kodiCfg = config.lanbat.services.kodi.settings;
+  # name|path|content|scraper|recursive|useFolderNames, one per line. Shows
+  # are a folder each (not recursive, folder names); the rest are scanned
+  # recursively.
+  videoSourcesEnv = lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (
+      name: v:
+      lib.concatStringsSep "|" [
+        name
+        v.path
+        v.content
+        v.scraper
+        (if v.content == "tvshows" then "0" else "1")
+        (if v.content == "tvshows" then "1" else "0")
+      ]
+    ) kodiCfg.videoSources
+  );
+  musicSourcesEnv = lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (name: path: "${name}|${path}") kodiCfg.musicSources
+  );
+
   kodiWebPort = 8080;
   kodiEventsPort = 9090;
   # Settings tv-kodi puts in guisettings.xml before Kodi starts (see the top).
@@ -260,6 +375,15 @@ let
 in
 {
   config = {
+    # The schema is merged into lanbat.services.kodi.settings (checks.nix
+    # rejects undeclared keys); the defaults are set field by field, so a
+    # profile's change to one field keeps the rest.
+    lanbat.settingsSchema.kodi = kodiSettings;
+    lanbat.services.kodi.settings = {
+      videoSources = lib.mapAttrs (_: lib.mapAttrs (_: lib.mkDefault)) videoSourceDefaults;
+      musicSources = lib.mapAttrs (_: lib.mkDefault) musicSourceDefaults;
+    };
+
     # Kodi's remote control, for Home Assistant (see the top).
     lanbat.services.kodi = {
       endpoint = {
@@ -387,7 +511,11 @@ in
           User = "root";
         };
         path = [ kodiBootstrap ];
-        environment.KODI_HOME = home;
+        environment = {
+          KODI_HOME = home;
+          KODI_VIDEO_SOURCES = videoSourcesEnv;
+          KODI_MUSIC_SOURCES = musicSourcesEnv;
+        };
         script = "exec kodi-bootstrap";
       };
 
@@ -408,6 +536,7 @@ in
         environment = {
           KODI_HOME = home;
           KODI_PORT = toString kodiEventsPort;
+          KODI_MUSIC_SOURCES = musicSourcesEnv;
         };
         script = "exec kodi-bootstrap music-scan";
       };
