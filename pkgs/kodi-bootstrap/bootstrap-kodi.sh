@@ -165,7 +165,8 @@ configure_music_library() {
 # reply. Kodi keeps the connection open, so the read ends on a timeout.
 rpc() {
   local reply
-  exec 3<>"/dev/tcp/127.0.0.1/${KODI_PORT}" || return 1
+  # Refused until Kodi is up; the caller retries.
+  { exec 3<>"/dev/tcp/127.0.0.1/${KODI_PORT}"; } 2>/dev/null || return 1
   printf '%s' "$1" >&3
   reply="$(timeout 2 cat <&3 || true)"
   exec 3>&-
