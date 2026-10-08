@@ -290,22 +290,27 @@ llama.cpp, LM Studio or Ollama behind `/v1`). External APIs use the `ha-llm-api-
 
 1. A noise gate, with no model: fragments ("Turn.", "Play."), the assistant's own words
    heard back (from this satellite's last reply or in its usual phrasing), the middle of
-   someone else's sentence and several sentences of radio or film speech get "Sorry?";
+   someone else's sentence and several sentences of radio or film speech get "Sorry, I didn't
+   catch that." (no question, so the microphone doesn't reopen on it);
    "stop", "cancel" and "never mind" stop. Questions, news, music to find, reminders and
-   anything for "all" or "everywhere" go straight to the cloud.
+   anything for several devices ("all", "everywhere", "the lights", "the TV and the radio") go
+   straight to the cloud. A cloud model's tool calls are checked: only the agent's two
+   functions, on exposed devices, with the actions they list.
 2. The local model (`lanbat.services.llama-cpp.settings.model`, `qwen3-4b` recommended)
    answers in a few tokens whether it is a clear command for one device ("act"), which it
    then does through Home Assistant's tools, or needs a question, the cloud or nothing.
 3. The cloud, through the LLM gateway (`services/llm-gateway.nix`): Claude Haiku by default,
-   with fallbacks and a monthly budget (`lanbat.services.llm-gateway.settings`), keys in
-   `llm-gateway-env`. A reply that claims an action no tool confirmed is replaced by
+   with fallbacks and a monthly budget (`lanbat.services.llm-gateway.settings`; LiteLLM
+   counts in memory and starts again when it restarts, so also set a spend limit in the
+   provider's console), keys in `llm-gateway-env`. A reply that claims an action no tool confirmed is replaced by
    "I didn't change anything."
 
 `lanbat.services.assistant-router.settings.mode` picks `local-first` (the above),
 `cloud-first` (no local model step) or `local-only` (no cloud: "I can't do that offline").
-Every request is a JSON line in `/var/lib/assistant-router/requests.jsonl` (what was heard,
-tier, route, milliseconds): `jq -r '[.tier, .route, .ms, .text] | @tsv'` on it shows what
-the assistant does with real speech.
+Every request is a JSON line in `/var/lib/assistant-router/requests-<date>.jsonl` (what was
+heard, tier, route, milliseconds), kept `logDays` days (14); `logText = false` keeps no text.
+`jq -r '[.tier, .route, .ms, .text] | @tsv'` on a day's file shows what the assistant does
+with real speech.
 
 The Pi 3 streams audio and plays replies; with LVA it also runs the
 wake word locally (~18–30% CPU idle in testing, more with AEC).

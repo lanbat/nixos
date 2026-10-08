@@ -1375,6 +1375,16 @@ in
     # The loopback is this host's own: an LLM there is a service on this host.
     assertions = [
       {
+        # A host that names its services gets only those; the agent would
+        # talk to a closed port.
+        assertion =
+          !llmRouter
+          || (config.lanbat.hasService "assistant-router" && config.lanbat.hasService "llm-gateway");
+        message =
+          "lanbat: lanbat.deployment.haLlm points at the assistant router, but this host's services"
+          + " don't include assistant-router and llm-gateway; add both to hosts.<key>.services.";
+      }
+      {
         assertion = !llmLocal || config.lanbat.hasService "llama-cpp";
         message = "lanbat: lanbat.deployment.haLlm.baseUrl is on the loopback (${
           if llm == null then "" else llm.baseUrl

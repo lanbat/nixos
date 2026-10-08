@@ -4,7 +4,11 @@
 # name the router asks for ("smart", "deep") is an ordered list of models;
 # LiteLLM tries the next on an error, a timeout or a rate limit. Keys are in
 # the llm-gateway-env secret (ANTHROPIC_API_KEY=..., OPENAI_API_KEY=...),
-# never in Home Assistant. Spending stops at budgetMonthly (US dollars).
+# never in Home Assistant. budgetMonthly (US dollars) is LiteLLM's own
+# counter: without a database it lives in memory and starts again when the
+# gateway restarts, so set a hard spend limit in the provider's console too.
+# There is no master key: any process on the server can use the gateway,
+# which listens on the loopback only.
 #
 # Settings: lanbat.services.llm-gateway.settings.models and budgetMonthly,
 # for example a second provider behind Claude:
@@ -50,7 +54,12 @@ let
     budgetMonthly = mkOption {
       type = types.ints.positive;
       default = 10;
-      description = "Spending limit per month, in US dollars; beyond it requests fail and the router says it can't reach the online assistant.";
+      description = ''
+        Spending limit per month, in US dollars; beyond it requests fail and the
+        router says it can't reach the online assistant. LiteLLM counts in
+        memory, so a restart of the gateway starts the count again: set a hard
+        limit in the provider's console as well.
+      '';
     };
   };
   # Each chain as LiteLLM deployments: "smart", "smart-fallback-1", ...

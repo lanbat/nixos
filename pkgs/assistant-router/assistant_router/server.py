@@ -2,14 +2,17 @@
 
 A request is one round of the agent's tool loop: the context block, the
 conversation so far, and, after a tool call, the tool's results. The first
-round of a turn is routed (gate, local triage, cloud); later rounds of the
-same turn stay on the tier that asked for the tools.
+round of a turn is routed (gate, local triage, cloud); a later round answers
+a local act from its result, and goes back to the cloud otherwise.
 """
 from __future__ import annotations
 
 import asyncio
+import datetime
+import glob
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
 
@@ -17,16 +20,26 @@ import aiohttp
 from aiohttp import web
 
 from . import actions, gate as gate_mod, honesty, triage
-from .context import parse_context
+from .context import Context, parse_context
 from .state import State
 
 LOG = logging.getLogger("assistant-router")
 
-SORRY = "Sorry?"
+# No question mark: Home Assistant keeps the microphone open after a reply
+# that asks one, and a rejection heard back would loop.
+SORRY = "Sorry, I didn't catch that."
 STOPPED = "Okay."
 CLARIFY = "Which one do you mean?"
 CLOUD_DOWN = "I can't reach the online assistant right now."
-OFFLINE = "I can't do that offline. I can control devices, media and timers."
+OFFLINE = "I can't do that offline. I can control devices and media."
+REFUSED = "I can't do that."
+
+# What a cloud model may ask Home Assistant to run: the agent's two functions,
+# with the actions their specs list (setup-ha.sh).
+TOOL_ACTIONS = {
+    "control_device": set(actions.SERVICE.values()),
+    "media_control": set(actions.MEDIA_SERVICE.values()),
+}
 
 
 @dataclass
@@ -38,7 +51,9 @@ class Config:
     mode: str  # local-first | cloud-first | local-only
     local_timeout: float = 4.0
     cloud_timeout: float = 20.0
-    log_path: str | None = None
+    log_dir: str | None = None
+    log_days: int = 14
+    log_text: bool = True
 
 
 def _reply(text: str) -> dict:
@@ -52,26 +67,63 @@ def _tool_reply(calls: list[dict]) -> dict:
                          "message": {"role": "assistant", "content": None, "tool_calls": calls}}]}
 
 
-def _turn(messages: list[dict]) -> tuple[str, list[dict]]:
-    """The last user text and the messages after it (this turn's rounds)."""
+def _turn(messages: list[dict]) -> tuple[str, str, list[dict]]:
+    """The last user text, the request it answers when the assistant had
+    asked which device was meant, and the messages after it (this turn's
+    rounds)."""
     for i in range(len(messages) - 1, -1, -1):
         if messages[i].get("role") == "user":
-            return messages[i].get("content") or "", messages[i + 1:]
-    return "", []
+            text = messages[i].get("content") or ""
+            asked = text
+            if i >= 2 and messages[i - 1].get("role") == "assistant" \
+                    and messages[i - 1].get("content") == CLARIFY and messages[i - 2].get("role") == "user":
+                asked = f"{messages[i - 2].get('content') or ''} ({text})"
+            return text, asked, messages[i + 1:]
+    return "", "", []
+
+
+def _allowed(calls: list[dict], ctx: Context | None) -> bool:
+    """Every call is one of the agent's functions, on an exposed entity, with
+    an action its spec lists."""
+    ids = {e.entity_id for e in ctx.entities} if ctx else set()
+    for call in calls:
+        fn = call.get("function") or {}
+        try:
+            args = json.loads(fn.get("arguments") or "")
+        except (TypeError, ValueError):
+            return False
+        if not isinstance(args, dict) or fn.get("name") not in TOOL_ACTIONS:
+            return False
+        if args.get("entity_id") not in ids or args.get("action") not in TOOL_ACTIONS[fn["name"]]:
+            return False
+    return True
 
 
 def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> web.Application:
     state = state or State()
-    pending: dict[str, triage.Triage] = {}  # conversation -> local act awaiting its tool result
+    log_day = {"v": ""}
 
     def log(entry: dict) -> None:
+        if not cfg.log_text:
+            entry.pop("text", None)
         LOG.info(json.dumps(entry))
-        if cfg.log_path:
-            with open(cfg.log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry) + "\n")
+        if not cfg.log_dir:
+            return
+        today = datetime.date.today()
+        if log_day["v"] != today.isoformat():
+            log_day["v"] = today.isoformat()
+            oldest = (today - datetime.timedelta(days=cfg.log_days)).isoformat()
+            for path in glob.glob(os.path.join(cfg.log_dir, "requests-*.jsonl")):
+                if os.path.basename(path)[len("requests-"):-len(".jsonl")] < oldest:
+                    os.remove(path)
+        with open(os.path.join(cfg.log_dir, f"requests-{today.isoformat()}.jsonl"), "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
 
     async def cloud(session: aiohttp.ClientSession, body: dict) -> dict | None:
-        out = dict(body, model=cfg.cloud_model)
+        # Home Assistant always sends temperature and top_p; current Claude
+        # models refuse both together, so the provider's defaults apply.
+        out = {k: v for k, v in body.items() if k not in ("temperature", "top_p", "user")}
+        out["model"] = cfg.cloud_model
         try:
             async with session.post(cfg.cloud_url, json=out,
                                     timeout=aiohttp.ClientTimeout(total=cfg.cloud_timeout)) as r:
@@ -86,6 +138,15 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> w
         state.remember_reply(device, said, clock())
         return _reply(said)
 
+    def from_cloud(device: str, ctx: Context | None, data: dict | None, tool_results: list[str]) -> dict:
+        if data is None:
+            return finish(device, CLOUD_DOWN, tool_results)
+        msg = data["choices"][0]["message"]
+        calls = msg.get("tool_calls")
+        if calls:
+            return _tool_reply(calls) if _allowed(calls, ctx) else finish(device, REFUSED, tool_results)
+        return finish(device, msg.get("content") or "", tool_results)
+
     async def completions(request: web.Request) -> web.Response:
         body = await request.json()
         messages = body.get("messages") or []
@@ -93,26 +154,21 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> w
         system = messages[0].get("content") or "" if messages and messages[0].get("role") == "system" else ""
         ctx = parse_context(system)
         device = ctx.device_id if ctx else ""
-        text, rounds = _turn(messages)
+        text, asked, rounds = _turn(messages)
         tool_results = [m.get("content") or "" for m in rounds if m.get("role") in ("tool", "function")]
         now = clock()
         session: aiohttp.ClientSession = request.app["session"]
         started = time.monotonic()
 
-        # A later round of this turn: answer from the tier that called the tools.
+        # A later round of this turn: a local act's result, or the cloud's.
         if rounds:
-            if conv in pending:
-                t = pending.pop(conv)
+            call_ids = [m.get("tool_call_id") or "" for m in rounds if m.get("role") == "tool"]
+            t = state.take_pending(call_ids, now)
+            if t is not None:
                 said = actions.done_phrase(t) if "Success" in tool_results else "That didn't work."
                 log({"conv": conv, "tier": "local", "round": "result", "results": tool_results})
                 return web.json_response(finish(device, said, tool_results))
-            data = await cloud(session, body)
-            if data is None:
-                return web.json_response(finish(device, CLOUD_DOWN, tool_results))
-            msg = data["choices"][0]["message"]
-            if msg.get("tool_calls"):
-                return web.json_response(_tool_reply(msg["tool_calls"]))
-            return web.json_response(finish(device, msg.get("content") or "", tool_results))
+            return web.json_response(from_cloud(device, ctx, await cloud(session, body), tool_results))
 
         verdict = gate_mod.gate(text, state.last_reply(device, now)) if ctx else "escalate"
         tier, route = "gate", verdict
@@ -123,11 +179,12 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> w
         else:
             t = triage.Triage("escalate")
             if verdict == "pass" and cfg.mode != "cloud-first":
-                t = await triage.classify(session, cfg.local_url, cfg.local_model, ctx, text, cfg.local_timeout)
+                t = await triage.classify(session, cfg.local_url, cfg.local_model, ctx, asked, cfg.local_timeout)
                 tier, route = "local", t.route
             if t.route == "act":
-                pending[conv] = t
-                resp = _tool_reply(actions.tool_calls(t))
+                calls = actions.tool_calls(t)
+                state.add_pending(calls[0]["id"], t, now)
+                resp = _tool_reply(calls)
             elif t.route == "reject":
                 resp = finish(device, SORRY, [])
             elif t.route == "clarify":
@@ -136,14 +193,7 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> w
                 resp = finish(device, OFFLINE, [])
             else:
                 tier, route = "cloud", "escalate"
-                state.set_tier(conv, "cloud", now)
-                data = await cloud(session, body)
-                if data is None:
-                    resp = finish(device, CLOUD_DOWN, [])
-                else:
-                    msg = data["choices"][0]["message"]
-                    resp = _tool_reply(msg["tool_calls"]) if msg.get("tool_calls") else \
-                        finish(device, msg.get("content") or "", [])
+                resp = from_cloud(device, ctx, await cloud(session, body), [])
         log({"conv": conv, "device": device, "room": ctx.room if ctx else "", "text": text,
              "tier": tier, "route": route, "ms": int((time.monotonic() - started) * 1000)})
         return web.json_response(resp)

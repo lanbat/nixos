@@ -9,9 +9,12 @@ def test_last_reply_expires():
     assert s.last_reply("other", now=120) == ""
 
 
-def test_tier_is_per_conversation_and_expires():
-    s = State(turn_seconds=120)
-    s.set_tier("c1", "cloud", now=0)
-    assert s.tier("c1", now=60) == "cloud"
-    assert s.tier("c2", now=60) is None
-    assert s.tier("c1", now=121) is None
+def test_pending_acts_are_keyed_by_tool_call_and_expire():
+    s = State(pending_seconds=60)
+    s.add_pending("call_a", "act-a", now=0)
+    assert s.take_pending(["call_x"], now=10) is None
+    assert s.take_pending(["call_a"], now=10) == "act-a"
+    assert s.take_pending(["call_a"], now=11) is None
+    s.add_pending("call_b", "act-b", now=0)
+    s.add_pending("call_c", "act-c", now=100)  # writing prunes call_b, older than 60 s
+    assert "call_b" not in s._pending

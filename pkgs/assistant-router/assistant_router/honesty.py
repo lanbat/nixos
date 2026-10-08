@@ -3,8 +3,13 @@ from __future__ import annotations
 
 import re
 
-CLAIM = re.compile(r"\b(done|turned|turning|switched|switching|it's (on|off)|is now (on|off)|set (it |the )?to|"
-                   r"paused|stopped|started|playing now|opened|closed|locked|unlocked|added)\b", re.I)
+# A claim is the assistant saying it acted: a reply that opens with the
+# action, "I turned...", "it's on.", "the lights are now off". The same verbs in
+# an answer about the world ("the war started in 1939") are not claims.
+VERBS = r"(turned|switched|turning|switching|set|paused|stopped|started|opened|closed|locked|unlocked|added|dimmed)"
+CLAIM = re.compile(
+    rf"^done\b|^{VERBS}\b|\bi('ve| have| just)? {VERBS}\b|"
+    r"\b(is|are) now (on|off|open|closed|playing|paused|locked|unlocked)\b|\b(it's|it is) (on|off)[.!]?$", re.I)
 ENTITY_ID = re.compile(r"\b[a-z_]+\.[a-z0-9_]+\b")
 
 

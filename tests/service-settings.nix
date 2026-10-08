@@ -271,6 +271,31 @@ let
       lanbat.services.llama-cpp.settings.model = "qwen3-4b";
     }
   ];
+  # The router configured on a server that lists its services without it.
+  routerUnlisted =
+    (lanbatLib.mkProfile "example" (
+      exampleDeploy
+      // {
+        hosts = exampleDeploy.hosts // {
+          server = exampleDeploy.hosts.server // {
+            services = [
+              "home-assistant"
+              "llama-cpp"
+              "postgresql"
+              "wyoming"
+            ];
+            modules = (exampleDeploy.hosts.server.modules or [ ]) ++ [
+              {
+                lanbat.deployment.haLlm = lib.mkForce {
+                  baseUrl = "http://127.0.0.1:8092/v1";
+                  model = "assistant";
+                };
+              }
+            ];
+          };
+        };
+      }
+    )).configurations.example-server.config;
   # The TV box with its shows in another directory.
   tvShowsElsewhere =
     (lanbatLib.mkProfile "example" (hostsWithModules {
@@ -846,8 +871,21 @@ let
       lib.hasInfix ''export LLM_ROUTER="1"'' (postSetup routerServer)
       && lib.hasInfix ''export LLM_USE_TOOLS="true"'' (postSetup routerServer)
       && !(lib.hasInfix ''export LLM_ROUTER="1"'' (postSetup base))
-      && lib.hasInfix "LANBAT-CONTEXT v1" (builtins.readFile ../pkgs/home-assistant-post-setup/setup-ha.sh)
-      && lib.hasInfix "name: media_control" (builtins.readFile ../pkgs/home-assistant-post-setup/setup-ha.sh)
+      && lib.hasInfix "LANBAT-CONTEXT v1" (
+        builtins.readFile ../pkgs/home-assistant-post-setup/setup-ha.sh
+      )
+      && lib.hasInfix "name: media_control" (
+        builtins.readFile ../pkgs/home-assistant-post-setup/setup-ha.sh
+      )
+    ))
+
+    (expect "router: a host that lists its services must list the router and the gateway" (
+      lib.any (lib.hasInfix "assistant-router") (failedAssertions routerUnlisted)
+    ))
+
+    (expect "router: the request log rotates and keeps two weeks" (
+      lib.hasInfix "--log-dir /var/lib/assistant-router" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+      && lib.hasInfix "--log-days 14" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
     ))
 
     (expect "router: a server without it runs as before" (

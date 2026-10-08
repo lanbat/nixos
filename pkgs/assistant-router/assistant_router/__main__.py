@@ -18,10 +18,13 @@ def main() -> None:
     p.add_argument("--cloud-url", required=True)
     p.add_argument("--cloud-model", default="smart")
     p.add_argument("--mode", choices=["local-first", "cloud-first", "local-only"], default="local-first")
-    p.add_argument("--log-path")
+    p.add_argument("--log-dir")
+    p.add_argument("--log-days", type=int, default=14)
+    p.add_argument("--no-log-text", action="store_true", help="log tier, route and timing, not what was said")
     a = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    cfg = Config(a.local_url, a.local_model, a.cloud_url, a.cloud_model, a.mode, log_path=a.log_path)
+    cfg = Config(a.local_url, a.local_model, a.cloud_url, a.cloud_model, a.mode,
+                 log_dir=a.log_dir, log_days=a.log_days, log_text=not a.no_log_text)
     web.run_app(make_app(cfg), host=a.host, port=a.port, print=None)
 
 

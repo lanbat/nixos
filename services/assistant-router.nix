@@ -9,8 +9,9 @@
 # gateway (services/llm-gateway.nix). See pkgs/assistant-router.
 #
 # Each request is logged, one JSON line, in
-# /var/lib/assistant-router/requests.jsonl: what was heard, which tier
-# answered, how and how fast.
+# /var/lib/assistant-router/requests-<date>.jsonl: what was heard (overheard
+# speech included, unless logText is off), which tier answered, how and how
+# fast. Files older than logDays are deleted.
 #
 # Always-on: it is in the voice path. Loopback only.
 {
@@ -27,6 +28,19 @@ let
   cfg = config.lanbat.services.assistant-router.settings;
   port = 8092;
   router = pkgs.callPackage ../pkgs/assistant-router { };
+  routerSettings.options.logDays = mkOption {
+    type = types.ints.positive;
+    default = 14;
+    description = ''
+      Days of request log to keep (one file a day in /var/lib/assistant-router).
+      The log holds what the microphones heard, overheard speech included.
+    '';
+  };
+  routerSettings.options.logText = mkOption {
+    type = types.bool;
+    default = true;
+    description = "Whether the request log keeps what was said, or only the tier, route and timing.";
+  };
   routerSettings.options.mode = mkOption {
     type = types.enum [
       "local-first"
@@ -62,16 +76,20 @@ in
         ];
         wants = [ "llama-cpp.service" ];
         serviceConfig = {
-          ExecStart = lib.concatStringsSep " " [
-            (lib.getExe router)
-            "--port ${toString port}"
-            "--local-url http://127.0.0.1:${toString config.lanbat.services.llama-cpp.port}/v1/chat/completions"
-            "--local-model ${config.lanbat.services.llama-cpp.settings.model}"
-            "--cloud-url http://127.0.0.1:${toString config.lanbat.services.llm-gateway.port}/v1/chat/completions"
-            "--cloud-model smart"
-            "--mode ${cfg.mode}"
-            "--log-path /var/lib/assistant-router/requests.jsonl"
-          ];
+          ExecStart = lib.concatStringsSep " " (
+            [
+              (lib.getExe router)
+              "--port ${toString port}"
+              "--local-url http://127.0.0.1:${toString config.lanbat.services.llama-cpp.port}/v1/chat/completions"
+              "--local-model ${config.lanbat.services.llama-cpp.settings.model}"
+              "--cloud-url http://127.0.0.1:${toString config.lanbat.services.llm-gateway.port}/v1/chat/completions"
+              "--cloud-model smart"
+              "--mode ${cfg.mode}"
+              "--log-dir /var/lib/assistant-router"
+              "--log-days ${toString cfg.logDays}"
+            ]
+            ++ lib.optionals (!cfg.logText) [ "--no-log-text" ]
+          );
           DynamicUser = true;
           StateDirectory = "assistant-router";
           Restart = "always";

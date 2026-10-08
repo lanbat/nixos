@@ -580,6 +580,10 @@ llm_functions() {
   function:
     type: script
     sequence:
+    - if: "{{ action not in ['turn_on', 'turn_off', 'toggle', 'open', 'close'] }}"
+      then:
+      - stop: Not an action control_device takes.
+        error: true
     - action: "{% set domain = entity_id.split('.')[0] %}{% if action == 'open' %}{{ domain }}.open_cover{% elif action == 'close' %}{{ domain }}.close_cover{% else %}homeassistant.{{ action }}{% endif %}"
       target:
         entity_id: "{{ entity_id }}"
@@ -616,6 +620,10 @@ FUNCTIONS
   function:
     type: script
     sequence:
+    - if: "{{ action not in ['media_pause', 'media_play', 'media_stop', 'media_next_track', 'volume_up', 'volume_down', 'volume_set'] }}"
+      then:
+      - stop: Not an action media_control takes.
+        error: true
     - if: "{{ action == 'volume_set' }}"
       then:
       - action: media_player.volume_set

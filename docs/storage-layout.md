@@ -111,6 +111,9 @@ These paths live on `/dev/lanbat/root` and are accessible at boot without any un
 ├── influxdb2/         InfluxDB data + WAL (BACK THIS UP)
 ├── mosquitto/         Mosquitto broker state
 ├── homepage/          Homepage config (stateless, managed in repo)
+├── private/assistant-router/  Assistant router request log, a file a day, logDays
+│                      kept: what the microphones heard (personal data; with
+│                      logText = false only tier, route and timing)
 └── containers/<account>/  rootless Podman image storage, one per container account
 
 /var/lib/private/tang/ ← bind mount from /mnt/control/tang (control LUKS);
@@ -156,6 +159,7 @@ are overlaid by bind mounts from `/mnt/workload/`.
 | Caddy | server-local | — | — |
 | Authentik | server-local | always-on PostgreSQL | — |
 | Home Assistant | server-local | always-on PostgreSQL | — |
+| Assistant router | server-local (request log) | — | — |
 | Nextcloud | server-local | workload PostgreSQL | Pi/b (external storage) |
 | Immich | server-local | workload PostgreSQL | Pi/a/photos |
 | Jellyfin | server-local | server-local | Pi/a/media + Pi/b/media |

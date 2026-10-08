@@ -70,3 +70,13 @@ def test_two_sentences_of_speech_rejected():
 
 def test_short_two_sentence_command_passes():
     assert gate("Louder. Okay, louder.", "") == "pass"
+
+
+@pytest.mark.parametrize("text", ["Turn off the lights", "Turn off the lights in the house",
+                                  "Turn off the TV in the bedroom and the kitchen", "Close the blinds"])
+def test_several_devices_go_to_the_cloud(text):
+    assert gate(text, "") == "escalate"
+
+
+def test_an_echo_of_sorry_is_rejected():
+    assert gate("Sorry, I didn't catch that.", "Sorry, I didn't catch that.") == "reject"

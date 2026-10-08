@@ -19,6 +19,9 @@ FILLERS = {"okay", "ok", "yes", "no", "please", "thanks", "thank", "you", "hello
 ACTION_ONLY = {"turn", "play", "stop", "on", "off", "switch", "set", "start"}
 STOP_PHRASES = {"stop", "please stop", "stop stop", "cancel", "never mind", "nevermind", "be quiet", "shut up"}
 ALL_WORDS = re.compile(r"\b(all|every|everything|everywhere|whole house|all of the)\b")
+# Several devices: a plural or two targets joined by "and". The local model
+# would pick one of them.
+SEVERAL = re.compile(r"\b(lights|lamps|switches|fans|blinds|curtains|shutters|speakers|tvs|plugs)\b|\b and (the )?[a-z]")
 CLOUD = re.compile(
     r"^(why|how|what is|what's the|what are|who|when|where|explain|tell me|can you tell|read|remind|"
     r"set (a |the )?remind|wake me|what happened)\b|\b(news|weather tomorrow|this weekend|recipe|podcast|"
@@ -69,6 +72,6 @@ def gate(text: str, last_reply: str) -> Verdict:
     sentences = text.count(".") + text.count("?") + text.count("!")
     if len(words) > MAX_COMMAND_WORDS or (sentences >= 2 and len(words) >= 12) or (sentences >= 3 and len(words) > 10):
         return "reject"
-    if ALL_WORDS.search(joined) or CLOUD.search(joined):
+    if ALL_WORDS.search(joined) or SEVERAL.search(joined) or CLOUD.search(joined):
         return "escalate"
     return "pass"
