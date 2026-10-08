@@ -67,6 +67,6 @@ pkgs.runCommand "pkgs-build-smoke"
     command -v lva-kodi-companion
     home-assistant-dashboards --help >/dev/null
     voice-id --help >/dev/null
-    command -v assistant-router
+    assistant-router --help >/dev/null
     touch $out
   ''
