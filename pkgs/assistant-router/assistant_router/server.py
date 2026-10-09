@@ -22,6 +22,7 @@ from aiohttp import web
 from . import actions, body as body_mod, gate as gate_mod, honesty, triage
 from .body import Bodies
 from .context import Context, parse_context
+from .people import People
 from .state import State
 
 LOG = logging.getLogger("assistant-router")
@@ -101,9 +102,10 @@ def _allowed(calls: list[dict], ctx: Context | None) -> bool:
 
 
 def make_app(cfg: Config, state: State | None = None, clock=time.monotonic,
-             bodies: Bodies | None = None) -> web.Application:
+             bodies: Bodies | None = None, people: People | None = None) -> web.Application:
     state = state or State()
     bodies = bodies or Bodies("")
+    people = people or People({})
     log_day = {"v": ""}
 
     def log(entry: dict) -> None:
@@ -129,7 +131,8 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic,
         out["model"] = cfg.cloud_model
         # A body in the room: its persona and what it senses go after Home
         # Assistant's block, so the start of the prompt stays the same.
-        block = bodies.prompt_block(room, clock())
+        now = clock()
+        block = "\n".join(b for b in (bodies.prompt_block(room, now), people.line(room, now)) if b)
         msgs = out.get("messages") or []
         if block and msgs and msgs[0].get("role") == "system":
             out["messages"] = [dict(msgs[0], content=(msgs[0].get("content") or "") + "\n" + block)] + msgs[1:]
@@ -244,14 +247,19 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic,
     return app
 
 
-def make_body_app(bodies: Bodies, clock=time.monotonic) -> web.Application:
+def make_body_app(bodies: Bodies, clock=time.monotonic, people: People | None = None) -> web.Application:
     """The bodies' side (assistant_router/body.py): one WebSocket each, on its
-    own listener, so the LAN reaches this and not the agent's endpoint."""
+    own listener, so the LAN reaches this and not the agent's endpoint.
+
+    A robot ("kind": anything but "room-sensor") is the room's body; it may
+    report the faces it recognises. A room sensor (pkgs/room-presence) is not
+    a body: it only reports the phones it sees, and gets nothing back."""
+    people = people or People({})
 
     async def socket(request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse(heartbeat=20)
         await ws.prepare(request)
-        room = ""
+        room, sensor = "", False
         try:
             async for msg in ws:
                 if msg.type != aiohttp.WSMsgType.TEXT:
@@ -264,15 +272,27 @@ def make_body_app(bodies: Bodies, clock=time.monotonic) -> web.Application:
                     continue
                 hello = data.get("hello")
                 if isinstance(hello, dict) and isinstance(hello.get("room"), str) and hello["room"].strip():
-                    if room:
+                    if room and not sensor:
                         bodies.disconnect(room, ws)
                     room = hello["room"].strip()[:64]
-                    bodies.connect(room, ws)
+                    sensor = hello.get("kind") == "room-sensor"
+                    if not sensor:
+                        bodies.connect(room, ws)
                     LOG.info(json.dumps({"body": "connected", "room": room, "kind": str(hello.get("kind", ""))[:32]}))
-                elif room and isinstance(data.get("state"), dict):
+                elif room and not sensor and isinstance(data.get("state"), dict):
                     bodies.update(room, data["state"], clock())
+                    faces = data["state"].get("faces")
+                    if isinstance(faces, list):
+                        people.forget_faces(room)
+                        for face in faces[:8]:
+                            if isinstance(face, dict):
+                                people.observe(room, "face", face.get("person"), face.get("confidence"), clock())
+                elif room and sensor and isinstance(data.get("seen"), list):
+                    for seen in data["seen"][:32]:
+                        if isinstance(seen, dict) and type(seen.get("rssi")) is int and seen["rssi"] >= -85:
+                            people.observe(room, "phone", seen.get("person"), 1.0, clock())
         finally:
-            if room:
+            if room and not sensor:
                 bodies.disconnect(room, ws)
                 LOG.info(json.dumps({"body": "gone", "room": room}))
         return ws

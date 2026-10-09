@@ -8,7 +8,10 @@ import logging
 
 from aiohttp import web
 
+import json
+
 from .body import Bodies
+from .people import People
 from .server import Config, make_app, make_body_app
 
 
@@ -18,11 +21,16 @@ async def serve(cfg: Config, a: argparse.Namespace) -> None:
         with open(a.persona_file, encoding="utf-8") as f:
             persona = f.read()
     bodies = Bodies(persona)
-    runners = [web.AppRunner(make_app(cfg, bodies=bodies))]
+    names = {}
+    if a.people_file:
+        with open(a.people_file, encoding="utf-8") as f:
+            names = {str(k): str(v) for k, v in json.load(f).items()}
+    people = People(names)
+    runners = [web.AppRunner(make_app(cfg, bodies=bodies, people=people))]
     await runners[0].setup()
     await web.TCPSite(runners[0], a.host, a.port).start()
     if a.body_port:
-        runners.append(web.AppRunner(make_body_app(bodies)))
+        runners.append(web.AppRunner(make_body_app(bodies, people=people)))
         await runners[1].setup()
         await web.TCPSite(runners[1], a.body_host, a.body_port).start()
     try:
@@ -49,6 +57,7 @@ def config(argv: list[str] | None = None) -> tuple[Config, argparse.Namespace]:
     p.add_argument("--body-host", default="127.0.0.1", help="where robot bodies connect (assistant_router/body.py)")
     p.add_argument("--body-port", type=int, default=0, help="0: no bodies")
     p.add_argument("--persona-file", help="who the assistant is when a body is in the room")
+    p.add_argument("--people-file", help="JSON {key: name}: the people it may recognise (people.py)")
     a = p.parse_args(argv)
     cfg = Config(a.local_url, a.local_model, a.cloud_url, a.cloud_model, a.mode, local_timeout=a.local_timeout,
                  log_dir=a.log_dir, log_days=a.log_days, log_text=not a.no_log_text)

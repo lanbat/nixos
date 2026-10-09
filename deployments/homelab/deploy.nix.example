@@ -34,6 +34,12 @@
       "Office" = "server";
       "Living Room" = "pi-storage";
     };
+    # People the assistant may recognise by voice, face or phone
+    # (docs/people.md). Names only; recognition is never authority.
+    # people = {
+    #   alex.name = "Alex";
+    #   sam.name = "Sam";
+    # };
     # Xiaomi BLE bind keys for Home Assistant, from ha-xiaomi-ble.age
     # (see secrets/README.md).
     # haXiaomiBle = true;

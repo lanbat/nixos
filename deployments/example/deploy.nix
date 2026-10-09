@@ -51,6 +51,11 @@
       "Office" = "server";
       "Living Room" = "pi-storage";
     };
+    # People the assistant may recognise (docs/people.md): names only.
+    people = {
+      alex.name = "Alex";
+      sam.name = "Sam";
+    };
     # Xiaomi BLE bind keys for Home Assistant, from ha-xiaomi-ble.age.
     haXiaomiBle = true;
     # Xiaomi BLE thermometers with a clock display, for lanbatPlugins.xiaomi-clock.
