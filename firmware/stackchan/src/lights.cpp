@@ -13,6 +13,7 @@ bool timerRinging = false;
 bool muted = false;
 bool online = true;
 bool asleep = false;
+bool lowBattery = false;
 uint32_t lastFrame = 0;
 
 struct Rgb {
@@ -47,6 +48,7 @@ void setStatus(bool m, bool o) {
   online = o;
 }
 void setAsleep(bool a) { asleep = a; }
+void setLowBattery(bool low) { lowBattery = low; }
 
 void update() {
   uint32_t now = millis();
@@ -119,6 +121,9 @@ void update() {
 
   if (asleep && !timerRinging && scene == Scene::Off) {
     for (auto& c : frame) c = {0, 0, 0};
+  }
+  if (lowBattery) {
+    frame[0] = frame[6] = scale({200, 90, 0}, breathe(now, 2000));
   }
 
   // The LEDs hang off the body's IO expander on the shared I2C bus: write

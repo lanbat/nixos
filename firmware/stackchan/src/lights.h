@@ -23,6 +23,8 @@ void setMouth(float level);  // 0..1, while Speaking
 void setTimer(float left, bool ringing);
 void setStatus(bool muted, bool online);
 void setAsleep(bool asleep);
+// A slow amber pulse on the first LED of each side: the battery is low.
+void setLowBattery(bool low);
 
 // Call from loop(): renders at about 30 fps.
 void update();

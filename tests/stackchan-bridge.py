@@ -282,18 +282,61 @@ class Router(unittest.TestCase):
     def test_presence_is_reported_on_change(self):
         b = Brain(Config(), now=NOON)
         self.assertEqual(self.router(b.on_device({"face": "new"}, NOON)),
-                         [{"state": {"present": True, "present_since_s": 0, "asleep": False}}])
+                         [{"state": {"present": True, "present_since_s": 0, "asleep": False, "battery_low": False}}])
         self.assertEqual(self.router(b.on_device({"face": "new"}, NOON + 1)), [])
         self.assertEqual(self.router(b.on_device({"face": "lost"}, NOON + 90)),
-                         [{"state": {"present": False, "present_since_s": 0, "asleep": False}}])
+                         [{"state": {"present": False, "present_since_s": 0, "asleep": False, "battery_low": False}}])
 
     def test_state_on_connect(self):
         b = Brain(Config(), now=NOON)
         b.on_device({"face": "new"}, NOON)
-        self.assertEqual(b.router_state(NOON + 125), {"present": True, "present_since_s": 125, "asleep": False})
+        self.assertEqual(b.router_state(NOON + 125), {"present": True, "present_since_s": 125, "asleep": False, "battery_low": False})
 
 
-class Envelope(unittest.TestCase):
+class Nap(unittest.TestCase):
+    """The robot naps by itself when nobody has been around (firmware)."""
+
+    def router(self, actions):
+        return [a[1] for a in actions if a[0] == "router"]
+
+    def test_the_nap_time_goes_to_the_robot(self):
+        b = Brain(Config(nap_after_s=600), now=NOON)
+        state = merged(b.on_device({"hello": {"fw": "1.0.0", "proto": 1}}, NOON))
+        self.assertEqual(state["config"]["nap_after_s"], 600)
+        self.assertEqual(Config().nap_after_s, 900)
+        self.assertEqual(Config.from_env({"NAP_AFTER_S": "0"}).nap_after_s, 0)
+
+    def test_a_nap_is_sleep_to_the_router(self):
+        b = Brain(Config(), now=NOON)
+        self.assertEqual(self.router(b.on_device({"rest": "nap"}, NOON)),
+                         [{"state": {"present": False, "present_since_s": 0, "asleep": True, "battery_low": False}}])
+        self.assertEqual(self.router(b.on_device({"rest": "nap"}, NOON + 1)), [])
+        self.assertEqual(self.router(b.on_device({"rest": "awake"}, NOON + 60)),
+                         [{"state": {"present": False, "present_since_s": 0, "asleep": False, "battery_low": False}}])
+        self.assertEqual(b.on_device({"rest": "snoring"}, NOON + 61), [])
+
+
+class Battery(unittest.TestCase):
+    def router(self, actions):
+        return [a[1] for a in actions if a[0] == "router"]
+
+    def test_a_low_battery_reaches_the_router_and_the_journal(self):
+        b = Brain(Config(), now=NOON)
+        out = b.on_device({"battery": {"level": 12, "mv": 3500, "charging": False, "low": True}}, NOON)
+        self.assertEqual(self.router(out)[0]["state"]["battery_low"], True)
+        self.assertTrue(any(a[0] == "log" and "battery" in a[1] for a in out))
+        # Only changes are passed on.
+        self.assertEqual(self.router(b.on_device({"battery": {"level": 11, "low": True}}, NOON + 30)), [])
+        out = b.on_device({"battery": {"level": 30, "charging": True, "low": False}}, NOON + 600)
+        self.assertEqual(self.router(out)[0]["state"]["battery_low"], False)
+
+    def test_a_bad_battery_line_is_ignored(self):
+        b = Brain(Config(), now=NOON)
+        self.assertEqual(b.on_device({"battery": "full"}, NOON), [])
+        self.assertEqual(b.on_device({"battery": {"low": "yes"}}, NOON), [])
+
+
+
     def test_silence_is_closed_and_speech_opens(self):
         quiet = b"\x00\x00" * 400
         loud = (b"\x00\x40" + b"\x00\xc0") * 200  # +/-16384

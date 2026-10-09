@@ -57,6 +57,7 @@ constexpr uint32_t kPiTimeoutMs = 10000;
 constexpr uint32_t kAbsenceForNoticeMs = 60000;  // gone this long, then seen: noticed
 constexpr uint32_t kFaceLostMs = 2500;
 constexpr uint32_t kDrowsyAfterMs = 5 * 60000;
+constexpr uint32_t kNapFramePeriodMs = 1000;
 
 Avatar avatar;
 bool hasCamera = false;
@@ -89,6 +90,17 @@ uint32_t lastFaceSeen = 0;
 uint32_t lastFaceFrame = 0;
 float lastFaceYaw = 0, lastFacePitch = kPitchRest;
 bool drowsy = false;
+// Nobody seen for napAfterMs (from the Pi; 0: never): a nap, dark and still,
+// with the camera slowed down. A face, a touch or the wake word ends it.
+bool napping = false;
+// The battery, read every 30 s. Low (<= kLowBatteryLevel %, not charging):
+// the servos are switched off, since a move's current surge on a weak supply
+// made the power chip cut the robot off; they come back when it charges.
+constexpr int kLowBatteryLevel = 15, kBatteryOkLevel = 25;
+bool lowBattery = false;
+uint32_t nextBatteryRead = 5000, nextBatteryReport = 0;
+int lastBatteryLevel = -100;
+uint32_t napAfterMs = 15 * 60000;
 uint32_t nextWander = 0;
 uint32_t touchDownZone = 0;
 
@@ -111,6 +123,7 @@ const Keyframe kTilt[] = {{110, 40, 400}, {110, 40, 900}, {0, 0, 400}};
 const Keyframe kDance[] = {{-200, 80, 250}, {200, 0, 250}, {-200, 80, 250}, {200, 0, 250},
                            {0, 150, 300}, {0, -60, 250}, {0, 150, 250}, {-300, 40, 350},
                            {300, 40, 450}, {0, 0, 350}};
+const Keyframe kStretch[] = {{0, 220, 600}, {0, 220, 700}, {0, 0, 500}};
 const Keyframe kLookAround[] = {{-450, 60, 700}, {-450, 60, 600}, {450, 60, 1100}, {450, 60, 600}, {0, 0, 700}};
 
 // Both eyes the same way (Avatar's own saccades move them again in a while).
@@ -194,8 +207,44 @@ void showText() {
   }
 }
 
+void startNap() {
+  napping = drowsy = true;
+  avatar.setExpression(Expression::Sleepy);
+  avatar.setIsAutoBlink(false);
+  avatar.setEyeOpenRatio(0);
+  lights::setAsleep(true);
+  vision::setFramePeriod(kNapFramePeriodMs);
+  M5.Display.setBrightness(min<int>(brightness, 10));
+  // The head stays where it is and the servos relax (the BSP releases torque
+  // at rest): a move now would draw a surge for nothing.
+  sendEvent("rest", "nap");
+}
+
+void endNap() {
+  if (!napping) return;
+  napping = drowsy = false;
+  avatar.setIsAutoBlink(true);
+  avatar.setEyeOpenRatio(1);
+  lights::setAsleep(asleep);
+  vision::setFramePeriod(150);
+  sendEvent("rest", "awake");
+  if (asleep) return;
+  M5.Display.setBrightness(brightness);
+  setMood("neutral");
+  pointHead(0, kPitchRest, 300);
+  GESTURE(kStretch);
+}
+
 void setAsleep(bool a) {
   if (a == asleep) return;
+  // Night outranks a nap: the night's sleep takes over from here.
+  if (a && napping) {
+    napping = false;
+    avatar.setIsAutoBlink(true);
+    avatar.setEyeOpenRatio(1);
+    vision::setFramePeriod(150);
+    sendEvent("rest", "awake");
+  }
   asleep = a;
   lights::setAsleep(a);
   vision::setPaused(a);
@@ -223,6 +272,7 @@ String clock(int seconds) {
 void handle(JsonDocument& doc) {
   if (doc["mood"].is<const char*>()) {
     String m = doc["mood"].as<const char*>();
+    if (napping && m != "neutral" && m != "sleepy") endNap();  // the wake word, a timer
     setMood(m);
     if (m == "listening" || m == "thinking") drowsy = false;
   }
@@ -307,6 +357,7 @@ void handle(JsonDocument& doc) {
       M5.Display.setBrightness(brightness);
     }
     if (doc["config"]["notice"].is<bool>()) noticeGuests = doc["config"]["notice"];
+    if (doc["config"]["nap_after_s"].is<int>()) napAfterMs = (uint32_t)doc["config"]["nap_after_s"].as<int>() * 1000;
   }
 }
 
@@ -341,6 +392,38 @@ void readSerial() {
   }
 }
 
+void readBattery() {
+  uint32_t now = millis();
+  if (now < nextBatteryRead) return;
+  nextBatteryRead = now + 30000;
+  int level = M5.Power.getBatteryLevel();
+  bool charging = M5.Power.isCharging() == m5::Power_Class::is_charging;
+  int mv = M5.Power.getBatteryVoltage();
+  bool low = lowBattery ? !(charging || level >= kBatteryOkLevel)
+                        : (level >= 0 && level <= kLowBatteryLevel && !charging);
+  bool changed = low != lowBattery;
+  if (changed) {
+    lowBattery = low;
+    M5StackChan.setServoPowerEnabled(!low);
+    lights::setLowBattery(low);
+    if (low) {
+      caption = "Low battery - please charge me";
+      captionUntil = now + 15000;
+      showText();
+    }
+  }
+  if (changed || abs(level - lastBatteryLevel) >= 5 || now >= nextBatteryReport) {
+    lastBatteryLevel = level;
+    nextBatteryReport = now + 300000;
+    JsonDocument doc;
+    doc["battery"]["level"] = level;
+    doc["battery"]["mv"] = mv;
+    doc["battery"]["charging"] = charging;
+    doc["battery"]["low"] = lowBattery;
+    send(doc);
+  }
+}
+
 const char* zoneName(int i) { return i == 0 ? "front" : i == 1 ? "middle" : "back"; }
 
 void readTouch() {
@@ -366,6 +449,7 @@ void readTouch() {
     setMood("happy");
     GESTURE(kNod);
   }
+  if (napping && (stroke || ts.wasPressed())) endNap();
   if (drowsy && (stroke || ts.wasPressed())) {
     drowsy = false;
     setMood("neutral");
@@ -396,6 +480,7 @@ void follow() {
     if (!faceVisible) {
       faceVisible = true;
       sendEvent("face", "new");
+      endNap();
       if (drowsy) {
         drowsy = false;
         setMood("neutral");
@@ -424,7 +509,11 @@ void follow() {
 
 void wander() {
   uint32_t now = millis();
-  if (asleep || look != "track" || faceVisible || gesture || mood != "neutral") return;
+  if (asleep || napping || look != "track" || faceVisible || gesture || mood != "neutral") return;
+  if (napAfterMs && now - lastFaceSeen > napAfterMs) {
+    startNap();
+    return;
+  }
   if (!drowsy && now - lastFaceSeen > kDrowsyAfterMs) {  // since boot, if nobody yet
     // Nobody for a while: it dozes, head down, until someone shows up.
     drowsy = true;
@@ -487,6 +576,7 @@ void loop() {
   M5StackChan.update();  // touch sensor (and M5.update)
   readSerial();
   readTouch();
+  readBattery();
   follow();
   wander();
   runGesture();
