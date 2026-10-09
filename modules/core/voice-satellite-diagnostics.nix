@@ -34,6 +34,7 @@ let
   units = lib.escapeShellArgs (
     [ unit ]
     ++ lib.optional (config.systemd.services ? lva-snapcast-duck) "lva-snapcast-duck"
+    ++ lib.optional (config.systemd.services ? lva-stackchan) "lva-stackchan"
     ++ lib.optional (config.systemd.services ? snapclient) "snapclient"
     ++ lib.optionals usesPipewire [
       "pipewire"

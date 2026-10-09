@@ -161,6 +161,7 @@
         media-feed-bridge = import ./tests/media-feed-bridge.nix { inherit pkgs; };
         pkgs-build = import ./tests/pkgs-build.nix { inherit pkgs; };
         ha-dashboards = import ./tests/ha-dashboards.nix { inherit pkgs; };
+        stackchan-bridge = import ./tests/stackchan-bridge.nix { inherit pkgs; };
         plugins = import ./tests/plugins.nix { inherit lib pkgs; };
         endpoints-table = import ./tests/endpoints-table.nix { inherit lib pkgs; };
         backup-server = import ./tests/backup-server.nix { inherit pkgs; };

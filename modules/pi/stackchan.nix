@@ -1,0 +1,166 @@
+# modules/pi/stackchan.nix
+#
+# A Stack-chan robot (M5Stack's StackChan kit: a CoreS3 with two servos, a
+# camera, head touch and LEDs) as the face of this host's voice satellite,
+# plugged in over USB. The Pi keeps the voice (wake word, microphone,
+# speaker); the robot shows it: listening, thinking, a mouth that follows the
+# reply, captions, timers, and it looks at the people it sees. A tap on its
+# head starts a conversation. See docs/stackchan.md.
+#
+# The robot runs firmware/stackchan; pkgs/lva-stackchan follows LVA's
+# peripheral WebSocket on the loopback and drives it. Nothing leaves the host:
+# the camera is processed on the robot and no picture is ever sent.
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
+
+let
+  inherit (lib) mkOption types;
+  cfg = config.lanbat.stackchan;
+  satellite = config.lanbat.voiceSatellite;
+  bridge = pkgs.callPackage ../../pkgs/lva-stackchan { };
+  flag = b: if b then "1" else "0";
+  hhmm = types.strMatching "([01][0-9]|2[0-3]):[0-5][0-9]";
+in
+{
+  options.lanbat.stackchan = {
+    enable = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Drive a Stack-chan robot from the voice satellite (on by default where the plugin is enabled).";
+    };
+    usbSerial = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "F4:12:FA:00:00:00";
+      description = ''
+        The robot's USB serial number (`udevadm info /dev/ttyACM0 | grep ID_SERIAL_SHORT`).
+        Null matches any ESP32-S3 on its built-in USB port (303a:1001), which is
+        enough unless another ESP32-S3 board is plugged in.
+      '';
+    };
+    captions = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Show what was said and the reply on the robot's screen.";
+    };
+    touchToTalk = mkOption {
+      type = types.bool;
+      default = true;
+      description = "A tap on the robot's head starts a conversation, or stops one.";
+    };
+    noticeGuests = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Look at, and nod to, a face that appears after nobody was around (camera, processed on the robot).";
+    };
+    nightHours = {
+      start = mkOption {
+        type = types.nullOr hhmm;
+        default = "23:00";
+        description = "When the robot goes to sleep (dimmed and still); null keeps it awake.";
+      };
+      end = mkOption {
+        type = types.nullOr hhmm;
+        default = "07:00";
+        description = "When it wakes up.";
+      };
+    };
+    brightness = mkOption {
+      type = types.ints.between 0 255;
+      default = 180;
+      description = "Screen brightness by day.";
+    };
+    nightBrightness = mkOption {
+      type = types.ints.between 0 255;
+      default = 10;
+      description = "Screen brightness while asleep.";
+    };
+    sadWords = mkOption {
+      type = types.nullOr (types.listOf types.str);
+      default = null;
+      example = [
+        "sorry"
+        "leider"
+      ];
+      description = ''
+        Words that make a reply sad rather than happy. Null keeps the bridge's
+        English list (pkgs/lva-stackchan); set it for another language.
+      '';
+    };
+  };
+
+  config = lib.mkIf (cfg.enable && satellite.enable) {
+    assertions = [
+      {
+        assertion = satellite.backend == "lva";
+        message = "lanbat.stackchan follows Linux Voice Assistant's events: set lanbat.voiceSatellite.backend = \"lva\" (docs/stackchan.md), or disable the stackchan plugin.";
+      }
+    ];
+
+    lanbat.voiceSatellite.lva.peripheralApiUsers = [ "lva-stackchan" ];
+
+    services.udev.extraRules = ''
+      SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", ${
+        lib.optionalString (cfg.usbSerial != null) ''ENV{ID_SERIAL_SHORT}=="${cfg.usbSerial}", ''
+      }SYMLINK+="stackchan", GROUP="dialout", MODE="0660"
+    '';
+
+    systemd.services.lva-stackchan = {
+      description = "Stack-chan: the face of the voice satellite";
+      after = [
+        "linux-voice-assistant.service"
+        "pipewire.service"
+      ];
+      wants = [ "linux-voice-assistant.service" ];
+      partOf = [ "linux-voice-assistant.service" ];
+      # Stopped with LVA (partOf) and started with it again. The robot may be
+      # plugged in later: the bridge waits for it.
+      wantedBy = [
+        "multi-user.target"
+        "linux-voice-assistant.service"
+      ];
+      environment = {
+        LVA_PERIPHERAL_URL = "ws://127.0.0.1:${toString satellite.lva.peripheralPort}";
+        STACKCHAN_DEVICE = "/dev/stackchan";
+        PIPEWIRE_RUNTIME_DIR = "/run/pipewire";
+        CAPTIONS = flag cfg.captions;
+        TOUCH_TO_TALK = flag cfg.touchToTalk;
+        NOTICE_GUESTS = flag cfg.noticeGuests;
+        NIGHT_START = if cfg.nightHours.start == null then "" else cfg.nightHours.start;
+        NIGHT_END = if cfg.nightHours.end == null then "" else cfg.nightHours.end;
+        BRIGHTNESS = toString cfg.brightness;
+        NIGHT_BRIGHTNESS = toString cfg.nightBrightness;
+      }
+      // lib.optionalAttrs (cfg.sadWords != null) {
+        SAD_WORDS = lib.concatStringsSep "," cfg.sadWords;
+      };
+      serviceConfig = {
+        ExecStart = lib.getExe bridge;
+        DynamicUser = true;
+        # The robot's tty, and the speaker's monitor for the mouth.
+        SupplementaryGroups = [
+          "dialout"
+          "pipewire"
+        ];
+        Restart = "on-failure";
+        RestartSec = "5s";
+        # Small next to the satellite, and never in its way on a Pi 3.
+        Nice = 5;
+        MemoryMax = "96M";
+        IPAddressDeny = "any";
+        IPAddressAllow = "localhost";
+        RestrictAddressFamilies = [
+          "AF_INET"
+          "AF_INET6"
+          "AF_UNIX"
+        ];
+        ProtectHome = true;
+        ProtectSystem = "strict";
+      };
+    };
+  };
+}
