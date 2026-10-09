@@ -23,6 +23,25 @@ let
   satellite = config.lanbat.voiceSatellite;
   bridge = pkgs.callPackage ../../pkgs/lva-stackchan { };
   flag = b: if b then "1" else "0";
+  endpointLib = import ../../lib/endpoints.nix { inherit lib; };
+
+  # The assistant router, when the profile runs it and this satellite has a
+  # room: the robot tells it what it sees and gets moods, gestures and body
+  # commands back (pkgs/assistant-router body.py).
+  # From deploy data, not the endpoint table: this decides `consumes`, which
+  # that table is built from.
+  hostLib = import ../../lib/host.nix { inherit lib; };
+  routerHere =
+    cfg.router
+    && satellite.room != null
+    && hostLib.haLlmIsRouter (config.lanbat.deployment.haLlm or null);
+  routerHost = endpointLib.soleHost {
+    endpoints = config.lanbat.endpoints;
+    name = "assistant-router";
+    consumer = "lva-stackchan on ${config.lanbat.hostKey}";
+  };
+  routerAddress = config.lanbat.endpointHost "assistant-router" routerHost;
+  routerUrl = "ws://${routerAddress}:${toString config.lanbat.endpoints.assistant-router.endpoint.port}/v1/body";
   hhmm = types.strMatching "([01][0-9]|2[0-3]):[0-5][0-9]";
 in
 {
@@ -40,6 +59,17 @@ in
         The robot's USB serial number (`udevadm info /dev/ttyACM0 | grep ID_SERIAL_SHORT`).
         Null matches any ESP32-S3 on its built-in USB port (303a:1001), which is
         enough unless another ESP32-S3 board is plugged in.
+      '';
+    };
+    router = mkOption {
+      type = types.bool;
+      default = true;
+      description = ''
+        Connect to the assistant router (services/assistant-router.nix), when
+        the profile runs it and the satellite has a room: the assistant then
+        knows it has a body and whether someone is in front of it, picks the
+        robot's mood and gestures per reply, and obeys "nod", "dance", "go to
+        sleep".
       '';
     };
     captions = mkOption {
@@ -102,6 +132,7 @@ in
     ];
 
     lanbat.voiceSatellite.lva.peripheralApiUsers = [ "lva-stackchan" ];
+    lanbat.services.stackchan.consumes = lib.optional routerHere "assistant-router";
 
     services.udev.extraRules = ''
       SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", ATTRS{idProduct}=="1001", ${
@@ -135,6 +166,10 @@ in
         BRIGHTNESS = toString cfg.brightness;
         NIGHT_BRIGHTNESS = toString cfg.nightBrightness;
       }
+      // lib.optionalAttrs routerHere {
+        ROUTER_BODY_URL = routerUrl;
+        ROOM = satellite.room;
+      }
       // lib.optionalAttrs (cfg.sadWords != null) {
         SAD_WORDS = lib.concatStringsSep "," cfg.sadWords;
       };
@@ -152,7 +187,7 @@ in
         Nice = 5;
         MemoryMax = "96M";
         IPAddressDeny = "any";
-        IPAddressAllow = "localhost";
+        IPAddressAllow = [ "localhost" ] ++ lib.optional routerHere routerAddress;
         RestrictAddressFamilies = [
           "AF_INET"
           "AF_INET6"

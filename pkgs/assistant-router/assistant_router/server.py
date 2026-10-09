@@ -19,7 +19,8 @@ from dataclasses import dataclass
 import aiohttp
 from aiohttp import web
 
-from . import actions, gate as gate_mod, honesty, triage
+from . import actions, body as body_mod, gate as gate_mod, honesty, triage
+from .body import Bodies
 from .context import Context, parse_context
 from .state import State
 
@@ -99,8 +100,10 @@ def _allowed(calls: list[dict], ctx: Context | None) -> bool:
     return True
 
 
-def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> web.Application:
+def make_app(cfg: Config, state: State | None = None, clock=time.monotonic,
+             bodies: Bodies | None = None) -> web.Application:
     state = state or State()
+    bodies = bodies or Bodies("")
     log_day = {"v": ""}
 
     def log(entry: dict) -> None:
@@ -119,11 +122,17 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> w
         with open(os.path.join(cfg.log_dir, f"requests-{today.isoformat()}.jsonl"), "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
 
-    async def cloud(session: aiohttp.ClientSession, body: dict) -> dict | None:
+    async def cloud(session: aiohttp.ClientSession, body: dict, room: str = "") -> dict | None:
         # Home Assistant always sends temperature and top_p; current Claude
         # models refuse both together, so the provider's defaults apply.
         out = {k: v for k, v in body.items() if k not in ("temperature", "top_p", "user")}
         out["model"] = cfg.cloud_model
+        # A body in the room: its persona and what it senses go after Home
+        # Assistant's block, so the start of the prompt stays the same.
+        block = bodies.prompt_block(room, clock())
+        msgs = out.get("messages") or []
+        if block and msgs and msgs[0].get("role") == "system":
+            out["messages"] = [dict(msgs[0], content=(msgs[0].get("content") or "") + "\n" + block)] + msgs[1:]
         try:
             async with session.post(cfg.cloud_url, json=out,
                                     timeout=aiohttp.ClientTimeout(total=cfg.cloud_timeout)) as r:
@@ -138,14 +147,20 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> w
         state.remember_reply(device, said, clock())
         return _reply(said)
 
-    def from_cloud(device: str, ctx: Context | None, data: dict | None, tool_results: list[str]) -> dict:
+    async def from_cloud(device: str, ctx: Context | None, data: dict | None, tool_results: list[str]) -> dict:
         if data is None:
             return finish(device, CLOUD_DOWN, tool_results)
         msg = data["choices"][0]["message"]
         calls = msg.get("tool_calls")
         if calls:
             return _tool_reply(calls) if _allowed(calls, ctx) else finish(device, REFUSED, tool_results)
-        return finish(device, msg.get("content") or "", tool_results)
+        text = msg.get("content") or ""
+        room = ctx.room if ctx else ""
+        if bodies.has(room):
+            mood, gesture, text = body_mod.split_tag(text)
+            act = {k: v for k, v in (("mood", mood), ("gesture", gesture)) if v}
+            await bodies.act(room, act)
+        return finish(device, text, tool_results)
 
     async def completions(request: web.Request) -> web.Response:
         body = await request.json()
@@ -165,10 +180,24 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> w
             call_ids = [m.get("tool_call_id") or "" for m in rounds if m.get("role") == "tool"]
             t = state.take_pending(call_ids, now)
             if t is not None:
-                said = actions.done_phrase(t) if "Success" in tool_results else "That didn't work."
+                ok = "Success" in tool_results
+                said = actions.done_phrase(t) if ok else "That didn't work."
+                if ok and ctx:
+                    await bodies.act(ctx.room, {"mood": "happy", "gesture": "nod"})
                 log({"conv": conv, "tier": "local", "round": "result", "results": tool_results})
                 return web.json_response(finish(device, said, tool_results))
-            return web.json_response(from_cloud(device, ctx, await cloud(session, body), tool_results))
+            return web.json_response(await from_cloud(
+                device, ctx, await cloud(session, body, ctx.room if ctx else ""), tool_results))
+
+        # A command to the room's body ("nod", "dance", "go to sleep") is
+        # answered here, before the gate: "Nod." alone is a fragment to it.
+        room = ctx.room if ctx else ""
+        cmd = body_mod.command(text) if bodies.has(room) else None
+        if cmd is not None:
+            await bodies.act(room, cmd[0])
+            log({"conv": conv, "device": device, "room": room, "text": text, "tier": "body", "route": "command",
+                 "ms": int((time.monotonic() - started) * 1000)})
+            return web.json_response(finish(device, cmd[1], []))
 
         verdict = gate_mod.gate(text, state.last_reply(device, now)) if ctx else "escalate"
         tier, route = "gate", verdict
@@ -193,7 +222,7 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> w
                 resp = finish(device, OFFLINE, [])
             else:
                 tier, route = "cloud", "escalate"
-                resp = from_cloud(device, ctx, await cloud(session, body), [])
+                resp = await from_cloud(device, ctx, await cloud(session, body, room), [])
         log({"conv": conv, "device": device, "room": ctx.room if ctx else "", "text": text,
              "tier": tier, "route": route, "ms": int((time.monotonic() - started) * 1000)})
         return web.json_response(resp)
@@ -212,4 +241,42 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic) -> w
     app.router.add_get("/healthz", healthz)
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
+    return app
+
+
+def make_body_app(bodies: Bodies, clock=time.monotonic) -> web.Application:
+    """The bodies' side (assistant_router/body.py): one WebSocket each, on its
+    own listener, so the LAN reaches this and not the agent's endpoint."""
+
+    async def socket(request: web.Request) -> web.WebSocketResponse:
+        ws = web.WebSocketResponse(heartbeat=20)
+        await ws.prepare(request)
+        room = ""
+        try:
+            async for msg in ws:
+                if msg.type != aiohttp.WSMsgType.TEXT:
+                    continue
+                try:
+                    data = json.loads(msg.data)
+                except ValueError:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                hello = data.get("hello")
+                if isinstance(hello, dict) and isinstance(hello.get("room"), str) and hello["room"].strip():
+                    if room:
+                        bodies.disconnect(room, ws)
+                    room = hello["room"].strip()[:64]
+                    bodies.connect(room, ws)
+                    LOG.info(json.dumps({"body": "connected", "room": room, "kind": str(hello.get("kind", ""))[:32]}))
+                elif room and isinstance(data.get("state"), dict):
+                    bodies.update(room, data["state"], clock())
+        finally:
+            if room:
+                bodies.disconnect(room, ws)
+                LOG.info(json.dumps({"body": "gone", "room": room}))
+        return ws
+
+    app = web.Application()
+    app.router.add_get("/v1/body", socket)
     return app

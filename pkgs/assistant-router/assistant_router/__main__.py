@@ -1,15 +1,38 @@
-"""assistant-router --port 8092 --local-url ... --cloud-url ... --mode local-first"""
+"""assistant-router --port 8092 --local-url ... --cloud-url ... --mode local-first
+                 [--body-port 8770 --body-host 0.0.0.0 --persona-file persona.txt]"""
 from __future__ import annotations
 
 import argparse
+import asyncio
 import logging
 
 from aiohttp import web
 
-from .server import Config, make_app
+from .body import Bodies
+from .server import Config, make_app, make_body_app
 
 
-def main() -> None:
+async def serve(cfg: Config, a: argparse.Namespace) -> None:
+    persona = ""
+    if a.persona_file:
+        with open(a.persona_file, encoding="utf-8") as f:
+            persona = f.read()
+    bodies = Bodies(persona)
+    runners = [web.AppRunner(make_app(cfg, bodies=bodies))]
+    await runners[0].setup()
+    await web.TCPSite(runners[0], a.host, a.port).start()
+    if a.body_port:
+        runners.append(web.AppRunner(make_body_app(bodies)))
+        await runners[1].setup()
+        await web.TCPSite(runners[1], a.body_host, a.body_port).start()
+    try:
+        await asyncio.Event().wait()
+    finally:
+        for runner in runners:
+            await runner.cleanup()
+
+
+def config(argv: list[str] | None = None) -> tuple[Config, argparse.Namespace]:
     p = argparse.ArgumentParser(prog="assistant-router")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8092)
@@ -23,11 +46,19 @@ def main() -> None:
     p.add_argument("--log-dir")
     p.add_argument("--log-days", type=int, default=14)
     p.add_argument("--no-log-text", action="store_true", help="log tier, route and timing, not what was said")
-    a = p.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    p.add_argument("--body-host", default="127.0.0.1", help="where robot bodies connect (assistant_router/body.py)")
+    p.add_argument("--body-port", type=int, default=0, help="0: no bodies")
+    p.add_argument("--persona-file", help="who the assistant is when a body is in the room")
+    a = p.parse_args(argv)
     cfg = Config(a.local_url, a.local_model, a.cloud_url, a.cloud_model, a.mode, local_timeout=a.local_timeout,
                  log_dir=a.log_dir, log_days=a.log_days, log_text=not a.no_log_text)
-    web.run_app(make_app(cfg), host=a.host, port=a.port, print=None)
+    return cfg, a
+
+
+def main() -> None:
+    cfg, a = config()
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    asyncio.run(serve(cfg, a))
 
 
 if __name__ == "__main__":
