@@ -127,6 +127,9 @@ let
   # An LLM on this host's loopback (services/llama-cpp.nix) needs no API key,
   # and no keepalive to hold off a scale-to-zero cold start.
   llmLocal = (import ../lib/host.nix { inherit lib; }).haLlmIsLocal llm;
+  # The agent behind the assistant router (services/assistant-router.nix) gets
+  # the router's context block as its prompt, and tools.
+  llmRouter = (import ../lib/host.nix { inherit lib; }).haLlmIsRouter llm;
   llmKey = llm != null && (llm.apiKey or (!llmLocal));
   # Where the heavy voice work runs (lib/voice-compute.nix).
   voiceCompute = (import ../lib/voice-compute.nix { inherit lib; }).forConfig config;
@@ -1372,6 +1375,16 @@ in
     # The loopback is this host's own: an LLM there is a service on this host.
     assertions = [
       {
+        # A host that names its services gets only those; the agent would
+        # talk to a closed port.
+        assertion =
+          !llmRouter
+          || (config.lanbat.hasService "assistant-router" && config.lanbat.hasService "llm-gateway");
+        message =
+          "lanbat: lanbat.deployment.haLlm points at the assistant router, but this host's services"
+          + " don't include assistant-router and llm-gateway; add both to hosts.<key>.services.";
+      }
+      {
         assertion = !llmLocal || config.lanbat.hasService "llama-cpp";
         message = "lanbat: lanbat.deployment.haLlm.baseUrl is on the loopback (${
           if llm == null then "" else llm.baseUrl
@@ -1588,8 +1601,9 @@ in
           ${lib.optionalString llmKey ''
             export LLM_API_KEY_FILE="${config.lanbat.secrets.ha-llm-api-key.path}"
           ''}
-          export LLM_MAX_TOKENS="${toString voiceCompute.llmMaxTokens}"
-          export LLM_USE_TOOLS="false"
+          export LLM_MAX_TOKENS="${toString (if llmRouter then 300 else voiceCompute.llmMaxTokens)}"
+          export LLM_USE_TOOLS="${if llmRouter then "true" else "false"}"
+          export LLM_ROUTER="${if llmRouter then "1" else "0"}"
         ''}
         ${lib.optionalString voiceRooms ''
           export VOICE_TOKEN_RECORD_FILE="${config.lanbat.secrets.ha-voice-refresh-token.path}"

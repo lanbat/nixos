@@ -23,6 +23,7 @@ let
   lvaKodiCompanion = pkgs.callPackage ../pkgs/lva-kodi-companion { };
   haDashboards = pkgs.callPackage ../pkgs/home-assistant-dashboards { };
   voiceId = pkgs.callPackage ../pkgs/voice-id { };
+  assistantRouter = pkgs.callPackage ../pkgs/assistant-router { };
 in
 pkgs.runCommand "pkgs-build-smoke"
   {
@@ -41,6 +42,7 @@ pkgs.runCommand "pkgs-build-smoke"
       lvaKodiCompanion
       haDashboards
       voiceId
+      assistantRouter
     ];
   }
   ''
@@ -65,5 +67,6 @@ pkgs.runCommand "pkgs-build-smoke"
     command -v lva-kodi-companion
     home-assistant-dashboards --help >/dev/null
     voice-id --help >/dev/null
+    assistant-router --help >/dev/null
     touch $out
   ''

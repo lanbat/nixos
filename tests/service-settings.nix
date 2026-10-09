@@ -261,6 +261,48 @@ let
       ];
       pi-voice = [ { lanbat.voiceSatellite.backend = "lva"; } ];
     })).configurations.example-pi-storage.config;
+  # A server whose Home Assistant agent talks to the assistant router.
+  routerServer = serverWith [
+    {
+      lanbat.deployment.haLlm = lib.mkForce {
+        baseUrl = "http://127.0.0.1:8092/v1";
+        model = "assistant";
+      };
+      lanbat.services.llama-cpp.settings.model = "qwen3-4b";
+      lanbat.services.llm-gateway.settings.models.smart = [
+        {
+          model = "gemini/gemini-3.5-flash";
+          params.reasoning_effort = "none";
+        }
+        { model = "gemini/gemini-3.1-flash-lite"; }
+      ];
+    }
+  ];
+  # The router configured on a server that lists its services without it.
+  routerUnlisted =
+    (lanbatLib.mkProfile "example" (
+      exampleDeploy
+      // {
+        hosts = exampleDeploy.hosts // {
+          server = exampleDeploy.hosts.server // {
+            services = [
+              "home-assistant"
+              "llama-cpp"
+              "postgresql"
+              "wyoming"
+            ];
+            modules = (exampleDeploy.hosts.server.modules or [ ]) ++ [
+              {
+                lanbat.deployment.haLlm = lib.mkForce {
+                  baseUrl = "http://127.0.0.1:8092/v1";
+                  model = "assistant";
+                };
+              }
+            ];
+          };
+        };
+      }
+    )).configurations.example-server.config;
   # The TV box with its shows in another directory.
   tvShowsElsewhere =
     (lanbatLib.mkProfile "example" (hostsWithModules {
@@ -819,6 +861,73 @@ let
       && lib.hasInfix ''<cleanstrings action="append">'' (
         builtins.readFile ../pkgs/kodi-tv-config/advancedsettings.xml
       )
+    ))
+
+    (expect "router: HA's agent behind the router starts it, llama.cpp and the gateway" (
+      routerServer.systemd.services ? assistant-router
+      && routerServer.systemd.services ? llm-gateway
+      && routerServer.services.llama-cpp.enable
+      && routerServer.services.litellm.enable
+      && lib.hasInfix "--local-model qwen3-4b" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+      && lib.hasInfix "--mode local-first" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+      && routerServer.lanbat.services.llm-gateway.secrets ? llm-gateway-env
+      # LiteLLM runs as a dynamic user; systemd reads the EnvironmentFile as root.
+      && routerServer.lanbat.services.llm-gateway.secrets.llm-gateway-env.owner == "root"
+      && failedAssertions routerServer == [ ]
+    ))
+
+    (expect "router: Home Assistant's agent prompt is the router's context block, with tools" (
+      lib.hasInfix ''export LLM_ROUTER="1"'' (postSetup routerServer)
+      && lib.hasInfix ''export LLM_USE_TOOLS="true"'' (postSetup routerServer)
+      && !(lib.hasInfix ''export LLM_ROUTER="1"'' (postSetup base))
+      && lib.hasInfix "LANBAT-CONTEXT v1" (
+        builtins.readFile ../pkgs/home-assistant-post-setup/setup-ha.sh
+      )
+      && lib.hasInfix "name: media_control" (
+        builtins.readFile ../pkgs/home-assistant-post-setup/setup-ha.sh
+      )
+    ))
+
+    (expect "router: a host that lists its services must list the router and the gateway" (
+      lib.any (lib.hasInfix "assistant-router") (failedAssertions routerUnlisted)
+    ))
+
+    (expect "router: the request log rotates and keeps two weeks" (
+      lib.hasInfix "--log-dir /var/lib/assistant-router" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+      && lib.hasInfix "--log-days 14" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+    ))
+
+    (expect "router: gateway models take extra LiteLLM parameters and fall back in order" (
+      let
+        litellm = routerServer.services.litellm.settings;
+        smart = lib.findFirst (m: m.model_name == "smart") null litellm.model_list;
+      in
+      smart.litellm_params == {
+        model = "gemini/gemini-3.5-flash";
+        reasoning_effort = "none";
+      }
+      && lib.elem { smart = [ "smart-fallback-1" ]; } litellm.router_settings.fallbacks
+      # A model out of quota (429) is passed over at once, not retried, and
+      # left alone for ten minutes.
+      && litellm.router_settings.num_retries == 0
+      && litellm.router_settings.allowed_fails == 0
+      && litellm.router_settings.cooldown_time == 600
+    ))
+
+    # Behind the router the local model is on the voice path: it gets the CPU
+    # ahead of Frigate and Jellyfin, and a busy server hands over to the cloud
+    # after 2.5 s instead of 4.
+    (expect "router: the local model has priority and a short time limit" (
+      routerServer.systemd.services.llama-cpp.serviceConfig.CPUWeight == 200
+      && routerServer.systemd.services.llama-cpp.serviceConfig.Nice == -5
+      && base.systemd.services.llama-cpp.serviceConfig.CPUWeight or 50 == 50
+      && lib.hasInfix "--local-timeout 2.5" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+    ))
+
+    (expect "router: a server without it runs as before" (
+      !(base.systemd.services ? assistant-router)
+      && !(base.systemd.services ? llm-gateway)
+      && !(base.services.litellm.enable or false)
     ))
 
     (expect "tv: the companion rewinds a film it paused for a question" (

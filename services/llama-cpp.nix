@@ -74,6 +74,7 @@ let
   # Read with `or` because a host assembled without the settings module, as
   # the pure-eval tests do, has no deployment to ask.
   enabled = hostLib.haLlmIsLocal (config.lanbat.deployment.haLlm or null);
+  behindRouter = hostLib.haLlmIsRouter (config.lanbat.deployment.haLlm or null);
 
   cfg = config.lanbat.services.llama-cpp.settings;
 
@@ -162,7 +163,11 @@ in
     (lib.mkIf enabled {
       assertions = [
         {
-          assertion = config.lanbat.deployment.haLlm.model == cfg.model;
+          # Behind the router, Home Assistant asks for "assistant" and the
+          # router asks llama.cpp for this model by name.
+          assertion =
+            hostLib.haLlmIsRouter config.lanbat.deployment.haLlm
+            || config.lanbat.deployment.haLlm.model == cfg.model;
           message =
             "lanbat: lanbat.deployment.haLlm.model is \"${config.lanbat.deployment.haLlm.model}\", but the llama-cpp"
             + " service serves \"${cfg.model}\" (lanbat.services.llama-cpp.settings.model); set both to the same name.";
@@ -205,8 +210,11 @@ in
       };
 
       systemd.services.llama-cpp.serviceConfig = {
-        Nice = 5;
-        CPUWeight = 50;
+        # Called by Home Assistant's agent, the model waits its turn behind
+        # Frigate and the rest. Behind the assistant router it is on the voice
+        # path, where a slow answer is worse: there it goes first.
+        Nice = if behindRouter then -5 else 5;
+        CPUWeight = if behindRouter then 200 else 50;
         CPUQuota = "400%";
         MemoryMax = model.memoryMax;
         MemorySwapMax = 0;

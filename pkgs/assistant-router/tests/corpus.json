@@ -1,0 +1,430 @@
+[
+  {
+    "text": "What time is it?",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play something by Madonna.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Turn off the office light.",
+    "expect": "act"
+  },
+  {
+    "text": "Stop.",
+    "expect": "act"
+  },
+  {
+    "text": "Turn off the bathroom light.",
+    "expect": "act"
+  },
+  {
+    "text": "Thank you.",
+    "expect": "reject"
+  },
+  {
+    "text": "Play Frozen by Madonna",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play Jazz Radio.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Who is that actor?",
+    "expect": "escalate"
+  },
+  {
+    "text": "Whenever a neutrino interacts with one of the billions of ideals, that interaction is big.  Stop.",
+    "expect": "reject"
+  },
+  {
+    "text": "What time is it?  What time is it?",
+    "expect": "escalate"
+  },
+  {
+    "text": "What time is it?  Okay, that's okay.  Okay, that's okay.  Okay, that's okay.",
+    "expect": "reject"
+  },
+  {
+    "text": "What are you playing?",
+    "expect": "escalate"
+  },
+  {
+    "text": "What?",
+    "expect": "reject"
+  },
+  {
+    "text": "volume up to 40%",
+    "expect": "act"
+  },
+  {
+    "text": "volume up",
+    "expect": "act"
+  },
+  {
+    "text": "volume to 10% please",
+    "expect": "act"
+  },
+  {
+    "text": "volume to 100%",
+    "expect": "act"
+  },
+  {
+    "text": "volume down to 10%",
+    "expect": "act"
+  },
+  {
+    "text": "Turn the volume up",
+    "expect": "act"
+  },
+  {
+    "text": "Turn the volume down by another 20%.",
+    "expect": "act"
+  },
+  {
+    "text": "Turn the volume down by 20%.",
+    "expect": "act"
+  },
+  {
+    "text": "Turn on the office light.",
+    "expect": "act"
+  },
+  {
+    "text": "Turn on office light.",
+    "expect": "act"
+  },
+  {
+    "text": "Turn on, bye.",
+    "expect": "reject"
+  },
+  {
+    "text": "Turn on bedroom or sunlight.",
+    "expect": "act"
+  },
+  {
+    "text": "Turn off the radio.",
+    "expect": "act"
+  },
+  {
+    "text": "Turn off the hallway light.",
+    "expect": "act"
+  },
+  {
+    "text": "turn off the bathroom light",
+    "expect": "act"
+  },
+  {
+    "text": "Turn off of this light.",
+    "expect": "clarify"
+  },
+  {
+    "text": "Turn off, off is light.",
+    "expect": "reject"
+  },
+  {
+    "text": "Turn off Bedroom 2 Light",
+    "expect": "act"
+  },
+  {
+    "text": "turn off bathroom light",
+    "expect": "act"
+  },
+  {
+    "text": "Turn off all lights right.",
+    "expect": "act"
+  },
+  {
+    "text": "turn off all lights",
+    "expect": "act"
+  },
+  {
+    "text": "Turn off.",
+    "expect": "clarify"
+  },
+  {
+    "text": "Turn.",
+    "expect": "reject"
+  },
+  {
+    "text": "to melt the bathroom light.",
+    "expect": "reject"
+  },
+  {
+    "text": "the lights are being turned off.",
+    "expect": "reject"
+  },
+  {
+    "text": "that we can even hold out of it.",
+    "expect": "reject"
+  },
+  {
+    "text": "Tell me something interesting about octopuses.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Tell me something about Lisbon Portugal.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Tell me another joke.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Tell me a joke.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Stop whatever you're playing.",
+    "expect": "act"
+  },
+  {
+    "text": "Stop the stream you're playing.",
+    "expect": "act"
+  },
+  {
+    "text": "Stop the radio.",
+    "expect": "act"
+  },
+  {
+    "text": "Stop!  Stop!",
+    "expect": "act"
+  },
+  {
+    "text": "Stop playing.  Stop playing.  Stop playing.  I can't help it.",
+    "expect": "reject"
+  },
+  {
+    "text": "Stop playing.",
+    "expect": "act"
+  },
+  {
+    "text": "Stop.  Okay, now, boom.  Turn the player off.  Turn the player off.",
+    "expect": "reject"
+  },
+  {
+    "text": "Stop Curry, stay back, please.  So, maybe you can't be able to eat some of that.",
+    "expect": "reject"
+  },
+  {
+    "text": "Set the Remind for 730",
+    "expect": "escalate"
+  },
+  {
+    "text": "Set them alive for 7.30.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Say something by Madonna.",
+    "expect": "reject"
+  },
+  {
+    "text": "reported a drone, stop the music, it's not yet clear if that is a new strike or  referencing an earlier one. Some bridges are part of a major increase in Russian  attack. Okay, now, let's see.",
+    "expect": "reject"
+  },
+  {
+    "text": "Please stop.",
+    "expect": "act"
+  },
+  {
+    "text": "please do your research and tell me what's playing",
+    "expect": "escalate"
+  },
+  {
+    "text": "please",
+    "expect": "reject"
+  },
+  {
+    "text": "Play the song, Ray of Light.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play the latest .net diaries podcast.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play the Dark Net Diary podcast.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play Take a Bow by Madonna",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play Song by Madonna",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play random song by Madonna.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play Papadont Fridge by Madonna",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play La Isla Bonita by Madonna",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play Kylie Minneauk",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play Issa by Madonna",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play Frozen by Madonna.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play especially for you by Kylie Minogue.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play Jaz Radio.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play a song by Madonna",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play A Song by Kylie Minogue",
+    "expect": "escalate"
+  },
+  {
+    "text": "Play.",
+    "expect": "reject"
+  },
+  {
+    "text": "Pause the video",
+    "expect": "act"
+  },
+  {
+    "text": "Pause the player please.  What do you need?",
+    "expect": "reject"
+  },
+  {
+    "text": "Pause.",
+    "expect": "act"
+  },
+  {
+    "text": "Okay.  Okay.  Okay.",
+    "expect": "reject"
+  },
+  {
+    "text": "Okay.  Okay, level.",
+    "expect": "reject"
+  },
+  {
+    "text": "Okay, it's on done.",
+    "expect": "reject"
+  },
+  {
+    "text": "Now, take the volume up to 30% please.",
+    "expect": "act"
+  },
+  {
+    "text": "No, because you're knocked on my nerves.  That's what I taught you.  You know the happy eyes.",
+    "expect": "reject"
+  },
+  {
+    "text": "No.",
+    "expect": "reject"
+  },
+  {
+    "text": "next",
+    "expect": "act"
+  },
+  {
+    "text": "Madonna, the singer.",
+    "expect": "escalate"
+  },
+  {
+    "text": "Louder.  Okay, Naboo.  Louder.",
+    "expect": "act"
+  },
+  {
+    "text": "Lay up our mark.",
+    "expect": "reject"
+  },
+  {
+    "text": "Just stop the playback.",
+    "expect": "act"
+  },
+  {
+    "text": "I will be dead.",
+    "expect": "reject"
+  },
+  {
+    "text": "I still continue to pause, please, in the comments.",
+    "expect": "reject"
+  },
+  {
+    "text": "Increase the volume to 70%.",
+    "expect": "act"
+  },
+  {
+    "text": "Increase the volume by 30%.",
+    "expect": "act"
+  },
+  {
+    "text": "I can't play and stop the radios.  Let me know if you need anything else.",
+    "expect": "reject"
+  },
+  {
+    "text": "How are you today?",
+    "expect": "escalate"
+  },
+  {
+    "text": "Hello.  Hello.",
+    "expect": "reject"
+  },
+  {
+    "text": "Have a smile for you.",
+    "expect": "reject"
+  },
+  {
+    "text": "Find something by Madama.",
+    "expect": "escalate"
+  },
+  {
+    "text": "except the evil out of them.  Well, the old term for personality disorders,  and this goes into the way back machine,  they used to call them character disorders.  Oh, but they got rid of that language  because it invokes a morality.  Yeah, yeah, right?  And so you don't want to...",
+    "expect": "reject"
+  },
+  {
+    "text": "except the evil out of it.  Well, the old term for personality disorders,  and this goes into the way back machine,  they used to call them character disorders.  Oh, but they got rid of that language  because it invokes a morality.  Yeah, yeah, right?  And so you don't want to-",
+    "expect": "reject"
+  },
+  {
+    "text": "Don't you want? Stop.",
+    "expect": "reject"
+  },
+  {
+    "text": "Done.",
+    "expect": "reject"
+  },
+  {
+    "text": "Did I set the reminder?",
+    "expect": "escalate"
+  },
+  {
+    "text": "Can you read the news for me please?",
+    "expect": "escalate"
+  },
+  {
+    "text": "Blame a donor.",
+    "expect": "reject"
+  },
+  {
+    "text": "Blame.",
+    "expect": "reject"
+  },
+  {
+    "text": "Ask me a question.",
+    "expect": "escalate"
+  }
+]

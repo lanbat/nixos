@@ -508,6 +508,24 @@ llm_api_key() {
 # questions about a device's state are answered by Home Assistant's own
 # intents before a request ever reaches it (prefer_local_intents).
 llm_prompt() {
+  if [ "${LLM_ROUTER:-0}" = 1 ]; then
+    # The assistant router reads this block (pkgs/assistant-router/assistant_router/context.py)
+    # and builds each model's prompt from it; the text after "end" is for a
+    # cloud model it passes the request on to.
+    cat <<'PROMPT'
+LANBAT-CONTEXT v1
+room: {{ area_name(current_device_id) or '' if current_device_id else '' }}
+device: {{ current_device_id or '' }}
+time: {{ now().isoformat() }}
+entities:
+{% for entity in exposed_entities -%}
+{{ entity.entity_id }}|{{ entity.name }}|{{ area_name(entity.entity_id) or '' }}|{{ entity.aliases | join('/') }}
+{% endfor -%}
+end
+You are the voice assistant of this home. Replies are spoken: one or two short plain sentences, without lists or markdown. Use the tools to act; only say you did something after the tool succeeded. If you are not sure what was meant, ask one short question.
+PROMPT
+    return
+  fi
   cat <<'PROMPT'
 You are the voice assistant of this home, running in Home Assistant. Your answers are spoken aloud: reply in one or two short, plain sentences, without lists, markdown or emoji.
 
@@ -562,10 +580,63 @@ llm_functions() {
   function:
     type: script
     sequence:
+    - if: "{{ action not in ['turn_on', 'turn_off', 'toggle', 'open', 'close'] }}"
+      then:
+      - stop: Not an action control_device takes.
+        error: true
     - action: "{% set domain = entity_id.split('.')[0] %}{% if action == 'open' %}{{ domain }}.open_cover{% elif action == 'close' %}{{ domain }}.close_cover{% else %}homeassistant.{{ action }}{% endif %}"
       target:
         entity_id: "{{ entity_id }}"
 FUNCTIONS
+  if [ "${LLM_ROUTER:-0}" = 1 ]; then
+    # Media for the router: pause, play, stop, skip and volume
+    # (pkgs/assistant-router/assistant_router/actions.py).
+    cat <<'FUNCTIONS'
+- spec:
+    name: media_control
+    description: Control a media player - pause, play, stop, skip, or change the volume (value 0-100 for volume_set).
+    parameters:
+      type: object
+      properties:
+        entity_id:
+          type: string
+          description: The entity_id of the media player, from the list of devices.
+        action:
+          type: string
+          enum:
+          - media_pause
+          - media_play
+          - media_stop
+          - media_next_track
+          - volume_up
+          - volume_down
+          - volume_set
+        value:
+          type: integer
+          description: The volume in percent, for volume_set.
+      required:
+      - entity_id
+      - action
+  function:
+    type: script
+    sequence:
+    - if: "{{ action not in ['media_pause', 'media_play', 'media_stop', 'media_next_track', 'volume_up', 'volume_down', 'volume_set'] }}"
+      then:
+      - stop: Not an action media_control takes.
+        error: true
+    - if: "{{ action == 'volume_set' }}"
+      then:
+      - action: media_player.volume_set
+        target:
+          entity_id: "{{ entity_id }}"
+        data:
+          volume_level: "{{ (value | int(0)) / 100 }}"
+      else:
+      - action: "media_player.{{ action }}"
+        target:
+          entity_id: "{{ entity_id }}"
+FUNCTIONS
+  fi
 }
 
 llm_conversation_json() {
