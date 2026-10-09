@@ -9,6 +9,7 @@ keeps it cached; the room and the request come last.
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 
 import aiohttp
@@ -37,12 +38,31 @@ Devices:
 """
 
 
+# The words that back each action: the local model sometimes answers
+# "Pause." with "on", so an action is only taken when the request says it.
+BACKING = {
+    "on": {"on"}, "off": {"off", "out"}, "toggle": {"toggle", "switch"},
+    "open": {"open"}, "close": {"close", "shut"},
+    "pause": {"pause", "hold"}, "play": {"play", "resume", "continue", "unpause", "carry"},
+    "stop": {"stop"}, "next": {"next", "skip"},
+    "volume_up": {"louder", "up", "raise", "increase"},
+    "volume_down": {"quieter", "down", "lower", "decrease", "softer"},
+    "volume_set": {"volume", "percent", "%"},
+}
+
+
 @dataclass(frozen=True)
 class Triage:
     route: str
     device: Entity | None = None
     action: str | None = None
     value: int | None = None
+
+
+def agrees(t: "Triage", text: str) -> bool:
+    """Whether a word of the request backs the action the model chose."""
+    words = set(re.findall(r"[a-z]+|%", text.lower()))
+    return bool(words & BACKING.get(t.action or "", set()))
 
 
 def controllable(ctx: Context) -> list[Entity]:
@@ -88,4 +108,6 @@ async def classify(session: aiohttp.ClientSession, url: str, model: str, ctx: Co
             data = await r.json()
     except (aiohttp.ClientError, asyncio.TimeoutError):
         return Triage("escalate")
-    return parse((data["choices"][0]["message"]["content"] or "").strip(), entities)
+    t = parse((data["choices"][0]["message"]["content"] or "").strip(), entities)
+    # An action the request doesn't say goes to the cloud rather than be done.
+    return t if t.route != "act" or agrees(t, text) else Triage("escalate")

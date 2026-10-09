@@ -40,3 +40,28 @@ def test_other_routes_and_garbage():
     assert parse("escalate", []).route == "escalate"
     assert parse("reject", []).route == "reject"
     assert parse("", []).route == "escalate"
+
+
+import pytest
+from assistant_router.triage import agrees
+
+TV = Entity("media_player.kodi_tv", "Bedroom 1 TV", "Bedroom 1")
+LIGHT = Entity("switch.office_light", "Office light", "Office")
+
+
+@pytest.mark.parametrize("text,action", [
+    ("Turn off the office light.", "off"), ("Switch the light on", "on"), ("Turn on bedroom or sunlight.", "on"),
+    ("Pause the TV.", "pause"), ("Resume the film", "play"), ("Skip this one", "next"), ("Stop playing.", "stop"),
+    ("Louder please", "volume_up"), ("Turn it down", "volume_down"), ("volume to 30%", "volume_set"),
+    ("Open the blinds", "open"), ("Close the curtains", "close"),
+])
+def test_actions_backed_by_the_words_said(text, action):
+    assert agrees(Triage("act", TV if action not in ("on", "off", "open", "close") else LIGHT, action), text)
+
+
+@pytest.mark.parametrize("text,action", [
+    ("Pause.", "on"), ("Pause the film.", "on"), ("Pause the TV.", "off"),
+    ("Turn off the office light.", "on"), ("Turn on the light", "off"), ("Louder", "volume_down"),
+])
+def test_actions_the_words_dont_back_are_refused(text, action):
+    assert not agrees(Triage("act", TV, action), text)

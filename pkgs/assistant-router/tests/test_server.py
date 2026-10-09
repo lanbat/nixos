@@ -261,3 +261,11 @@ def test_cli_takes_the_local_time_limit(monkeypatch):
     monkeypatch.setattr(cli, "make_app", lambda cfg: captured.update(cfg=cfg) or real(cfg))
     cli.main()
     assert captured["cfg"].local_timeout == 2.5
+
+
+async def test_a_local_act_the_words_dont_back_goes_to_the_cloud(aiohttp_client, fakes):
+    seen, local_line, _, base = fakes
+    local_line["v"] = "act 0 on"  # the model's answer to "Pause." on the server
+    c = await client_for(aiohttp_client, base)
+    choice = await post(c, req("Pause."))
+    assert choice["finish_reason"] == "stop" and len(seen["cloud"]) == 1
