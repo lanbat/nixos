@@ -10,7 +10,7 @@ device: dev1
 time: t
 entities:
 switch.office_light|Office light|Office|
-media_player.kodi_binturong|Bedroom 1 TV|Bedroom 1|
+media_player.kodi_tv|Bedroom 1 TV|Bedroom 1|
 end
 """
 
@@ -203,7 +203,7 @@ async def test_a_valid_cloud_tool_call_passes(aiohttp_client, fakes):
     seen, local_line, cloud_reply, base = fakes
     local_line["v"] = "escalate"
     cloud_reply["v"] = {"role": "assistant", "content": None, "tool_calls": [{"id": "x", "type": "function",
-        "function": {"name": "media_control", "arguments": '{"entity_id": "media_player.kodi_binturong", "action": "volume_set", "value": 20}'}}]}
+        "function": {"name": "media_control", "arguments": '{"entity_id": "media_player.kodi_tv", "action": "volume_set", "value": 20}'}}]}
     c = await client_for(aiohttp_client, base)
     assert (await post(c, req("Make it quieter in here")))["finish_reason"] == "tool_calls"
 

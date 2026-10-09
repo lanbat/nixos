@@ -6,7 +6,7 @@ device: abc123
 time: 2026-10-08T09:30:00+01:00
 entities:
 switch.office_light|Office light|Office|
-media_player.kodi_binturong|Bedroom 1 TV|Bedroom 1|telly/tv
+media_player.kodi_tv|Bedroom 1 TV|Bedroom 1|telly/tv
 end
 """
 
@@ -16,7 +16,7 @@ def test_parses_room_device_time_and_entities():
     assert ctx.room == "Bedroom 1"
     assert ctx.device_id == "abc123"
     assert ctx.time.startswith("2026-10-08T09:30")
-    assert [e.entity_id for e in ctx.entities] == ["switch.office_light", "media_player.kodi_binturong"]
+    assert [e.entity_id for e in ctx.entities] == ["switch.office_light", "media_player.kodi_tv"]
     assert ctx.entities[1].aliases == ("telly", "tv")
     assert ctx.entities[1].domain == "media_player"
 

@@ -2,14 +2,14 @@ from assistant_router.context import Context, Entity
 from assistant_router.triage import Triage, controllable, local_prompt, parse
 
 ENTS = [Entity("switch.office_light", "Office light", "Office"),
-        Entity("media_player.kodi_binturong", "Bedroom 1 TV", "Bedroom 1"),
+        Entity("media_player.kodi_tv", "Bedroom 1 TV", "Bedroom 1"),
         Entity("todo.shopping_list", "Shopping List", "")]
 CTX = Context("Bedroom 1", "dev", "t", tuple(ENTS))
 
 
 def test_only_controllable_entities_are_numbered():
     ids = [e.entity_id for e in controllable(CTX)]
-    assert ids == ["media_player.kodi_binturong", "switch.office_light"]
+    assert ids == ["media_player.kodi_tv", "switch.office_light"]
 
 
 def test_prompt_is_stable_and_lists_rooms():
