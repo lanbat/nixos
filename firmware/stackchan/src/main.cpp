@@ -453,5 +453,14 @@ void loop() {
   runGesture();
   if (captionUntil && millis() > captionUntil) showText();
   lights::update();
+
+  // Once, 15 s after boot: whether the camera delivers frames.
+  static bool reported = false;
+  if (!reported && hasCamera && millis() > 15000) {
+    reported = true;
+    JsonDocument doc;
+    doc["log"] = String("camera: ") + vision::frameCount() + " frames in the first 15 s";
+    send(doc);
+  }
   delay(10);
 }

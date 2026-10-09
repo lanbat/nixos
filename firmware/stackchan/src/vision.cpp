@@ -3,6 +3,7 @@
 #include <M5Unified.h>
 #include <driver/i2c.h>
 #include <esp_camera.h>
+#include <esp_log.h>
 
 #include "human_face_detect_mnp01.hpp"
 #include "human_face_detect_msr01.hpp"
@@ -45,6 +46,7 @@ camera_config_t cameraConfig() {
 SemaphoreHandle_t lock;
 Sighting current;
 volatile bool paused = false;
+volatile uint32_t frames = 0;
 
 // The image is mirrored: a face on the robot's left is on the frame's right.
 constexpr float kMirrorX = -1.0f;
@@ -67,6 +69,7 @@ void detectTask(void*) {
       vTaskDelay(pdMS_TO_TICKS(200));
       continue;
     }
+    frames++;
     std::vector<int> shape = {(int)fb->height, (int)fb->width, 3};
     auto& candidates = stage1.infer((uint16_t*)fb->buf, shape);
     auto& faces = stage2.infer((uint16_t*)fb->buf, shape, candidates);
@@ -102,6 +105,11 @@ namespace vision {
 
 bool begin() {
   lock = xSemaphoreCreateMutex();
+  // The driver's DMA task logs a warning for a short or overflowing frame,
+  // and its small stack overflows doing it (stack canary, cam_task). A bad
+  // frame is only skipped; keep it quiet.
+  esp_log_level_set("cam_hal", ESP_LOG_NONE);
+  esp_log_level_set("camera", ESP_LOG_ERROR);
   // The camera's SCCB shares the internal I2C bus (PMIC, touch, the body's
   // IO expander and head sensor). It is needed only to set the sensor up:
   // M5Unified lets go of the bus, the camera driver configures the sensor,
@@ -131,5 +139,7 @@ Sighting latest() {
 }
 
 void setPaused(bool p) { paused = p; }
+
+uint32_t frameCount() { return frames; }
 
 }  // namespace vision

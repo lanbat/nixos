@@ -24,4 +24,7 @@ Sighting latest();
 // Paused while asleep: no frames, less heat and power.
 void setPaused(bool paused);
 
+// Frames the detector has looked at since boot (for the boot report).
+uint32_t frameCount();
+
 }  // namespace vision
