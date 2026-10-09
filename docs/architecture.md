@@ -199,6 +199,12 @@ page on the loopback (query counts, cache hits), and the server's Telegraf
 queries every CoreDNS host (`inputs.dns_query`), recording whether each answers
 and how fast. systemd restarts a crashed CoreDNS.
 
+The DNS hosts resolve these names through their own CoreDNS too: a
+systemd-resolved delegation (`/etc/systemd/dns-delegate.d/lanbat.dns-delegate`)
+sends the domain and the short suffix to the local CoreDNS, then to the other
+DNS hosts, so neither a router's IPv6 DNS advertisement nor resolved staying on
+the gateway after a failed query can send them elsewhere.
+
 Service-to-service traffic does not use DNS: endpoints resolve to addresses at
 evaluation time. The exception is OIDC (`auth.<domain>`), which rootless
 containers resolve through the gateway, because Podman drops loopback

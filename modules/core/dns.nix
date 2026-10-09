@@ -105,11 +105,9 @@ let
   # the file plugin can answer NXDOMAIN for a name it does not have, where the
   # hosts plugin answers SERVFAIL, which sends clients on to the next resolver.
   # Its name servers are the CoreDNS hosts, which have host records here.
+  dnsHosts = lib.sort (a: b: a < b) (endpoints.coredns or { hosts = [ ]; }).hosts;
   nameServers = map (host: lanbat.hosts.${host}.networking.hostname) (
-    let
-      hosts = (endpoints.coredns or { hosts = [ ]; }).hosts;
-    in
-    if hosts == [ ] then [ lanbat.hostKey ] else lib.sort (a: b: a < b) hosts
+    if dnsHosts == [ ] then [ lanbat.hostKey ] else dnsHosts
   );
   zoneFile =
     suffix:
@@ -122,6 +120,19 @@ let
       + lib.concatMapStrings (ns: "@ IN NS ${ns}.${suffix}.\n") nameServers
       + lib.concatMapStrings (r: "${r.name} IN A ${r.ip}\n") (lib.sort (a: b: a.name < b.name) records)
     );
+
+  resolved = config.services.resolved.enable;
+  delegate = ''
+    [Delegate]
+    DNS=${
+      lib.concatStringsSep " " (
+        [ "127.0.0.1" ] ++ map ipOf (lib.filter (host: host != lanbat.hostKey) dnsHosts)
+      )
+    }
+    Domains=${
+      lib.concatMapStringsSep " " (zone: "~${zone}") ([ domain ] ++ lib.optional (short != null) short)
+    }
+  '';
 
   upstreams = if dns.upstreams == [ ] then [ lanbat.deployment.gatewayIp ] else dns.upstreams;
 
@@ -192,6 +203,22 @@ in
   # This host resolves through its own CoreDNS first; the gateway (and the
   # server's public fallback) stay behind it for when it is down.
   networking.nameservers = lib.mkBefore [ "127.0.0.1" ];
+
+  # systemd-resolved sends a name to the DNS servers of the interface it
+  # learnt them on (a router's IPv6 advertisement, say) in preference to the
+  # global ones, and stays on a fallback server once it has switched to one,
+  # for example at boot before CoreDNS listens. Either way the profile's names
+  # went to a resolver that does not have them. A delegation is a scope of its
+  # own: names under the domain and the short suffix always go to this host's
+  # CoreDNS, then to the other CoreDNS hosts, which serve the same zones.
+  #
+  # The file is written here rather than through services.resolved.dnsDelegates,
+  # whose rendering fails in the nixpkgs revision the Raspberry Pi platforms
+  # pin (it looks for a Resolve section).
+  environment.etc."systemd/dns-delegate.d/lanbat.dns-delegate" = lib.mkIf resolved {
+    text = delegate;
+  };
+  systemd.services.systemd-resolved.reloadTriggers = lib.mkIf resolved [ delegate ];
 
   assertions =
     lib.mapAttrsToList (name: rs: {

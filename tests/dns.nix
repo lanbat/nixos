@@ -10,7 +10,10 @@
 #
 # Asserts the short and full names, NXDOMAIN under the short suffix and
 # fallthrough under the domain, forwarding, refusal outside the LAN subnet,
-# the server resolving through itself, and the metrics page Telegraf reads.
+# the metrics page Telegraf reads, and the server resolving the profile's
+# names through itself with systemd-resolved, as the real hosts run it, even
+# when its interface has a DNS server of its own (as a router's IPv6
+# advertisement gives it) that answers them wrongly.
 #
 # Run with: nix build -L .#checks.x86_64-linux.dns
 { pkgs }:
@@ -101,6 +104,13 @@ pkgs.testers.runNixOSTest {
       ../modules/core/dns.nix
     ];
 
+    # As on the real hosts (networkd enables it there). Its global server is
+    # only the gateway: the state a real host ends up in once resolved has
+    # given up on CoreDNS (at boot, before CoreDNS listens) and stayed on the
+    # gateway, made certain here instead of raced for.
+    services.resolved.enable = true;
+    networking.nameservers = pkgs.lib.mkForce [ "192.168.1.1" ];
+
     lanbat.profile = "test";
     lanbat.hostKey = "server";
     lanbat.hosts = hosts;
@@ -158,13 +168,22 @@ pkgs.testers.runNixOSTest {
         assert answer("example.org") == "10.0.0.99"
         assert answer("nope.home.test") == "10.0.0.99"
 
-    with subtest("the server resolves through its own CoreDNS"):
+    with subtest("the server resolves the profile's names through its own CoreDNS"):
+        # The interface's own DNS server is the client, which answers every
+        # name with 10.0.0.99, like a router that does not know the names.
+        server.succeed("resolvectl dns eth1 192.168.1.1")
+        server.succeed("resolvectl flush-caches")
         server.succeed("getent hosts torrent.lan | grep -q '^192.168.1.2 '")
+        server.succeed("getent hosts torrent.home.test | grep -q '^192.168.1.2 '")
+        server.succeed("getent hosts pi.lan | grep -q '^192.168.1.50 '")
+        # Other names still resolve.
+        server.succeed("getent hosts example.org | grep -q '^10.0.0.99 '")
 
     with subtest("queries from outside the LAN subnet are refused"):
         assert status("refused.lan", "-b 192.168.1.200") == "REFUSED"
 
     with subtest("metrics are exported for Telegraf"):
-        server.succeed("curl -sf http://127.0.0.1:9153/metrics | grep -q coredns_dns_requests_total")
+        server.succeed("curl -sf -o /tmp/metrics http://127.0.0.1:9153/metrics")
+        server.succeed("grep -q coredns_dns_requests_total /tmp/metrics")
   '';
 }
