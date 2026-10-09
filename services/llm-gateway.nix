@@ -107,7 +107,9 @@ in
     (lib.mkIf enabled {
       lanbat.services.llm-gateway = {
         inherit port;
-        secrets.llm-gateway-env = { };
+        # LiteLLM runs as a dynamic user, so there is no llm-gateway account to
+        # own the file; systemd reads the EnvironmentFile as root.
+        secrets.llm-gateway-env.owner = "root";
       };
       services.litellm = {
         enable = true;

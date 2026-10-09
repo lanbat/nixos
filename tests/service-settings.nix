@@ -871,6 +871,8 @@ let
       && lib.hasInfix "--local-model qwen3-4b" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
       && lib.hasInfix "--mode local-first" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
       && routerServer.lanbat.services.llm-gateway.secrets ? llm-gateway-env
+      # LiteLLM runs as a dynamic user; systemd reads the EnvironmentFile as root.
+      && routerServer.lanbat.services.llm-gateway.secrets.llm-gateway-env.owner == "root"
       && failedAssertions routerServer == [ ]
     ))
 
