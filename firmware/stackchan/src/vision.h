@@ -27,4 +27,11 @@ void setPaused(bool paused);
 // Frames the detector has looked at since boot (for the boot report).
 uint32_t frameCount();
 
+// Debug view: the camera image and the detector's boxes on the robot's
+// screen (candidates yellow, faces green), in place of the face.
+void setPreview(bool on);
+
+// Frame size and detection counts since the last call, for the Pi's journal.
+String stats();
+
 }  // namespace vision

@@ -1,0 +1,7 @@
+
+# pioarduino hybrid build output
+.pio/
+managed_components/
+sdkconfig.*
+dependencies.lock
+.dummy/
