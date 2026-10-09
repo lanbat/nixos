@@ -426,6 +426,13 @@ void runGesture() {
 
 void setup() {
   M5StackChan.begin();  // M5Unified, servo power, touch, LEDs
+  // The Pi speaks and listens; the robot's own speaker and microphone stay
+  // off. The speaker's amplifier keeps whatever state the last firmware left
+  // it in (the stock one leaves it on), and on with no signal it amplifies
+  // noise: switching it on and off through M5Unified powers it down.
+  M5.Speaker.begin();
+  M5.Speaker.end();
+  M5.Mic.end();
   Serial.begin(115200);
   M5.Display.setBrightness(brightness);
 
@@ -453,5 +460,14 @@ void loop() {
   runGesture();
   if (captionUntil && millis() > captionUntil) showText();
   lights::update();
+
+  // Once, 15 s after boot: whether the camera delivers frames.
+  static bool reported = false;
+  if (!reported && hasCamera && millis() > 15000) {
+    reported = true;
+    JsonDocument doc;
+    doc["log"] = String("camera: ") + vision::frameCount() + " frames in the first 15 s";
+    send(doc);
+  }
   delay(10);
 }
