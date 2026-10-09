@@ -138,6 +138,7 @@ class Brain:
     present: bool = False
     present_at: float = 0.0
     napping: bool = False  # the robot's own nap (nobody around), not the night
+    battery_low: bool = False
 
     def __post_init__(self) -> None:
         self.asleep = self.night_seen = self._is_night(self.now)
@@ -166,7 +167,8 @@ class Brain:
     def router_state(self, now: float) -> dict:
         return {"present": self.present,
                 "present_since_s": int(now - self.present_at) if self.present else 0,
-                "asleep": self.asleep or self.napping}
+                "asleep": self.asleep or self.napping,
+                "battery_low": self.battery_low}
 
     def _sleep(self, asleep: bool) -> list:
         return [
@@ -336,6 +338,13 @@ class Brain:
         if face in ("new", "lost") and (face == "new") != self.present:
             self.present = face == "new"
             self.present_at = now
+            out.append(("router", {"state": self.router_state(now)}))
+        battery = msg.get("battery")
+        if isinstance(battery, dict) and type(battery.get("low")) is bool and battery["low"] != self.battery_low:
+            self.battery_low = battery["low"]
+            level = battery.get("level")
+            out.append(("log", f"robot battery {'low' if self.battery_low else 'fine again'}"
+                               + (f" ({level} %)" if type(level) is int else "")))
             out.append(("router", {"state": self.router_state(now)}))
         rest = msg.get("rest")
         if rest in ("nap", "awake") and (rest == "nap") != self.napping:

@@ -115,3 +115,13 @@ async def test_a_disconnected_body_is_forgotten():
     b.disconnect("Kitchen", sock)
     assert not b.has("Kitchen")
     assert b.prompt_block("Kitchen", now=0.0) is None
+
+
+def test_a_low_battery_is_in_the_prompt():
+    b = Bodies(PERSONA)
+    b.connect("Kitchen", FakeSocket())
+    assert "battery" not in b.prompt_block("Kitchen", now=0.0)
+    b.update("Kitchen", {"battery_low": True}, now=0.0)
+    assert "Your battery is low" in b.prompt_block("Kitchen", now=0.0)
+    b.update("Kitchen", {"battery_low": "very"}, now=1.0)  # not a bool: ignored
+    assert b.state("Kitchen").battery_low

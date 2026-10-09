@@ -23,6 +23,10 @@ voice satellite's USB port, it becomes the satellite's face. The Pi keeps the vo
   (`lanbat.stackchan.napAfter`) it naps: screen dark, eyes closed, LEDs off, head down,
   the camera slowed to a frame a second. Someone walking in, a tap or the wake word wakes
   it with a stretch, and Nabu knows it was napping.
+- **Battery.** The robot reads its battery every 30 s. Below 15 % and not charging it
+  stops moving its head (a servo's current surge on a weak supply makes its power chip
+  cut it off, and then only the power button brings it back), pulses amber and asks to
+  be charged; Nabu knows too. It moves again once it charges or is back above 25 %.
 - **Night.** From 23:00 to 07:00 it sleeps, dimmed, still and with its camera off. The
   wake word or a tap wakes it for the conversation.
 - **Status.** One dim red LED on each side means the microphone is muted. A slow red
@@ -200,6 +204,8 @@ One JSON object per line, 115200 baud over the CoreS3's USB port.
 | `{"hello": {"fw", "proto"}}` | At boot and when the Pi comes back; the bridge answers with the whole state |
 | `{"touch": "tap\|stroke", "zone": "front\|middle\|back\|screen"}` | Head tap or stroke, or a tap on the face |
 | `{"face": "new\|lost"}` | Someone came into view, or left it |
+| `{"rest": "nap\|awake"}` | It started or ended a nap |
+| `{"battery": {"level", "mv", "charging", "low"}}` | On a change, and every 5 minutes |
 | `{"log": "..."}` | Shown in the bridge's journal |
 
 ## Troubleshooting

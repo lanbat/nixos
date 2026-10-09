@@ -93,6 +93,13 @@ bool drowsy = false;
 // Nobody seen for napAfterMs (from the Pi; 0: never): a nap, dark and still,
 // with the camera slowed down. A face, a touch or the wake word ends it.
 bool napping = false;
+// The battery, read every 30 s. Low (<= kLowBatteryLevel %, not charging):
+// the servos are switched off, since a move's current surge on a weak supply
+// made the power chip cut the robot off; they come back when it charges.
+constexpr int kLowBatteryLevel = 15, kBatteryOkLevel = 25;
+bool lowBattery = false;
+uint32_t nextBatteryRead = 5000, nextBatteryReport = 0;
+int lastBatteryLevel = -100;
 uint32_t napAfterMs = 15 * 60000;
 uint32_t nextWander = 0;
 uint32_t touchDownZone = 0;
@@ -208,7 +215,8 @@ void startNap() {
   lights::setAsleep(true);
   vision::setFramePeriod(kNapFramePeriodMs);
   M5.Display.setBrightness(min<int>(brightness, 10));
-  pointHead(0, kPitchMin + 50, 100);
+  // The head stays where it is and the servos relax (the BSP releases torque
+  // at rest): a move now would draw a surge for nothing.
   sendEvent("rest", "nap");
 }
 
@@ -384,6 +392,38 @@ void readSerial() {
   }
 }
 
+void readBattery() {
+  uint32_t now = millis();
+  if (now < nextBatteryRead) return;
+  nextBatteryRead = now + 30000;
+  int level = M5.Power.getBatteryLevel();
+  bool charging = M5.Power.isCharging() == m5::Power_Class::is_charging;
+  int mv = M5.Power.getBatteryVoltage();
+  bool low = lowBattery ? !(charging || level >= kBatteryOkLevel)
+                        : (level >= 0 && level <= kLowBatteryLevel && !charging);
+  bool changed = low != lowBattery;
+  if (changed) {
+    lowBattery = low;
+    M5StackChan.setServoPowerEnabled(!low);
+    lights::setLowBattery(low);
+    if (low) {
+      caption = "Low battery - please charge me";
+      captionUntil = now + 15000;
+      showText();
+    }
+  }
+  if (changed || abs(level - lastBatteryLevel) >= 5 || now >= nextBatteryReport) {
+    lastBatteryLevel = level;
+    nextBatteryReport = now + 300000;
+    JsonDocument doc;
+    doc["battery"]["level"] = level;
+    doc["battery"]["mv"] = mv;
+    doc["battery"]["charging"] = charging;
+    doc["battery"]["low"] = lowBattery;
+    send(doc);
+  }
+}
+
 const char* zoneName(int i) { return i == 0 ? "front" : i == 1 ? "middle" : "back"; }
 
 void readTouch() {
@@ -536,6 +576,7 @@ void loop() {
   M5StackChan.update();  // touch sensor (and M5.update)
   readSerial();
   readTouch();
+  readBattery();
   follow();
   wander();
   runGesture();

@@ -6,7 +6,7 @@ values from fixed lists, so nothing a body sends ever becomes free text in a
 prompt:
 
     body -> router  {"hello": {"room": "Kitchen", "kind": "stackchan", "proto": 1}}
-                    {"state": {"present": true, "present_since_s": 130, "asleep": false}}
+                    {"state": {"present": true, "present_since_s": 130, "asleep": false, "battery_low": false}}
     router -> body  {"act": {"mood": "happy", "gesture": "nod", "look": "user", "sleep": false}}
 
 For a request from a room with a body, the cloud model gets the persona and
@@ -71,6 +71,7 @@ class BodyState:
     present: bool = False
     since: float | None = None  # when the person in front arrived (router clock)
     asleep: bool = False
+    battery_low: bool = False
 
 
 def _key(room: str) -> str:
@@ -116,6 +117,9 @@ class Bodies:
         asleep = fields.get("asleep")
         if type(asleep) is bool:
             state.asleep = asleep
+        battery_low = fields.get("battery_low")
+        if type(battery_low) is bool:
+            state.battery_low = battery_low
 
     async def act(self, room: str, act: dict[str, Any]) -> bool:
         socket = self._sockets.get(_key(room))
@@ -141,6 +145,8 @@ class Bodies:
             seen = "Nobody is in front of you right now."
         if state.asleep:
             seen += " You were asleep until you were spoken to."
+        if state.battery_low:
+            seen += " Your battery is low: when it fits, ask to be charged."
         return "\n".join([
             self.persona,
             seen,
