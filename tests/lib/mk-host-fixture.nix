@@ -65,7 +65,12 @@ let
 
   # Registry plugins the VM tests leave out by default. tv drives the HDMI
   # output and pulls Kodi and the emulators into a VM that has no display.
-  vmExcludedPlugins = [ "tv" ];
+  # stackchan needs the LVA satellite backend (the fixtures run Wyoming) and a
+  # robot on USB; tests/service-settings.nix evaluates it.
+  vmExcludedPlugins = [
+    "tv"
+    "stackchan"
+  ];
 
   # By default a host enables each registered plugin that supports its role, as
   # a deployment enabling everything would, so no plugin's services drop out of
