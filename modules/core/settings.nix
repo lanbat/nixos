@@ -403,6 +403,30 @@ in
         '';
       };
 
+      people = mkOption {
+        type = types.attrsOf (
+          types.submodule {
+            options.name = mkOption {
+              type = types.strMatching "[^\n]{1,40}";
+              description = "What the assistant calls this person.";
+            };
+          }
+        );
+        default = { };
+        example = {
+          alex.name = "Alex";
+          sam.name = "Sam";
+        };
+        description = ''
+          The people the assistant may recognise (by voice, by face at a robot,
+          by phone over Bluetooth), keyed by a short identifier. The keys are the
+          only identities that travel between the satellites, the robot and the
+          assistant router; names, never secrets or voiceprints. Recognition is a
+          hint for what the assistant says, never authority over anything
+          (docs/people.md).
+        '';
+      };
+
       xiaomiClocks = mkOption {
         type = types.listOf (types.strMatching "([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}");
         default = [ ];

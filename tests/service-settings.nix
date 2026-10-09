@@ -812,6 +812,8 @@ let
 
     (expect "stackchan: the router's persona is the profile's" (
       bodyServer.lanbat.services.assistant-router.settings.body.persona == "You are Robo."
+      && lib.hasInfix "assistant-router-people.json" bodyServer.systemd.services.assistant-router.serviceConfig.ExecStart
+      && bodyServer.lanbat.deployment.people.alex.name == "Alex"
       && lib.hasInfix "assistant-router-persona.txt" bodyServer.systemd.services.assistant-router.serviceConfig.ExecStart
     ))
 

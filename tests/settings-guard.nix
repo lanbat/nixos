@@ -33,6 +33,8 @@ let
     "deployment.parkingGuard"
     "deployment.androidDevices"
     "deployment.xiaomiClocks"
+    # Nobody to recognise is a valid household setting, not a placeholder.
+    "deployment.people"
     "deployment.dns"
     "hosts"
     "mosquitto.extraUsers"

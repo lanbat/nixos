@@ -360,3 +360,58 @@ async def test_a_body_connects_and_reports_over_its_socket(aiohttp_client):
     assert await bodies.act("Kitchen", {"gesture": "nod"})
     assert (await ws.receive_json()) == {"act": {"gesture": "nod"}}
     await ws.close()
+
+
+# ── who is there (assistant_router/people.py) ─────────────────────────────────
+from assistant_router.people import People  # noqa: E402
+
+
+async def test_the_cloud_hears_who_is_there(aiohttp_client, fakes):
+    seen, local_line, _, base = fakes
+    local_line["v"] = "escalate"
+    cfg = Config(local_url=f"{base}/local/v1/chat/completions", local_model="qwen3-4b",
+                 cloud_url=f"{base}/cloud/v1/chat/completions", cloud_model="smart", mode="local-first")
+    people = People({"kiril": "Kiril"})
+    people.observe("Bedroom 1", "phone", "kiril", 1.0, now=0.0)
+    c = await aiohttp_client(make_app(cfg, State(), people=people, clock=lambda: 10.0))
+    await post(c, req("Good morning"))
+    system = seen["cloud"][-1]["messages"][0]["content"]
+    assert system.startswith(CTX)
+    assert "Kiril is nearby" in system
+
+
+async def test_who_is_there_never_changes_a_device_action(aiohttp_client, fakes):
+    seen, _, _, base = fakes
+    cfg = Config(local_url=f"{base}/local/v1/chat/completions", local_model="qwen3-4b",
+                 cloud_url=f"{base}/cloud/v1/chat/completions", cloud_model="smart", mode="local-first")
+    people = People({"kiril": "Kiril"})
+    people.observe("Bedroom 1", "phone", "kiril", 1.0, now=0.0)
+    c = await aiohttp_client(make_app(cfg, State(), people=people, clock=lambda: 10.0))
+    choice = await post(c, req("Turn off the office light."))
+    call = choice["message"]["tool_calls"][0]
+    assert json.loads(call["function"]["arguments"]) == {"entity_id": "switch.office_light", "action": "turn_off"}
+    assert "Kiril" not in json.dumps(seen["local"])  # the local model never sees it
+
+
+async def test_a_robot_reports_faces_and_a_sensor_reports_phones(aiohttp_client):
+    import asyncio
+    bodies, people = Bodies("You are Nabu."), People({"kiril": "Kiril", "maria": "Maria"})
+    c = await aiohttp_client(make_body_app(bodies, clock=lambda: 100.0, people=people))
+    robot = await c.ws_connect("/v1/body")
+    await robot.send_json({"hello": {"room": "Kitchen", "kind": "stackchan", "proto": 1}})
+    await robot.send_json({"state": {"present": True, "faces": [{"person": "kiril", "confidence": 0.9},
+                                                                  {"person": "nobody", "confidence": 0.9}]}})
+    sensor = await c.ws_connect("/v1/body")
+    await sensor.send_json({"hello": {"room": "Kitchen", "kind": "room-sensor", "proto": 1}})
+    await sensor.send_json({"seen": [{"person": "maria", "rssi": -70}, {"person": "maria", "rssi": "loud"}]})
+    for _ in range(50):
+        line = people.line("Kitchen", now=100.0)
+        if line and "Maria" in line and "Kiril" in line:
+            break
+        await asyncio.sleep(0.01)
+    assert "talking to Kiril" in line and "Maria is nearby" in line
+    # A sensor is not a body: no persona, no acts for it.
+    assert bodies.has("Kitchen")
+    await sensor.close()
+    assert bodies.has("Kitchen")
+    await robot.close()

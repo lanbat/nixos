@@ -53,6 +53,10 @@ let
     )
   ) bodyHosts;
   personaFile = pkgs.writeText "assistant-router-persona.txt" cfg.body.persona;
+  # Who it may recognise (lanbat.deployment.people): keys and names only.
+  peopleFile = pkgs.writeText "assistant-router-people.json" (
+    builtins.toJSON (lib.mapAttrs (_: p: p.name) (config.lanbat.deployment.people or { }))
+  );
   routerSettings.options.localTimeout = mkOption {
     type = types.numbers.positive;
     default = 2.5;
@@ -152,6 +156,7 @@ in
               "--body-host 0.0.0.0"
               "--body-port ${toString bodyPort}"
               "--persona-file ${personaFile}"
+              "--people-file ${peopleFile}"
             ]
             ++ lib.optionals (!cfg.logText) [ "--no-log-text" ]
           );
