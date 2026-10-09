@@ -60,6 +60,11 @@ constexpr uint32_t kDrowsyAfterMs = 5 * 60000;
 
 Avatar avatar;
 bool hasCamera = false;
+bool debugCamera = false;
+uint32_t debugUntil = 0;
+// The debug view ends by itself, so a lost "off" never leaves the robot faceless.
+constexpr uint32_t kDebugMs = 120000;
+uint32_t nextStats = 0;
 
 // What the Pi said.
 String mood = "neutral";
@@ -103,6 +108,10 @@ const Keyframe kShake[] = {{-130, 0, 180}, {130, 0, 220}, {-130, 0, 220}, {0, 0,
 const Keyframe kWiggle[] = {{-90, 30, 120}, {90, 30, 120}, {-90, 30, 120}, {90, 30, 120}, {0, 0, 200}};
 const Keyframe kPerk[] = {{0, 90, 150}, {0, 60, 300}};
 const Keyframe kTilt[] = {{110, 40, 400}, {110, 40, 900}, {0, 0, 400}};
+const Keyframe kDance[] = {{-200, 80, 250}, {200, 0, 250}, {-200, 80, 250}, {200, 0, 250},
+                           {0, 150, 300}, {0, -60, 250}, {0, 150, 250}, {-300, 40, 350},
+                           {300, 40, 450}, {0, 0, 350}};
+const Keyframe kLookAround[] = {{-450, 60, 700}, {-450, 60, 600}, {450, 60, 1100}, {450, 60, 600}, {0, 0, 700}};
 
 // Both eyes the same way (Avatar's own saccades move them again in a while).
 void gaze(float vertical, float horizontal) {
@@ -146,7 +155,7 @@ void pointHead(int yaw, int pitch, int speed) {
 
 void setMood(const String& m) {
   mood = m;
-  if (m == "happy") {
+  if (m == "happy" || m == "excited") {
     avatar.setExpression(Expression::Happy);
   } else if (m == "sad") {
     avatar.setExpression(Expression::Sad);
@@ -168,7 +177,7 @@ void setMood(const String& m) {
     lights::setScene(lights::Scene::Error);
   } else if (m == "surprised") {
     lights::setScene(lights::Scene::Greeting);
-  } else if (m == "happy" && !piPresent) {
+  } else if (m == "excited" || (m == "happy" && !piPresent)) {
     lights::setScene(lights::Scene::Happy);
   } else if (m == "neutral" || m == "sleepy") {
     lights::setScene(lights::Scene::Off);
@@ -236,6 +245,10 @@ void handle(JsonDocument& doc) {
     else if (g == "wiggle") GESTURE(kWiggle);
     else if (g == "perk") GESTURE(kPerk);
     else if (g == "tilt") GESTURE(kTilt);
+    else if (g == "dance") {
+      GESTURE(kDance);
+      lights::setScene(lights::Scene::Happy);
+    } else if (g == "look_around") GESTURE(kLookAround);
   }
   if (!doc["mouth"].isNull()) {
     float level = constrain(doc["mouth"].as<float>(), 0.0f, 1.0f);
@@ -271,6 +284,18 @@ void handle(JsonDocument& doc) {
     showText();
   }
   if (doc["sleep"].is<bool>()) setAsleep(doc["sleep"].as<bool>());
+  if (doc["debug"].is<const char*>()) {
+    // {"debug": "camera"} shows what the camera sees; {"debug": "off"} ends it.
+    debugCamera = hasCamera && String(doc["debug"].as<const char*>()) == "camera";
+    debugUntil = millis() + kDebugMs;
+    if (debugCamera) {
+      avatar.suspend();
+      M5.Display.fillScreen(TFT_BLACK);
+    } else {
+      avatar.resume();
+    }
+    vision::setPreview(debugCamera);
+  }
   if (doc["status"].is<JsonObject>()) {
     muted = doc["status"]["muted"] | false;
     haOnline = doc["status"]["online"] | true;
@@ -352,6 +377,13 @@ void follow() {
   uint32_t now = millis();
   if (!hasCamera || asleep) return;
   Sighting s = vision::latest();
+  if (debugCamera) {
+    // The preview owns the screen: report faces, don't react to them.
+    if (s.face && !faceVisible) sendEvent("face", "new");
+    if (s.face) lastFaceSeen = millis();
+    faceVisible = s.face || (faceVisible && millis() - lastFaceSeen < kFaceLostMs);
+    return;
+  }
   bool fresh = s.face && s.at != lastFaceFrame;
 
   if (fresh) {
@@ -463,6 +495,17 @@ void loop() {
 
   // Once, 15 s after boot: whether the camera delivers frames.
   static bool reported = false;
+  if (debugCamera && millis() > debugUntil) {
+    debugCamera = false;
+    vision::setPreview(false);
+    avatar.resume();
+  }
+  if (debugCamera && millis() > nextStats) {
+    nextStats = millis() + 2000;
+    JsonDocument doc;
+    doc["log"] = vision::stats();
+    send(doc);
+  }
   if (!reported && hasCamera && millis() > 15000) {
     reported = true;
     JsonDocument doc;

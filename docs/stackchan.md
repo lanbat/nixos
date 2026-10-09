@@ -55,17 +55,31 @@ firmware. Build and flash it from any Linux machine with Nix, or from the Pi its
 2. **Build and upload:**
    ```bash
    cd firmware/stackchan
-   nix shell nixpkgs#platformio -c pio run -t upload --upload-port /dev/ttyACM0
+   nix shell nixpkgs#uv -c uvx --from platformio pio run -t upload --upload-port /dev/ttyACM0
    ```
-   The first build downloads the ESP32 toolchain to `~/.platformio` (about 1 GB). If
-   the upload can't connect, hold the button on the CoreS3's side for about three
-   seconds until its LED turns green (download mode), then upload again.
+   The firmware is built with pioarduino (Arduino 3.3 on ESP-IDF 5.5), which needs
+   PlatformIO 6.2 or newer; `uvx` runs the current one. The first build downloads the
+   toolchain and ESP-IDF to `~/.platformio` (a few GB) and compiles ESP-IDF itself with
+   the face detector (`espressif/human_face_detect`), about 20 minutes; later builds take
+   a few. If the upload can't connect, hold the button on the CoreS3's side for about
+   three seconds until its LED turns green (download mode), then upload again.
 3. **Press the power button** afterwards. The robot stays off after the reset at the end
    of an upload.
 
-To flash from the Pi, build on another machine and copy
-`.pio/build/stackchan/{bootloader,partitions,firmware}.bin` and `boot_app0.bin` over.
-Then write them with `esptool.py` at the addresses `pio run -t upload -v` prints.
+To flash from the Pi, build on another machine, copy
+`.pio/build/stackchan/firmware.factory.bin` (bootloader, partition table and firmware in
+one image) over, stop the bridge and write it at 0:
+
+```bash
+sudo systemctl stop lva-stackchan
+esptool --chip esp32s3 -p /dev/stackchan -b 921600 write-flash 0x0 firmware.factory.bin
+sudo systemctl start lva-stackchan
+```
+
+**Camera debug view.** With the bridge stopped, send `{"debug": "camera"}` to the robot
+(one JSON line on `/dev/stackchan`): its screen shows what the camera sees, with a box on
+each face it detects (green once it counts as a face), and every 2 s it reports frames,
+detections and the best score. `{"debug": "off"}` ends it, and so do two minutes.
 
 To restore the stock firmware:
 `esptool.py --chip esp32s3 -p /dev/ttyACM0 write_flash 0 stackchan-stock.bin`.
