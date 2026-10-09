@@ -909,6 +909,16 @@ let
       && lib.elem { smart = [ "smart-fallback-1" ]; } litellm.router_settings.fallbacks
     ))
 
+    # Behind the router the local model is on the voice path: it gets the CPU
+    # ahead of Frigate and Jellyfin, and a busy server hands over to the cloud
+    # after 2.5 s instead of 4.
+    (expect "router: the local model has priority and a short time limit" (
+      routerServer.systemd.services.llama-cpp.serviceConfig.CPUWeight == 200
+      && routerServer.systemd.services.llama-cpp.serviceConfig.Nice == -5
+      && base.systemd.services.llama-cpp.serviceConfig.CPUWeight or 50 == 50
+      && lib.hasInfix "--local-timeout 2.5" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+    ))
+
     (expect "router: a server without it runs as before" (
       !(base.systemd.services ? assistant-router)
       && !(base.systemd.services ? llm-gateway)

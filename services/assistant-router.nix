@@ -28,6 +28,16 @@ let
   cfg = config.lanbat.services.assistant-router.settings;
   port = 8092;
   router = pkgs.callPackage ../pkgs/assistant-router { };
+  routerSettings.options.localTimeout = mkOption {
+    type = types.numbers.positive;
+    default = 2.5;
+    description = ''
+      Seconds the local model may take to decide before the request goes to
+      the cloud. It decides in about 1.5 s on an idle server; a busy one (a
+      library scan, Frigate) can take much longer, and then the cloud answers
+      sooner.
+    '';
+  };
   routerSettings.options.logDays = mkOption {
     type = types.ints.positive;
     default = 14;
@@ -85,6 +95,7 @@ in
               "--cloud-url http://127.0.0.1:${toString config.lanbat.services.llm-gateway.port}/v1/chat/completions"
               "--cloud-model smart"
               "--mode ${cfg.mode}"
+              "--local-timeout ${toString cfg.localTimeout}"
               "--log-dir /var/lib/assistant-router"
               "--log-days ${toString cfg.logDays}"
             ]

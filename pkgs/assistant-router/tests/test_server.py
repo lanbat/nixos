@@ -247,3 +247,17 @@ async def test_request_log_rotates_daily_and_keeps_n_days(aiohttp_client, fakes,
     assert today.exists() and not old.exists()
     entry = json.loads(today.read_text().splitlines()[-1])
     assert "text" not in entry and entry["route"] == "reject"
+
+
+def test_cli_takes_the_local_time_limit(monkeypatch):
+    import sys
+    from assistant_router import __main__ as cli
+    seen = {}
+    monkeypatch.setattr(cli.web, "run_app", lambda app, **kw: seen.update(app=app))
+    monkeypatch.setattr(sys, "argv", ["assistant-router", "--local-url", "l", "--local-model", "m",
+                                      "--cloud-url", "c", "--local-timeout", "2.5"])
+    captured = {}
+    real = cli.make_app
+    monkeypatch.setattr(cli, "make_app", lambda cfg: captured.update(cfg=cfg) or real(cfg))
+    cli.main()
+    assert captured["cfg"].local_timeout == 2.5
