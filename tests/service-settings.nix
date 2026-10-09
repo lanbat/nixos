@@ -269,6 +269,13 @@ let
         model = "assistant";
       };
       lanbat.services.llama-cpp.settings.model = "qwen3-4b";
+      lanbat.services.llm-gateway.settings.models.smart = [
+        {
+          model = "gemini/gemini-3.5-flash";
+          params.reasoning_effort = "none";
+        }
+        { model = "gemini/gemini-3.1-flash-lite"; }
+      ];
     }
   ];
   # The router configured on a server that lists its services without it.
@@ -886,6 +893,18 @@ let
     (expect "router: the request log rotates and keeps two weeks" (
       lib.hasInfix "--log-dir /var/lib/assistant-router" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
       && lib.hasInfix "--log-days 14" routerServer.systemd.services.assistant-router.serviceConfig.ExecStart
+    ))
+
+    (expect "router: gateway models take extra LiteLLM parameters and fall back in order" (
+      let
+        litellm = routerServer.services.litellm.settings;
+        smart = lib.findFirst (m: m.model_name == "smart") null litellm.model_list;
+      in
+      smart.litellm_params == {
+        model = "gemini/gemini-3.5-flash";
+        reasoning_effort = "none";
+      }
+      && lib.elem { smart = [ "smart-fallback-1" ]; } litellm.router_settings.fallbacks
     ))
 
     (expect "router: a server without it runs as before" (

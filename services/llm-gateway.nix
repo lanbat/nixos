@@ -18,6 +18,17 @@
 #     { model = "openai/gpt-4.1-mini"; }
 #   ];
 #
+# or Google's free tier (GEMINI_API_KEY=... in the secret), quick with
+# thinking off:
+#
+#   lanbat.services.llm-gateway.settings.models = {
+#     smart = [
+#       { model = "gemini/gemini-3.5-flash"; params.reasoning_effort = "none"; }
+#       { model = "gemini/gemini-3.1-flash-lite"; }
+#     ];
+#     deep = [ { model = "gemini/gemini-3.8-flash"; } ];
+#   };
+#
 # Always-on with the router; loopback only.
 {
   config,
@@ -41,6 +52,18 @@ let
               type = types.str;
               example = "anthropic/claude-haiku-4-5";
               description = "A LiteLLM model name: provider/model.";
+            };
+            options.params = mkOption {
+              type = types.attrsOf types.anything;
+              default = { };
+              example = {
+                reasoning_effort = "none";
+              };
+              description = ''
+                More LiteLLM parameters for this model (litellm_params), such as
+                reasoning_effort = "none" to keep a thinking model quick enough
+                for a spoken reply.
+              '';
             };
           }
         )
@@ -68,7 +91,9 @@ let
       name: chain:
       lib.imap0 (i: m: {
         model_name = if i == 0 then name else "${name}-fallback-${toString i}";
-        litellm_params.model = m.model;
+        litellm_params = m.params // {
+          inherit (m) model;
+        };
       }) chain
     ) cfg.models
   );
