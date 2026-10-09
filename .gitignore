@@ -49,3 +49,6 @@ __pycache__/
 
 # Per-deployment modules found by lib/local-modules.nix (see docs/extensibility.md)
 deployments/*/local/
+
+# PlatformIO build output (firmware/stackchan)
+.pio/

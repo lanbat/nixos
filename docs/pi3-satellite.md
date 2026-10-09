@@ -386,3 +386,10 @@ lanbat.voiceSatellite.lva.volume = 0.4;
 
 For the film itself, keep Kodi's volume high and turn the speakers down: Kodi's scale is
 steep (50 % is about −30 dB), and a quiet signal turned up in the speaker is noisier.
+
+## 10. A Stack-chan robot as its face
+
+M5Stack's StackChan kit, plugged into the satellite's USB port, shows what the assistant
+is doing. It looks at the people in front of it, listens and thinks visibly, moves its
+mouth with the reply, shows captions and timers, and starts a conversation when you tap
+its head. It needs the LVA backend and the `stackchan` plugin; see [stackchan.md](stackchan.md).

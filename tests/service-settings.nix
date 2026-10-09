@@ -33,6 +33,10 @@
 #   - Audiobookshelf: the library defaults to drive b's media/audiobooks and
 #     Audible, a profile moves it and picks another provider, and the NFS
 #     dependency follows the drive.
+#   - Stack-chan (lanbat-stackchan plugin on the example Pi 3): the bridge
+#     follows LVA's peripheral API on the loopback, a profile pins the robot,
+#     keeps it awake and sets its sad words, and the Wyoming backend is
+#     rejected.
 #   - The Redis index registry keeps today's indexes and rejects a clash, and
 #     Nextcloud's database is the workload instance's "nextcloud" over its
 #     socket, as database.createLocally made it.
@@ -261,6 +265,41 @@ let
       ];
       pi-voice = [ { lanbat.voiceSatellite.backend = "lva"; } ];
     })).configurations.example-pi-storage.config;
+  # The example Pi 3 with a Stack-chan (lanbat-stackchan plugin), on the given
+  # satellite backend and with these modules on top.
+  pi3Stackchan =
+    backend: modules:
+    let
+      deploy = hostsWithModules {
+        server = [ { lanbat.voiceSatellite.backend = backend; } ];
+        pi-storage = [ { lanbat.voiceSatellite.backend = backend; } ];
+        pi-voice = [ { lanbat.voiceSatellite.backend = backend; } ] ++ modules;
+      };
+    in
+    (lanbatLib.mkProfile "example" (
+      deploy
+      // {
+        hosts = deploy.hosts // {
+          pi-voice = deploy.hosts.pi-voice // {
+            plugins = deploy.hosts.pi-voice.plugins ++ [ inputsWithSelf.self.lanbatPlugins.stackchan ];
+          };
+        };
+      }
+    )).configurations.example-pi-voice.config;
+  stackchan = pi3Stackchan "lva" [ ];
+  stackchanTuned = pi3Stackchan "lva" [
+    {
+      lanbat.stackchan = {
+        usbSerial = "F4:12:FA:00:00:01";
+        nightHours.start = null;
+        sadWords = [
+          "sorry"
+          "leider"
+        ];
+      };
+    }
+  ];
+  stackchanWyoming = pi3Stackchan "wyoming" [ ];
   # A server whose Home Assistant agent talks to the assistant router.
   routerServer = serverWith [
     {
@@ -686,6 +725,39 @@ let
       # And WirePlumber doesn't give a new music stream the ducked volume.
       && lvaPi3Aec.services.pipewire.wireplumber.extraConfig ? "51-snapclient-volume"
       && lvaPi3Aec.systemd.services.lva-snapcast-duck.environment.DUCK_VOLUME == "0.25"
+    ))
+
+    (expect "stackchan: the bridge follows LVA's peripheral API on the loopback" (
+      let
+        unit = stackchan.systemd.services.lva-stackchan;
+      in
+      lib.elem "lva-stackchan" stackchan.lanbat.voiceSatellite.lva.peripheralApiUsers
+      &&
+        unit.environment.LVA_PERIPHERAL_URL
+        == "ws://127.0.0.1:${toString stackchan.lanbat.voiceSatellite.lva.peripheralPort}"
+      && lib.elem "linux-voice-assistant.service" unit.partOf
+      && lib.elem "dialout" unit.serviceConfig.SupplementaryGroups
+      && lib.elem "pipewire" unit.serviceConfig.SupplementaryGroups
+      && unit.environment.NIGHT_START == "23:00"
+      && !(unit.environment ? SAD_WORDS)
+      && lib.hasInfix ''SYMLINK+="stackchan"'' stackchan.services.udev.extraRules
+      && !(lib.hasInfix "ID_SERIAL_SHORT" stackchan.services.udev.extraRules)
+      && failedAssertions stackchan == [ ]
+    ))
+
+    (expect "stackchan: a profile pins the robot, keeps it awake and gives it its own sad words" (
+      let
+        env = stackchanTuned.systemd.services.lva-stackchan.environment;
+      in
+      lib.hasInfix ''ENV{ID_SERIAL_SHORT}=="F4:12:FA:00:00:01"'' stackchanTuned.services.udev.extraRules
+      && env.NIGHT_START == ""
+      && env.SAD_WORDS == "sorry,leider"
+    ))
+
+    (expect "stackchan: needs the LVA backend" (
+      lib.any (lib.hasInfix "lanbat.stackchan follows Linux Voice Assistant") (
+        failedAssertions stackchanWyoming
+      )
     ))
 
     # A WirePlumber or PipeWire restart recreates the microphone's node; LVA
