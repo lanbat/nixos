@@ -24,6 +24,10 @@ Sighting latest();
 // Paused while asleep: no frames, less heat and power.
 void setPaused(bool paused);
 
+// Time between frames: 150 ms normally, longer while napping (a face still
+// wakes it, a little later).
+void setFramePeriod(uint32_t ms);
+
 // Frames the detector has looked at since boot (for the boot report).
 uint32_t frameCount();
 

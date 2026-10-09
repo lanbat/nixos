@@ -80,6 +80,7 @@ class Config:
     brightness: int = 180
     night_brightness: int = 10
     notice_guests: bool = True
+    nap_after_s: int = 900  # nobody seen this long: the robot naps (0: never)
     sad_words: tuple[str, ...] = DEFAULT_SAD_WORDS
 
     @classmethod
@@ -97,6 +98,7 @@ class Config:
             brightness=int(env.get("BRIGHTNESS", "180")),
             night_brightness=int(env.get("NIGHT_BRIGHTNESS", "10")),
             notice_guests=flag("NOTICE_GUESTS", True),
+            nap_after_s=int(env.get("NAP_AFTER_S", "900")),
             sad_words=tuple(w.strip().lower() for w in sad.split(",") if w.strip()) if sad else DEFAULT_SAD_WORDS,
         )
 
@@ -135,6 +137,7 @@ class Brain:
     router_mood_at: float = 0.0
     present: bool = False
     present_at: float = 0.0
+    napping: bool = False  # the robot's own nap (nobody around), not the night
 
     def __post_init__(self) -> None:
         self.asleep = self.night_seen = self._is_night(self.now)
@@ -163,7 +166,7 @@ class Brain:
     def router_state(self, now: float) -> dict:
         return {"present": self.present,
                 "present_since_s": int(now - self.present_at) if self.present else 0,
-                "asleep": self.asleep}
+                "asleep": self.asleep or self.napping}
 
     def _sleep(self, asleep: bool) -> list:
         return [
@@ -203,6 +206,7 @@ class Brain:
             ("device", {"config": {
                 "brightness": self.config.night_brightness if self.asleep else self.config.brightness,
                 "notice": self.config.notice_guests,
+                "nap_after_s": self.config.nap_after_s,
             }}),
             self._status(),
             ("device", {"sleep": self.asleep and not self.in_turn}),
@@ -332,6 +336,10 @@ class Brain:
         if face in ("new", "lost") and (face == "new") != self.present:
             self.present = face == "new"
             self.present_at = now
+            out.append(("router", {"state": self.router_state(now)}))
+        rest = msg.get("rest")
+        if rest in ("nap", "awake") and (rest == "nap") != self.napping:
+            self.napping = rest == "nap"
             out.append(("router", {"state": self.router_state(now)}))
         if "hello" in msg:
             hello = msg["hello"] or {}

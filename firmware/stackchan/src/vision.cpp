@@ -57,7 +57,8 @@ volatile float bestScore = 0;
 
 // The image is mirrored: a face on the robot's left is on the frame's right.
 constexpr float kMirrorX = -1.0f;
-constexpr uint32_t kFramePeriodMs = 150;
+// One frame every 150 ms; one a second while the robot naps.
+volatile uint32_t framePeriodMs = 150;
 
 // A detection counts as a face once it has turned up in about the same place
 // in kHitsNeeded frames in a row, so one stray hit doesn't move the head.
@@ -141,7 +142,8 @@ void detectTask(void*) {
     xSemaphoreGive(lock);
 
     uint32_t spent = millis() - started;
-    if (spent < kFramePeriodMs) vTaskDelay(pdMS_TO_TICKS(kFramePeriodMs - spent));
+    uint32_t period = framePeriodMs;
+    if (spent < period) vTaskDelay(pdMS_TO_TICKS(period - spent));
   }
 }
 
@@ -187,6 +189,8 @@ Sighting latest() {
 }
 
 void setPaused(bool p) { paused = p; }
+
+void setFramePeriod(uint32_t ms) { framePeriodMs = ms; }
 
 uint32_t frameCount() { return frames; }
 

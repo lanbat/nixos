@@ -87,6 +87,16 @@ in
       default = true;
       description = "Look at, and nod to, a face that appears after nobody was around (camera, processed on the robot).";
     };
+    napAfter = mkOption {
+      type = types.nullOr types.ints.positive;
+      default = 15;
+      description = ''
+        Minutes without seeing anyone before the robot naps: screen dark, eyes
+        closed, LEDs off, head down, the camera slowed to a frame a second. A
+        face, a touch or the wake word wakes it. Null keeps it awake (it still
+        dozes after 5 minutes).
+      '';
+    };
     nightHours = {
       start = mkOption {
         type = types.nullOr hhmm;
@@ -165,6 +175,7 @@ in
         NIGHT_END = if cfg.nightHours.end == null then "" else cfg.nightHours.end;
         BRIGHTNESS = toString cfg.brightness;
         NIGHT_BRIGHTNESS = toString cfg.nightBrightness;
+        NAP_AFTER_S = toString (if cfg.napAfter == null then 0 else cfg.napAfter * 60);
       }
       // lib.optionalAttrs routerHere {
         ROUTER_BODY_URL = routerUrl;

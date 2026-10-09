@@ -293,6 +293,29 @@ class Router(unittest.TestCase):
         self.assertEqual(b.router_state(NOON + 125), {"present": True, "present_since_s": 125, "asleep": False})
 
 
+class Nap(unittest.TestCase):
+    """The robot naps by itself when nobody has been around (firmware)."""
+
+    def router(self, actions):
+        return [a[1] for a in actions if a[0] == "router"]
+
+    def test_the_nap_time_goes_to_the_robot(self):
+        b = Brain(Config(nap_after_s=600), now=NOON)
+        state = merged(b.on_device({"hello": {"fw": "1.0.0", "proto": 1}}, NOON))
+        self.assertEqual(state["config"]["nap_after_s"], 600)
+        self.assertEqual(Config().nap_after_s, 900)
+        self.assertEqual(Config.from_env({"NAP_AFTER_S": "0"}).nap_after_s, 0)
+
+    def test_a_nap_is_sleep_to_the_router(self):
+        b = Brain(Config(), now=NOON)
+        self.assertEqual(self.router(b.on_device({"rest": "nap"}, NOON)),
+                         [{"state": {"present": False, "present_since_s": 0, "asleep": True}}])
+        self.assertEqual(self.router(b.on_device({"rest": "nap"}, NOON + 1)), [])
+        self.assertEqual(self.router(b.on_device({"rest": "awake"}, NOON + 60)),
+                         [{"state": {"present": False, "present_since_s": 0, "asleep": False}}])
+        self.assertEqual(b.on_device({"rest": "snoring"}, NOON + 61), [])
+
+
 class Envelope(unittest.TestCase):
     def test_silence_is_closed_and_speech_opens(self):
         quiet = b"\x00\x00" * 400

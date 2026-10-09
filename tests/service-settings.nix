@@ -292,6 +292,7 @@ let
       lanbat.stackchan = {
         usbSerial = "F4:12:FA:00:00:01";
         nightHours.start = null;
+        napAfter = null;
         sadWords = [
           "sorry"
           "leider"
@@ -775,6 +776,7 @@ let
       && lib.elem "dialout" unit.serviceConfig.SupplementaryGroups
       && lib.elem "pipewire" unit.serviceConfig.SupplementaryGroups
       && unit.environment.NIGHT_START == "23:00"
+      && unit.environment.NAP_AFTER_S == "900"
       && !(unit.environment ? SAD_WORDS)
       && lib.hasInfix ''SYMLINK+="stackchan"'' stackchan.services.udev.extraRules
       && !(lib.hasInfix "ID_SERIAL_SHORT" stackchan.services.udev.extraRules)
@@ -788,6 +790,7 @@ let
       lib.hasInfix ''ENV{ID_SERIAL_SHORT}=="F4:12:FA:00:00:01"'' stackchanTuned.services.udev.extraRules
       && env.NIGHT_START == ""
       && env.SAD_WORDS == "sorry,leider"
+      && env.NAP_AFTER_S == "0"
     ))
 
     (expect "stackchan: the robot is the router's body in its room, over a port opened to it alone" (

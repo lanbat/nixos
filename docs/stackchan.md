@@ -19,6 +19,10 @@ voice satellite's USB port, it becomes the satellite's face. The Pi keeps the vo
   front to back just makes it happy. Any touch silences a ringing timer.
 - **Timers.** The soonest timer counts down under its face, and the LEDs drain as it
   runs. When it rings, the robot wiggles and flashes amber.
+- **A nap when nobody is around.** After 5 minutes without a face it dozes; after 15
+  (`lanbat.stackchan.napAfter`) it naps: screen dark, eyes closed, LEDs off, head down,
+  the camera slowed to a frame a second. Someone walking in, a tap or the wake word wakes
+  it with a stretch, and Nabu knows it was napping.
 - **Night.** From 23:00 to 07:00 it sleeps, dimmed, still and with its camera off. The
   wake word or a tap wakes it for the conversation.
 - **Status.** One dim red LED on each side means the microphone is muted. A slow red
