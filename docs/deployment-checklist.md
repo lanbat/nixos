@@ -48,9 +48,24 @@ echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
   names through the router.
 - [ ] With the `lanbat-dns` plugin (optional): add `inputs.self.lanbatPlugins.dns` to
   the server's and the storage Pi's `plugins`, set `deployment.dns` (`shortSuffix`,
-  `extraRecords`), deploy both, then set the router's DHCP DNS servers to their two
-  addresses. The router's own upstream must stay a public resolver, not CoreDNS,
-  or the two forward to each other (CoreDNS's `loop` check stops it at start).
+  `extraRecords`), and deploy both. Then make clients find the short names, one of
+  two ways:
+  - **Forward the short suffix from the router** (simplest; clients keep the router
+    as their DNS server, including over IPv6). On a dnsmasq router such as OpenWrt,
+    add a file to its config directory (`/etc/dnsmasq.d/lanbat-dns.conf`) and
+    restart dnsmasq:
+    ```
+    server=/<short>/<server-ip>
+    server=/<short>/<storage-pi-ip>
+    rebind-domain-ok=/<short>/
+    ```
+    `rebind-domain-ok` lets the private answers through rebind protection. A file
+    rather than `uci add_list dhcp.@dnsmasq[0].server`, because a DNS-over-HTTPS
+    proxy package rewrites that list.
+  - **Or hand out the CoreDNS hosts over DHCP** as the clients' DNS servers.
+    The router's own upstream must then stay a public resolver, not CoreDNS, or the
+    two forward to each other (CoreDNS's `loop` check stops it at start). If the
+    router also advertises an IPv6 DNS server, clients may ask it instead.
 
 ### 0c. Create secrets (agenix)
 

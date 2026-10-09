@@ -176,10 +176,10 @@ consumers dial. The per-host `overlay` blocks can stay where they are.
 
 ## DNS host down
 
-With the `lanbat-dns` plugin on two hosts, clients fail over to the other
-address their DHCP lease lists, and both serve the same names. With both down,
-clients fall back to whatever else DHCP hands out: full names still resolve
-through the router's `*.<domain>` record, short names stop.
+With the `lanbat-dns` plugin on two hosts, both serve the same names. When the
+router forwards the short suffix to both, it moves on to the other; when DHCP
+hands both out, clients do. With both down, full names still resolve through
+the router's `*.<domain>` record; short names stop.
 Hosts list their own CoreDNS first, then the gateway. Service-to-service
 traffic is unaffected: it uses addresses fixed at evaluation time.
 
