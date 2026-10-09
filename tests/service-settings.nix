@@ -300,6 +300,42 @@ let
     }
   ];
   stackchanWyoming = pi3Stackchan "wyoming" [ ];
+  # The Stack-chan on a Pi 3 in the Kitchen, with the assistant router on the
+  # server: the robot is the router's body there.
+  bodyProfile =
+    let
+      deploy = hostsWithModules {
+        server = [
+          {
+            lanbat.voiceSatellite.backend = "lva";
+            lanbat.services.assistant-router.settings.body.persona = "You are Robo.";
+          }
+        ];
+        pi-storage = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+        pi-voice = [ { lanbat.voiceSatellite.backend = "lva"; } ];
+      };
+    in
+    lanbatLib.mkProfile "example" (
+      deploy
+      // {
+        deployment = deploy.deployment // {
+          voiceRooms = deploy.deployment.voiceRooms // {
+            Kitchen = "pi-voice";
+          };
+          haLlm = {
+            baseUrl = "http://127.0.0.1:8092/v1";
+            model = "assistant";
+          };
+        };
+        hosts = deploy.hosts // {
+          pi-voice = deploy.hosts.pi-voice // {
+            plugins = deploy.hosts.pi-voice.plugins ++ [ inputsWithSelf.self.lanbatPlugins.stackchan ];
+          };
+        };
+      }
+    );
+  bodyServer = bodyProfile.configurations.example-server.config;
+  bodyPi = bodyProfile.configurations.example-pi-voice.config;
   # A server whose Home Assistant agent talks to the assistant router.
   routerServer = serverWith [
     {
@@ -752,6 +788,36 @@ let
       lib.hasInfix ''ENV{ID_SERIAL_SHORT}=="F4:12:FA:00:00:01"'' stackchanTuned.services.udev.extraRules
       && env.NIGHT_START == ""
       && env.SAD_WORDS == "sorry,leider"
+    ))
+
+    (expect "stackchan: the robot is the router's body in its room, over a port opened to it alone" (
+      let
+        env = bodyPi.systemd.services.lva-stackchan.environment;
+        router = bodyServer.systemd.services.assistant-router.serviceConfig;
+        piIp = bodyServer.lanbat.hosts.pi-voice.networking.ip;
+        serverIp = bodyServer.lanbat.hosts.server.networking.ip;
+      in
+      env.ROOM == "Kitchen"
+      && env.ROUTER_BODY_URL == "ws://${serverIp}:8770/v1/body"
+      && lib.elem serverIp bodyPi.systemd.services.lva-stackchan.serviceConfig.IPAddressAllow
+      && lib.hasInfix "--body-port 8770" router.ExecStart
+      && lib.elem piIp router.IPAddressAllow
+      && lib.elem 8770 bodyServer.networking.firewall.allowedTCPPorts
+      && lib.any (r: lib.hasInfix "--dport 8770 -s ${piIp} -j ACCEPT" r) (
+        lib.splitString "\n" bodyServer.networking.firewall.extraCommands
+      )
+      && failedAssertions bodyServer == [ ]
+      && failedAssertions bodyPi == [ ]
+    ))
+
+    (expect "stackchan: the router's persona is the profile's" (
+      bodyServer.lanbat.services.assistant-router.settings.body.persona == "You are Robo."
+      && lib.hasInfix "assistant-router-persona.txt" bodyServer.systemd.services.assistant-router.serviceConfig.ExecStart
+    ))
+
+    (expect "stackchan: without a room or a router, no body connection" (
+      !(stackchan.systemd.services.lva-stackchan.environment ? ROUTER_BODY_URL)
+      && stackchan.lanbat.services.stackchan.consumes == [ ]
     ))
 
     (expect "stackchan: needs the LVA backend" (

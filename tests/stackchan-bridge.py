@@ -231,6 +231,68 @@ class Device(unittest.TestCase):
         self.assertTrue(any(a[0] == "log" and "protocol" in a[1] for a in out))
 
 
+class Router(unittest.TestCase):
+    """The assistant router's side (pkgs/assistant-router body.py)."""
+
+    def router(self, actions):
+        return [a[1] for a in actions if a[0] == "router"]
+
+    def test_the_routers_mood_wins_over_the_guess(self):
+        b = Brain(Config(), now=NOON)
+        b.on_lva("wake_word_detected", {}, NOON)
+        acted = merged(b.on_router({"act": {"mood": "excited", "gesture": "dance"}}, NOON + 1))
+        self.assertEqual(acted["mood"], "excited")
+        self.assertEqual(acted["gesture"], "dance")
+        # "Sorry" would make the guess sad; the router said excited.
+        reply = merged(b.on_lva("tts_text", {"text": "Sorry, I just love dancing!"}, NOON + 2))
+        self.assertEqual(reply["mood"], "excited")
+
+    def test_the_routers_mood_is_forgotten_after_a_while(self):
+        b = Brain(Config(), now=NOON)
+        b.on_router({"act": {"mood": "excited"}}, NOON)
+        self.assertEqual(merged(b.on_lva("tts_text", {"text": "Sorry."}, NOON + 30))["mood"], "sad")
+
+    def test_look_commands(self):
+        b = Brain(Config(), now=NOON)
+        self.assertEqual(merged(b.on_router({"act": {"look": "user"}}, NOON))["look"], "user")
+        self.assertEqual(merged(b.on_router({"act": {"gesture": "look_at_user"}}, NOON))["look"], "user")
+        self.assertEqual(merged(b.on_router({"act": {"gesture": "look_around"}}, NOON))["gesture"], "look_around")
+
+    def test_unknown_values_are_ignored(self):
+        b = Brain(Config(), now=NOON)
+        self.assertEqual(b.on_router({"act": {"mood": "furious", "gesture": "backflip", "look": "away"}}, NOON), [])
+        self.assertEqual(b.on_router({"hello": 1}, NOON), [])
+
+    def test_go_to_sleep_by_day_lasts_until_the_night_changes(self):
+        b = Brain(Config(night_start="23:00", night_end="07:00"), now=NOON)
+        b.on_lva("wake_word_detected", {}, NOON)
+        b.on_router({"act": {"sleep": True}}, NOON + 1)
+        self.assertEqual(merged(b.on_lva("idle", {}, NOON + 3))["sleep"], True)  # after the reply
+        self.assertNotIn("sleep", merged(b.tick(NOON + 60)))  # still day: it stays asleep
+        self.assertEqual(merged(b.tick(MIDNIGHT))["sleep"], True)
+        self.assertEqual(merged(b.tick(MIDNIGHT + 8 * 3600))["sleep"], False)
+
+    def test_wake_up_at_night(self):
+        b = Brain(Config(night_start="23:00", night_end="07:00"), now=MIDNIGHT)
+        b.on_lva("wake_word_detected", {}, MIDNIGHT)
+        b.on_router({"act": {"sleep": False}}, MIDNIGHT + 1)
+        self.assertNotIn("sleep", merged(b.on_lva("idle", {}, MIDNIGHT + 3)))
+        self.assertFalse(b.asleep)
+
+    def test_presence_is_reported_on_change(self):
+        b = Brain(Config(), now=NOON)
+        self.assertEqual(self.router(b.on_device({"face": "new"}, NOON)),
+                         [{"state": {"present": True, "present_since_s": 0, "asleep": False}}])
+        self.assertEqual(self.router(b.on_device({"face": "new"}, NOON + 1)), [])
+        self.assertEqual(self.router(b.on_device({"face": "lost"}, NOON + 90)),
+                         [{"state": {"present": False, "present_since_s": 0, "asleep": False}}])
+
+    def test_state_on_connect(self):
+        b = Brain(Config(), now=NOON)
+        b.on_device({"face": "new"}, NOON)
+        self.assertEqual(b.router_state(NOON + 125), {"present": True, "present_since_s": 125, "asleep": False})
+
+
 class Envelope(unittest.TestCase):
     def test_silence_is_closed_and_speech_opens(self):
         quiet = b"\x00\x00" * 400

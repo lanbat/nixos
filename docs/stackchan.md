@@ -116,6 +116,34 @@ The robot can be plugged in and out at any time.
   head silences the ring.
 - Walk out of view for a minute and come back: it should turn to you and nod.
 
+## 4. Nabu with a body
+
+When the profile runs the assistant router (`services/assistant-router.nix`) and the
+satellite has a room (`lanbat.deployment.voiceRooms`), the robot connects to the router,
+and the assistant knows it has a body:
+
+- **It is someone.** A request from the robot's room goes to the cloud model with a
+  persona, `lanbat.services.assistant-router.settings.body.persona`. By default that's
+  Nabu, matching the "Okay Nabu" wake word: upbeat and excited about the day, warm and
+  gentle when someone is down, like a best friend. Ask it "how old are you?".
+- **It picks its own face.** The model starts each reply with a tag, `[mood]` or
+  `[mood gesture]`. The router takes the tag off before the reply is spoken and sends it
+  to the robot. These moods and gestures replace the guess from the reply's words.
+- **It knows who is there.** The robot tells the router whether someone is in front of
+  its camera, and since when, so "can you see me?" gets a true answer.
+- **Body commands, answered at once** without a model: "nod", "shake your head", "look
+  at me", "look around", "do a little dance", "go to sleep" and "wake up". "Go to sleep"
+  by day lasts until the night hours start or end.
+
+Only fixed fields pass between the robot and the router (yes/no, seconds, names from
+fixed lists), so nothing the robot sends becomes text in a prompt. The router listens
+for robots on port 8770, which is opened only to the hosts running `lva-stackchan`.
+`lanbat.stackchan.router = false` turns the connection off.
+
+Check it: `journalctl -u lva-stackchan` on the Pi shows `body of Kitchen at
+ws://…:8770/v1/body`, and `journalctl -u assistant-router` on the server shows
+`{"body": "connected", "room": "Kitchen", …}`.
+
 ## How it fits together
 
 ```
@@ -138,9 +166,9 @@ One JSON object per line, 115200 baud over the CoreS3's USB port.
 
 | Pi → robot | Meaning |
 |---|---|
-| `{"mood": "neutral\|listening\|thinking\|happy\|sad\|surprised\|sleepy\|confused\|curious"}` | Face and LED scene |
+| `{"mood": "neutral\|listening\|thinking\|happy\|excited\|sad\|surprised\|sleepy\|confused\|curious"}` | Face and LED scene |
 | `{"look": "track\|user\|up\|center"}` | Follow faces, look at the speaker, look up (thinking), straight ahead |
-| `{"gesture": "perk\|nod\|shake\|wiggle\|tilt"}` | A short head movement |
+| `{"gesture": "perk\|nod\|shake\|wiggle\|tilt\|dance\|look_around"}` | A head movement |
 | `{"mouth": 0.0–1.0}` | Mouth opening, about 20 times a second while a reply plays |
 | `{"caption": {"text", "who", "ms"}}` | Caption under the face for `ms` |
 | `{"timers": [{"id", "name", "remaining_s", "total_s", "ringing"}]}` | All timers, soonest first |

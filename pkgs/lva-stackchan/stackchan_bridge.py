@@ -17,6 +17,11 @@ This decides what it should feel and say:
   LVA reports a cancelled timer only as an idle in the middle of a turn.
 - Night: between NIGHT_START and NIGHT_END it sleeps, dimmed and still,
   waking for a conversation.
+- The assistant router (ROUTER_BODY_URL, pkgs/assistant-router body.py):
+  the robot tells it whether someone is in front of it; it sends the mood
+  and gesture the cloud model chose for a reply, and body commands ("nod",
+  "dance", "go to sleep"). Its mood wins over the guess from the reply's
+  words.
 
 Brain holds the decisions and no I/O, so tests/stackchan-bridge.py drives it
 with scripted events.
@@ -34,7 +39,11 @@ from dataclasses import dataclass, field
 
 PROTOCOL = 1
 
-MOODS = ("neutral", "listening", "thinking", "happy", "sad", "surprised", "sleepy", "confused", "curious")
+MOODS = ("neutral", "listening", "thinking", "happy", "excited", "sad", "surprised", "sleepy", "confused", "curious")
+GESTURES = ("perk", "nod", "shake", "wiggle", "tilt", "dance", "look_around")
+LOOKS = ("track", "user", "up", "center")
+# How long the router's mood waits for the reply it was chosen for.
+ROUTER_MOOD_SECONDS = 10
 
 DEFAULT_SAD_WORDS = (
     "sorry",
@@ -121,9 +130,14 @@ class Brain:
     online: bool = True
     asleep: bool = False
     timers: dict[str, Timer] = field(default_factory=dict)
+    night_seen: bool = False  # night or day at the last look: asleep follows its changes
+    router_mood: str | None = None
+    router_mood_at: float = 0.0
+    present: bool = False
+    present_at: float = 0.0
 
     def __post_init__(self) -> None:
-        self.asleep = self._is_night(self.now)
+        self.asleep = self.night_seen = self._is_night(self.now)
 
     # ── helpers ────────────────────────────────────────────────────────────
     def _is_night(self, now: float) -> bool:
@@ -146,8 +160,14 @@ class Brain:
     def _status(self) -> tuple[str, dict]:
         return ("device", {"status": {"muted": self.muted, "online": self.online}})
 
+    def router_state(self, now: float) -> dict:
+        return {"present": self.present,
+                "present_since_s": int(now - self.present_at) if self.present else 0,
+                "asleep": self.asleep}
+
     def _sleep(self, asleep: bool) -> list:
         return [
+            ("router", {"state": self.router_state(self.now)}),
             ("device", {"sleep": asleep}),
             (
                 "device",
@@ -200,6 +220,7 @@ class Brain:
 
     # ── inputs ─────────────────────────────────────────────────────────────
     def on_lva(self, event: str, data: dict, now: float) -> list:
+        self.now = now
         out: list = []
         if event in ("wake_word_detected", "listening"):
             if not self.in_turn:
@@ -220,6 +241,9 @@ class Brain:
             self.replied = True
             text = data.get("text", "")
             mood = self.reply_mood(text)
+            if self.router_mood and now - self.router_mood_at <= ROUTER_MOOD_SECONDS:
+                mood = self.router_mood
+            self.router_mood = None
             out += self._caption(text, "assistant") + [self._mood(mood), ("device", {"look": "user"})]
             if mood == "curious":
                 out.append(("device", {"gesture": "tilt"}))
@@ -275,8 +299,40 @@ class Brain:
                 out += [self._mood("surprised"), ("device", {"gesture": "wiggle"})]
         return out
 
-    def on_device(self, msg: dict, now: float) -> list:
+    def on_router(self, msg: dict, now: float) -> list:
+        """An act from the assistant router: fields from fixed lists, else ignored."""
+        act = msg.get("act") if isinstance(msg, dict) else None
+        if not isinstance(act, dict):
+            return []
+        self.now = now
         out: list = []
+        mood = act.get("mood")
+        if mood in MOODS:
+            self.router_mood, self.router_mood_at = mood, now
+            out.append(self._mood(mood))
+        gesture = act.get("gesture")
+        if gesture == "look_at_user":
+            out.append(("device", {"look": "user"}))
+        elif gesture in GESTURES:
+            out.append(("device", {"gesture": gesture}))
+        if act.get("look") in LOOKS:
+            out.append(("device", {"look": act["look"]}))
+        sleep = act.get("sleep")
+        if type(sleep) is bool:
+            # Until night or day next changes (tick); in a turn, at its end.
+            self.asleep = sleep
+            if not self.in_turn:
+                out += self._sleep(sleep) + [self._mood("sleepy" if sleep else "neutral")]
+        return out
+
+    def on_device(self, msg: dict, now: float) -> list:
+        self.now = now
+        out: list = []
+        face = msg.get("face")
+        if face in ("new", "lost") and (face == "new") != self.present:
+            self.present = face == "new"
+            self.present_at = now
+            out.append(("router", {"state": self.router_state(now)}))
         if "hello" in msg:
             hello = msg["hello"] or {}
             out.append(("log", f"robot firmware {hello.get('fw', '?')}, protocol {hello.get('proto', '?')}"))
@@ -299,9 +355,11 @@ class Brain:
 
     def tick(self, now: float) -> list:
         out: list = []
+        self.now = now
         night = self._is_night(now)
-        if night != self.asleep:
-            self.asleep = night
+        if night != self.night_seen:
+            # Night falls or ends: that decides, whatever "go to sleep" said.
+            self.night_seen = self.asleep = night
             if not self.in_turn:
                 out += self._sleep(night)
                 out.append(self._mood("sleepy" if night else "neutral"))
@@ -360,12 +418,15 @@ async def follow_mouth(send) -> None:
 
 # ── I/O ────────────────────────────────────────────────────────────────────
 class Bridge:
-    def __init__(self, config: Config, device: str, lva_url: str) -> None:
+    def __init__(self, config: Config, device: str, lva_url: str, router_url: str = "", room: str = "") -> None:
         self.brain = Brain(config, now=time.time())
         self.device = device
         self.lva_url = lva_url
+        self.router_url = router_url
+        self.room = room
         self.writer: asyncio.StreamWriter | None = None
         self.ws = None
+        self.router_ws = None
         self.mouth_task: asyncio.Task | None = None
 
     async def send_device(self, line: dict) -> None:
@@ -391,6 +452,12 @@ class Bridge:
                 elif not value and self.mouth_task is not None:
                     self.mouth_task.cancel()
                     self.mouth_task = None
+            elif kind == "router":
+                if self.router_ws is not None:
+                    try:
+                        await self.router_ws.send(json.dumps(value))
+                    except Exception as err:  # pylint: disable=broad-except
+                        log(f"router write failed: {err}")
             elif kind == "log":
                 log(value)
 
@@ -442,6 +509,32 @@ class Bridge:
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)
 
+    async def router_loop(self) -> None:
+        """The assistant router (pkgs/assistant-router body.py): what the
+        robot senses goes there, moods, gestures and body commands come back."""
+        import websockets
+
+        delay = 1
+        while True:
+            try:
+                async with websockets.connect(self.router_url) as ws:
+                    self.router_ws, delay = ws, 1
+                    await ws.send(json.dumps({"hello": {"room": self.room, "kind": "stackchan", "proto": PROTOCOL}}))
+                    await ws.send(json.dumps({"state": self.brain.router_state(time.time())}))
+                    log(f"body of {self.room} at {self.router_url}")
+                    async for raw in ws:
+                        try:
+                            msg = json.loads(raw)
+                        except ValueError:
+                            continue
+                        if isinstance(msg, dict):
+                            await self.act(self.brain.on_router(msg, time.time()))
+            except (OSError, websockets.exceptions.WebSocketException) as err:
+                log(f"router unreachable ({err}); retrying")
+            self.router_ws = None
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 60)
+
     async def clock_loop(self) -> None:
         while True:
             await asyncio.sleep(3)
@@ -450,7 +543,10 @@ class Bridge:
             await self.send_device({"ping": 1})
 
     async def run(self) -> None:
-        await asyncio.gather(self.serial_loop(), self.lva_loop(), self.clock_loop())
+        loops = [self.serial_loop(), self.lva_loop(), self.clock_loop()]
+        if self.router_url and self.room:
+            loops.append(self.router_loop())
+        await asyncio.gather(*loops)
 
 
 def main() -> None:
@@ -458,6 +554,8 @@ def main() -> None:
         Config.from_env(),
         device=os.environ.get("STACKCHAN_DEVICE", "/dev/stackchan"),
         lva_url=os.environ.get("LVA_PERIPHERAL_URL", "ws://127.0.0.1:6055"),
+        router_url=os.environ.get("ROUTER_BODY_URL", ""),
+        room=os.environ.get("ROOM", ""),
     )
     asyncio.run(bridge.run())
 

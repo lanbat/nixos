@@ -249,18 +249,19 @@ async def test_request_log_rotates_daily_and_keeps_n_days(aiohttp_client, fakes,
     assert "text" not in entry and entry["route"] == "reject"
 
 
-def test_cli_takes_the_local_time_limit(monkeypatch):
-    import sys
+def test_cli_takes_the_local_time_limit():
     from assistant_router import __main__ as cli
-    seen = {}
-    monkeypatch.setattr(cli.web, "run_app", lambda app, **kw: seen.update(app=app))
-    monkeypatch.setattr(sys, "argv", ["assistant-router", "--local-url", "l", "--local-model", "m",
-                                      "--cloud-url", "c", "--local-timeout", "2.5"])
-    captured = {}
-    real = cli.make_app
-    monkeypatch.setattr(cli, "make_app", lambda cfg: captured.update(cfg=cfg) or real(cfg))
-    cli.main()
-    assert captured["cfg"].local_timeout == 2.5
+    cfg, _ = cli.config(["--local-url", "l", "--local-model", "m", "--cloud-url", "c", "--local-timeout", "2.5"])
+    assert cfg.local_timeout == 2.5
+
+
+def test_cli_takes_the_body_listener():
+    from assistant_router import __main__ as cli
+    _, a = cli.config(["--local-url", "l", "--local-model", "m", "--cloud-url", "c",
+                       "--body-host", "0.0.0.0", "--body-port", "8770", "--persona-file", "p.txt"])
+    assert (a.body_host, a.body_port, a.persona_file) == ("0.0.0.0", 8770, "p.txt")
+    _, a = cli.config(["--local-url", "l", "--local-model", "m", "--cloud-url", "c"])
+    assert a.body_port == 0  # no bodies unless asked
 
 
 async def test_a_local_act_the_words_dont_back_goes_to_the_cloud(aiohttp_client, fakes):
@@ -269,3 +270,93 @@ async def test_a_local_act_the_words_dont_back_goes_to_the_cloud(aiohttp_client,
     c = await client_for(aiohttp_client, base)
     choice = await post(c, req("Pause."))
     assert choice["finish_reason"] == "stop" and len(seen["cloud"]) == 1
+
+
+# ── a body in the room (assistant_router/body.py) ─────────────────────────────
+from assistant_router.body import Bodies  # noqa: E402
+from assistant_router.server import make_body_app  # noqa: E402
+
+
+class Sock:
+    def __init__(self):
+        self.sent = []
+
+    async def send_json(self, data):
+        self.sent.append(data)
+
+
+async def body_client(aiohttp_client, base, room="Bedroom 1"):
+    cfg = Config(local_url=f"{base}/local/v1/chat/completions", local_model="qwen3-4b",
+                 cloud_url=f"{base}/cloud/v1/chat/completions", cloud_model="smart", mode="local-first")
+    bodies = Bodies("You are Nabu, a little robot.")
+    sock = Sock()
+    if room:
+        bodies.connect(room, sock)
+    return await aiohttp_client(make_app(cfg, State(), bodies=bodies)), bodies, sock
+
+
+async def test_body_command_is_answered_here(aiohttp_client, fakes):
+    seen, _, _, base = fakes
+    c, _, sock = await body_client(aiohttp_client, base)
+    choice = await post(c, req("Do a little dance!"))
+    assert choice["message"]["content"] == "Here I go!"
+    assert sock.sent == [{"act": {"mood": "excited", "gesture": "dance"}}]
+    assert seen["local"] == [] and seen["cloud"] == []
+
+
+async def test_body_command_without_a_body_takes_the_normal_path(aiohttp_client, fakes):
+    seen, local_line, _, base = fakes
+    local_line["v"] = "escalate"
+    c, _, sock = await body_client(aiohttp_client, base, room="Kitchen")
+    await post(c, req("Do a little dance!"))
+    assert sock.sent == []
+    assert len(seen["cloud"]) == 1
+
+
+async def test_cloud_gets_the_persona_and_its_tag_drives_the_body(aiohttp_client, fakes):
+    seen, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    cloud_reply["v"] = {"role": "assistant", "content": "[excited nod] Good morning! What a lovely day."}
+    c, _, sock = await body_client(aiohttp_client, base)
+    choice = await post(c, req("Good morning"))
+    assert choice["message"]["content"] == "Good morning! What a lovely day."
+    assert sock.sent == [{"act": {"mood": "excited", "gesture": "nod"}}]
+    system = seen["cloud"][-1]["messages"][0]["content"]
+    assert system.startswith(CTX)  # Home Assistant's block untouched, the body's after it
+    assert "You are Nabu" in system and "Nobody is in front of you" in system
+
+
+async def test_without_a_body_the_cloud_request_is_unchanged(aiohttp_client, fakes):
+    seen, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    c, _, _ = await body_client(aiohttp_client, base, room="Kitchen")
+    await post(c, req("Good morning"))
+    assert seen["cloud"][-1]["messages"][0]["content"] == CTX
+
+
+async def test_a_local_act_makes_the_body_nod(aiohttp_client, fakes):
+    _, _, _, base = fakes
+    c, _, sock = await body_client(aiohttp_client, base)
+    choice = await post(c, req("Turn off the office light."))
+    call = choice["message"]["tool_calls"][0]
+    await post(c, req("Turn off the office light.", [choice["message"], {
+        "role": "tool", "tool_call_id": call["id"], "name": "control_device", "content": "Success"}]))
+    assert sock.sent == [{"act": {"mood": "happy", "gesture": "nod"}}]
+
+
+async def test_a_body_connects_and_reports_over_its_socket(aiohttp_client):
+    bodies = Bodies("You are Nabu.")
+    c = await aiohttp_client(make_body_app(bodies, clock=lambda: 1000.0))
+    ws = await c.ws_connect("/v1/body")
+    await ws.send_json({"hello": {"room": "Kitchen", "kind": "stackchan", "proto": 1}})
+    await ws.send_json({"state": {"present": True, "present_since_s": 0, "asleep": False}})
+    await ws.send_json({"ping": 1})  # anything else is ignored
+    for _ in range(50):
+        if bodies.has("Kitchen") and bodies.state("Kitchen").present:
+            break
+        import asyncio
+        await asyncio.sleep(0.01)
+    assert bodies.state("Kitchen").present
+    assert await bodies.act("Kitchen", {"gesture": "nod"})
+    assert (await ws.receive_json()) == {"act": {"gesture": "nod"}}
+    await ws.close()

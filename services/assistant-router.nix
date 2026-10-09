@@ -13,7 +13,12 @@
 # speech included, unless logText is off), which tier answered, how and how
 # fast. Files older than logDays are deleted.
 #
-# Always-on: it is in the voice path. Loopback only.
+# Robot bodies (a Stack-chan on a satellite, modules/pi/stackchan.nix) connect
+# on bodyPort from the hosts that consume this service; nothing else reaches
+# it. For a request from a room with a body, the cloud model answers as
+# settings.body.persona and drives the body (pkgs/assistant-router body.py).
+#
+# Always-on: it is in the voice path. Home Assistant's side is loopback only.
 {
   config,
   lib,
@@ -27,7 +32,27 @@ let
   enabled = hostLib.haLlmIsRouter (config.lanbat.deployment.haLlm or null);
   cfg = config.lanbat.services.assistant-router.settings;
   port = 8092;
+  bodyPort = 8770;
   router = pkgs.callPackage ../pkgs/assistant-router { };
+
+  # Hosts whose services consume the router: the bodies. The same derivation
+  # as modules/wiring/policy.nix, which opens bodyPort to exactly these.
+  bodyHosts = lib.unique (
+    lib.concatLists (
+      lib.mapAttrsToList (
+        _: entry: if lib.elem "assistant-router" (entry.consumes or [ ]) then entry.hosts else [ ]
+      ) config.lanbat.endpoints
+    )
+  );
+  overlay = config.lanbat.overlay;
+  bodyAddresses = lib.concatMap (
+    h:
+    [ config.lanbat.hosts.${h}.networking.ip ]
+    ++ lib.optional (overlay.onOverlay h && overlay.onOverlay config.lanbat.hostKey) (
+      overlay.addressOf h
+    )
+  ) bodyHosts;
+  personaFile = pkgs.writeText "assistant-router-persona.txt" cfg.body.persona;
   routerSettings.options.localTimeout = mkOption {
     type = types.numbers.positive;
     default = 2.5;
@@ -50,6 +75,22 @@ let
     type = types.bool;
     default = true;
     description = "Whether the request log keeps what was said, or only the tier, route and timing.";
+  };
+  routerSettings.options.body.persona = mkOption {
+    type = types.str;
+    default = ''
+      You are Nabu, the voice of this home, living in a little robot with a face,
+      eyes and a head that turns. You love the day and the people here: upbeat,
+      curious and excited about what's ahead, and warm and gentle when someone is
+      tired or down, like a best friend. You can see whether someone is in front
+      of you. Replies are spoken: one or two short, plain sentences.
+    '';
+    description = ''
+      Who the assistant is when the request comes from a room with a robot
+      body (modules/pi/stackchan.nix). The cloud model gets it, with what the
+      body senses, after Home Assistant's context. The name should match the
+      wake word people say ("Okay Nabu").
+    '';
   };
   routerSettings.options.mode = mkOption {
     type = types.enum [
@@ -76,7 +117,17 @@ in
           message = "lanbat: with the assistant router, lanbat.deployment.haLlm.model must be \"assistant\".";
         }
       ];
-      lanbat.services.assistant-router.port = port;
+      lanbat.services.assistant-router = {
+        inherit port;
+        # What other hosts consume: the bodies' socket, not Home Assistant's
+        # endpoint, which stays on the loopback.
+        endpoint = {
+          scheme = "http";
+          port = bodyPort;
+        };
+        extraPorts = [ bodyPort ];
+      };
+      networking.firewall.allowedTCPPorts = lib.mkIf (bodyHosts != [ ]) [ bodyPort ];
       systemd.services.assistant-router = {
         description = "Assistant router: noise gate, local triage, cloud escalation";
         wantedBy = [ "multi-user.target" ];
@@ -98,6 +149,9 @@ in
               "--local-timeout ${toString cfg.localTimeout}"
               "--log-dir /var/lib/assistant-router"
               "--log-days ${toString cfg.logDays}"
+              "--body-host 0.0.0.0"
+              "--body-port ${toString bodyPort}"
+              "--persona-file ${personaFile}"
             ]
             ++ lib.optionals (!cfg.logText) [ "--no-log-text" ]
           );
@@ -106,7 +160,7 @@ in
           Restart = "always";
           RestartSec = 2;
           IPAddressDeny = "any";
-          IPAddressAllow = "localhost";
+          IPAddressAllow = [ "localhost" ] ++ bodyAddresses;
         };
       };
     })
