@@ -181,6 +181,17 @@ consumers dial. The per-host `overlay` blocks can stay where they are.
 
 ---
 
+## DNS host down
+
+With the `lanbat-dns` plugin on two hosts, clients fail over to the other
+address their DHCP lease lists, and both serve the same names. With both down,
+clients fall back to whatever else DHCP hands out: full names still resolve
+through the router's `*.<domain>` record, short names stop.
+Hosts list their own CoreDNS first, then the gateway. Service-to-service
+traffic is unaffected: it uses addresses fixed at evaluation time.
+
+---
+
 ## What needs manual intervention
 
 | Situation | Manual action needed? |
@@ -198,6 +209,7 @@ consumers dial. The per-host `overlay` blocks can stay where they are.
 | Server new kernel | Yes — manual reboot required, then unlock both layers |
 | Pi new kernel | Yes — reboot the Pi when convenient; Clevis/Tang unlocks its drives |
 | Container image updates | Yes — bump the tag and deploy |
+| DNS host down | No — the other CoreDNS host answers; with both down, full names resolve through the router (see [DNS host down](#dns-host-down)) |
 | Overlay down | No for Tang, NFS and boot; overlay edges pause until it returns, or set `overlay.provider = "none"` and redeploy (see [Overlay down](#overlay-down)) |
 | Server root or workload fills up | Yes — grow the volume from LVM free space (`docs/operations.md`) |
 

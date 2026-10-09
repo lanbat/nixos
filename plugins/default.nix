@@ -7,4 +7,5 @@
   voice = import ./voice;
   android = import ./android;
   xiaomi-clock = import ./xiaomi-clock;
+  dns = import ./dns;
 }

@@ -175,7 +175,44 @@ Caddy and Authentik on this one.
 | `audio.<domain>` | Snapcast control UI (may merge with `music` when retired) |
 
 DNS assumption: `*.<domain>` resolves to the server's IPv4 address.
-This is configured in your router/DNS and is out of scope for this repo.
+Either the router answers it, or hosts with the `lanbat-dns` plugin do (below).
+
+### LAN DNS (lanbat-dns)
+
+`lanbatPlugins.dns` runs CoreDNS (`modules/core/dns.nix`) on the hosts that list
+it, normally the server and the storage Pi, so that DNS survives either rebooting.
+Every record is computed from the profile at evaluation time, so the instances
+serve identical zones and nothing is replicated between them:
+
+| Name | Answers |
+|---|---|
+| `<subdomain>.<domain>`, `<subdomain>.<short>` | the host running Caddy |
+| `<service>.<domain>`, `<service>.<short>` | the host running a service that has no subdomain and runs on one host (Samba, Mosquitto, InfluxDB...) |
+| `<hostname>.<domain>`, `<hostname>.<short>` | that host |
+| `deployment.dns.extraRecords` | as given |
+
+`<short>` is `deployment.dns.shortSuffix` (e.g. `torrent.lan`). Caddy redirects
+each short web name to `<subdomain>.<domain>`, which stays the only name logins,
+OIDC and the apps' own URLs see. A short name that is not listed is NXDOMAIN;
+an unlisted name under `<domain>` and every other name go to
+`deployment.dns.upstreams` (the gateway by default). Only the LAN subnet is
+answered.
+
+Monitoring is Telegraf's: each CoreDNS host's Telegraf reads CoreDNS's metrics
+page on the loopback (query counts, cache hits), and the server's Telegraf
+queries every CoreDNS host (`inputs.dns_query`), recording whether each answers
+and how fast. systemd restarts a crashed CoreDNS.
+
+The DNS hosts resolve these names through their own CoreDNS too: a
+systemd-resolved delegation (`/etc/systemd/dns-delegate.d/lanbat.dns-delegate`)
+sends the domain and the short suffix to the local CoreDNS, then to the other
+DNS hosts, so neither a router's IPv6 DNS advertisement nor resolved staying on
+the gateway after a failed query can send them elsewhere.
+
+Service-to-service traffic does not use DNS: endpoints resolve to addresses at
+evaluation time. The exception is OIDC (`auth.<domain>`), which rootless
+containers resolve through the gateway, because Podman drops loopback
+resolvers; keep the router's `*.<domain>` record as well.
 
 ### Services on another host
 

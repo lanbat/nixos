@@ -194,6 +194,7 @@ When adding a deployment-time value:
 | `config.lanbat.hosts.<key>.disks.system` | Server system disk path |
 | `config.lanbat.hosts.<key>.storage.drives` | Pi NVMe by-id filenames, keyed by drive name |
 | `config.lanbat.deployment.voiceRooms` | Area name → host key for voice satellites |
+| `config.lanbat.deployment.dns` | LAN DNS for the `lanbat-dns` plugin: short suffix, upstreams, extra records |
 | `config.lanbat.deployment.androidDevices` | Android TV boxes to provision over ADB |
 | `config.lanbat.deployment.voiceCompute.profile` | Where the voice assistant's heavy work runs: `low-spec` or `apple-silicon` (`lib/voice-compute.nix`) |
 
@@ -210,7 +211,8 @@ availability requirements:
 **Always-on** (the default; start at boot, data on the unencrypted host root):
 - The service starts without any LUKS unlock and NixOS manages `/var/lib/<name>` normally.
 - Current members: Caddy, PostgreSQL (always-on instance), Redis, Authentik, Home Assistant, Grafana, InfluxDB,
-  Mosquitto, Zigbee2MQTT, Frigate, Music Assistant, Snapcast, Wyoming pipeline, speaker identification (voice-id), assistant router, LLM gateway, SearXNG, Telegraf, Homepage
+  Mosquitto, Zigbee2MQTT, Frigate, Music Assistant, Snapcast, Wyoming pipeline, speaker identification (voice-id), assistant router, LLM gateway, SearXNG, Telegraf, Homepage,
+  CoreDNS (`lanbat-dns` plugin)
 
 **Workload-gated** (start only after `unlock-workload`, data on encrypted LUKS):
 - Set `tier = "workload"`, list the `/var/lib` directories in `state` and the systemd

@@ -44,6 +44,13 @@ echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
     → zigbeeVendorId = "10c4"   zigbeeProductId = "ea60"
     ```
 - [ ] Configure DNS on your router: point `*.<domain>` to the server's static IP.
+  Keep this record even with the `lanbat-dns` plugin: containers resolve OIDC
+  names through the router.
+- [ ] With the `lanbat-dns` plugin (optional): add `inputs.self.lanbatPlugins.dns` to
+  the server's and the storage Pi's `plugins`, set `deployment.dns` (`shortSuffix`,
+  `extraRecords`), deploy both, then set the router's DHCP DNS servers to their two
+  addresses. The router's own upstream must stay a public resolver, not CoreDNS,
+  or the two forward to each other (CoreDNS's `loop` check stops it at start).
 
 ### 0c. Create secrets (agenix)
 

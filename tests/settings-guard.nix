@@ -33,6 +33,7 @@ let
     "deployment.parkingGuard"
     "deployment.androidDevices"
     "deployment.xiaomiClocks"
+    "deployment.dns"
     "hosts"
     "mosquitto.extraUsers"
   ];

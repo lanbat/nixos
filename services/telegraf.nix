@@ -76,6 +76,16 @@ let
       in
       "${influx.endpoint.scheme}://${lanbat.endpointHost "influxdb" host}:${toString influx.endpoint.port}";
 
+  # Every CoreDNS host in the profile (the lanbat-dns plugin), asked for this
+  # host's own name: the health check of LAN DNS, from one place.
+  dnsHosts = (lanbat.endpoints.coredns or { hosts = [ ]; }).hosts;
+  dnsZone =
+    if lanbat.deployment.dns.shortSuffix != null then
+      lanbat.deployment.dns.shortSuffix
+    else
+      lanbat.deployment.domain;
+  dnsProbeName = "${lanbat.hosts.${lanbat.hostKey}.networking.hostname}.${dnsZone}";
+
   # A health check of a service on this host, at the port its description
   # gives; none when the service does not run here.
   serviceHealthCheck =
@@ -182,6 +192,22 @@ in
         {
           urls = cfg.pingTargets;
         }
+      ];
+
+      # Whether every CoreDNS host answers, with what rcode and how fast.
+      inputs.dns_query = lib.optionals (dnsHosts != [ ]) [
+        {
+          servers = map (host: lanbat.hosts.${host}.networking.ip) dnsHosts;
+          domains = [ dnsProbeName ];
+          record_type = "A";
+          timeout = "2s";
+          interval = "60s";
+        }
+      ];
+
+      # CoreDNS metrics, on a host with the lanbat-dns plugin.
+      inputs.prometheus = lib.optionals config.services.coredns.enable [
+        { urls = [ "http://127.0.0.1:9153/metrics" ]; }
       ];
 
       inputs.redis = lib.optionals (lanbat.hasService "redis") [

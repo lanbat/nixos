@@ -117,7 +117,8 @@ You need:
 - optionally a Raspberry Pi 3 as a Snapcast speaker and voice satellite (a 32 GB microSD card,
   a USB microphone and a speaker; [docs/pi3-satellite.md](docs/pi3-satellite.md));
 - a domain for the services (`<service>.<domain>`), and local DNS that resolves those
-  names to the server. The services stay on your LAN; Caddy serves them with certificates
+  names to the server: the router, or the optional `lanbat-dns` plugin, which also
+  gives short names (`torrent.lan`). The services stay on your LAN; Caddy serves them with certificates
   from an internal CA that each client device trusts once;
 - a workstation with [Nix](https://nixos.org/download/) and flakes enabled.
 
