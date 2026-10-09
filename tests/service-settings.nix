@@ -907,6 +907,11 @@ let
         reasoning_effort = "none";
       }
       && lib.elem { smart = [ "smart-fallback-1" ]; } litellm.router_settings.fallbacks
+      # A model out of quota (429) is passed over at once, not retried, and
+      # left alone for ten minutes.
+      && litellm.router_settings.num_retries == 0
+      && litellm.router_settings.allowed_fails == 0
+      && litellm.router_settings.cooldown_time == 600
     ))
 
     # Behind the router the local model is on the voice path: it gets the CPU

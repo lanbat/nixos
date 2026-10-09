@@ -120,7 +120,12 @@ in
           model_list = modelList;
           router_settings = {
             inherit fallbacks;
-            num_retries = 1;
+            # A model out of quota (429 on a free tier) is not retried: the
+            # next one in the chain answers at once, and the spent model is
+            # left alone for ten minutes. Retrying cost 15 s and more.
+            num_retries = 0;
+            allowed_fails = 0;
+            cooldown_time = 600;
             timeout = 15;
           };
           litellm_settings = {
