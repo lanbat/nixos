@@ -185,6 +185,10 @@ in
       RestartSec = "15s";
       Environment = [
         "JELLYFIN_PublishedServerUrl=https://media.${domain}"
+        # The SSO plugin fetches Authentik's discovery document and tokens
+        # from https://auth.<domain>; trust the internal Caddy CA (global
+        # environment.variables do not reach units).
+        "SSL_CERT_FILE=/var/lib/caddy-local-ca/ca-certificates.crt"
       ];
     };
   };

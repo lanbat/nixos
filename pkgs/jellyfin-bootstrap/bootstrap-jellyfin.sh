@@ -24,10 +24,12 @@ log() {
   echo "jellyfin-bootstrap: $*"
 }
 
+# /health answers 200 "Degraded" while the server is still starting, and the
+# API answers 503 until then, so wait for "Healthy".
 wait_for_jellyfin() {
   local attempt
   for attempt in $(seq 1 60); do
-    if curl -fsS -o /dev/null "${JELLYFIN_URL}/health"; then
+    if [[ "$(curl -fsS "${JELLYFIN_URL}/health" 2>/dev/null)" == "Healthy" ]]; then
       return 0
     fi
     sleep 5
@@ -487,8 +489,10 @@ setup_sso() {
     -o /dev/null
 }
 
+# The login page's "Sign in with Authentik" button. Branding is written through
+# /System/Configuration/branding (admin); /Branding/Configuration is read-only.
 setup_branding() {
-  local disclaimer
+  local disclaimer current desired
   disclaimer="$(cat <<EOF
 <form action="${EXTERNAL_URL}/sso/OID/start/authentik">
   <button class="raised block emby-button button-submit" type="submit">
@@ -497,15 +501,20 @@ setup_branding() {
 </form>
 EOF
 )"
-  api_call -X POST "${JELLYFIN_URL}/Branding/Configuration" \
+  current="$(api_call "${JELLYFIN_URL}/System/Configuration/branding")"
+  desired="$(jq \
+    --arg disclaimer "$disclaimer" \
+    '.LoginDisclaimer = $disclaimer
+     | .CustomCss = "a.raised.emby-button { padding: 0.9em 1em; color: inherit !important; } .disclaimerContainer { display: block; }"' \
+    <<<"$current")"
+  if [[ "$desired" == "$current" ]]; then
+    return 0
+  fi
+  log "configuring login page (Sign in with Authentik)"
+  api_call -X POST "${JELLYFIN_URL}/System/Configuration/branding" \
     -H 'Content-Type: application/json' \
-    -d "$(jq -n \
-      --arg disclaimer "$disclaimer" \
-      '{
-        LoginDisclaimer: $disclaimer,
-        CustomCss: "a.raised.emby-button { padding: 0.9em 1em; color: inherit !important; } .disclaimerContainer { display: block; }"
-      }')" \
-    -o /dev/null || true
+    -d "$desired" \
+    -o /dev/null
 }
 
 harden_adult_permissions() {
@@ -594,6 +603,7 @@ if [[ -f "$CONFIG_STATE_FILE" ]] && wizard_complete && configuration_complete 2>
   setup_plugins
   configure_imvdb
   configure_opensubtitles
+  setup_branding
   refresh_all_libraries
   refresh_new_provider_libraries
   log "configuration already complete"

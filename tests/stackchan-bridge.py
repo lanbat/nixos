@@ -336,7 +336,7 @@ class Battery(unittest.TestCase):
         self.assertEqual(b.on_device({"battery": {"low": "yes"}}, NOON), [])
 
 
-
+class Envelope(unittest.TestCase):
     def test_silence_is_closed_and_speech_opens(self):
         quiet = b"\x00\x00" * 400
         loud = (b"\x00\x40" + b"\x00\xc0") * 200  # +/-16384
