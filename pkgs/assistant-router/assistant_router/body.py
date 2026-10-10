@@ -7,7 +7,14 @@ prompt:
 
     body -> router  {"hello": {"room": "Kitchen", "kind": "stackchan", "proto": 1}}
                     {"state": {"present": true, "present_since_s": 130, "asleep": false, "battery_low": false}}
+                    {"face_image": "<base64>"}   a face it was asked to capture
+                    {"face_image": null}          it couldn't get one
     router -> body  {"act": {"mood": "happy", "gesture": "nod", "look": "user", "sleep": false}}
+                    {"capture": true}             send me a face of whoever is in front
+
+A face comes over only when the room's body is asked for one (enrolment); the
+bytes go straight to Frigate's face library and never into a prompt, so the
+fixed-fields rule holds.
 
 For a request from a room with a body, the cloud model gets the persona and
 what the body senses after Home Assistant's context block, and starts its
@@ -17,12 +24,17 @@ reply is spoken and sent to the body. A few body commands ("nod", "dance",
 """
 from __future__ import annotations
 
+import asyncio
+import base64
 import re
 from dataclasses import dataclass
 from typing import Any
 
 MOODS = ("happy", "excited", "sad", "curious", "surprised", "thinking", "sleepy", "neutral")
 GESTURES = ("nod", "shake", "tilt", "wiggle", "dance", "look_around", "look_at_user")
+
+# How long to wait for a body's face before a capture is reported as failed.
+CAPTURE_TIMEOUT_S = 10.0
 
 _TAG = re.compile(r"^\s*\[([A-Za-z_]+)(?:\s+([A-Za-z_]+))?\]\s*")
 
@@ -85,6 +97,7 @@ class Bodies:
         self.persona = persona.strip()
         self._sockets: dict[str, Any] = {}
         self._states: dict[str, BodyState] = {}
+        self._captures: dict[str, Any] = {}  # room key -> a face in flight
 
     def connect(self, room: str, socket: Any) -> None:
         self._sockets[_key(room)] = socket
@@ -94,6 +107,9 @@ class Bodies:
         if self._sockets.get(_key(room)) is socket:
             del self._sockets[_key(room)]
             self._states.pop(_key(room), None)
+        fut = self._captures.pop(_key(room), None)
+        if fut is not None and not fut.done():
+            fut.set_result(None)  # the body went away: no face is coming
 
     def has(self, room: str) -> bool:
         return bool(room) and _key(room) in self._sockets
@@ -130,6 +146,42 @@ class Bodies:
         except Exception:  # pylint: disable=broad-except
             return False
         return True
+
+    async def capture(self, room: str, timeout: float = CAPTURE_TIMEOUT_S) -> bytes | None:
+        """Ask the room's body for a face and wait for it. None when there is
+        no body, a capture is already in flight, or no face arrives in time."""
+        key = _key(room)
+        socket = self._sockets.get(key)
+        if socket is None or key in self._captures:
+            return None
+        fut = asyncio.get_running_loop().create_future()
+        self._captures[key] = fut
+        try:
+            await socket.send_json({"capture": True})
+        except Exception:  # pylint: disable=broad-except
+            self._captures.pop(key, None)
+            return None
+        try:
+            return await asyncio.wait_for(fut, timeout)
+        except asyncio.TimeoutError:
+            return None
+        finally:
+            if self._captures.get(key) is fut:
+                self._captures.pop(key, None)
+
+    def complete_capture(self, room: str, image: str | None) -> None:
+        """The body's answer to a capture: the base64 face, or None for a
+        failure. Unknown or malformed input resolves as a failure, never raises."""
+        fut = self._captures.get(_key(room))
+        if fut is None or fut.done():
+            return
+        if image:
+            try:
+                fut.set_result(base64.b64decode(image, validate=True))
+                return
+            except (ValueError, TypeError):
+                pass
+        fut.set_result(None)
 
     def prompt_block(self, room: str, now: float) -> str | None:
         """The persona and what the body senses, for a cloud request from

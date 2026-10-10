@@ -1,3 +1,6 @@
+import asyncio
+import base64
+
 import pytest
 from assistant_router.body import Bodies, BodyState, command, split_tag
 
@@ -125,3 +128,92 @@ def test_a_low_battery_is_in_the_prompt():
     assert "Your battery is low" in b.prompt_block("Kitchen", now=0.0)
     b.update("Kitchen", {"battery_low": "very"}, now=1.0)  # not a bool: ignored
     assert b.state("Kitchen").battery_low
+
+
+class CaptureSocket:
+    """A body socket that answers a capture with a face (or None)."""
+
+    def __init__(self, bodies, room, image=b"jpeg"):
+        self.bodies = bodies
+        self.room = room
+        self.image = image
+        self.sent = []
+
+    async def send_json(self, data):
+        self.sent.append(data)
+        if data.get("capture"):
+            self.bodies.complete_capture(self.room,
+                                         base64.b64encode(self.image).decode() if self.image else None)
+
+
+class SilentSocket:
+    """A body socket that asks but never answers a capture."""
+
+    def __init__(self):
+        self.sent = []
+
+    async def send_json(self, data):
+        self.sent.append(data)
+
+
+async def test_capture_round_trip():
+    b = Bodies(PERSONA)
+    sock = CaptureSocket(b, "Kitchen", b"jpeg")
+    b.connect("Kitchen", sock)
+    assert await b.capture("Kitchen") == b"jpeg"
+    assert sock.sent == [{"capture": True}]
+
+
+async def test_capture_without_a_body_is_none():
+    b = Bodies(PERSONA)
+    assert await b.capture("Hall") is None
+
+
+async def test_capture_times_out_when_no_face_comes():
+    b = Bodies(PERSONA)
+    b.connect("Kitchen", SilentSocket())
+    assert await b.capture("Kitchen", timeout=0.05) is None
+
+
+async def test_capture_reports_none_when_the_body_says_no():
+    b = Bodies(PERSONA)
+    b.connect("Kitchen", CaptureSocket(b, "Kitchen", image=None))
+    assert await b.capture("Kitchen") is None
+
+
+async def test_capture_malformed_base64_is_none():
+    b = Bodies(PERSONA)
+    fut = asyncio.get_running_loop().create_future()
+    b._captures["kitchen"] = fut
+    b.complete_capture("Kitchen", "!!!not base64!!!")
+    assert fut.result() is None
+
+
+async def test_capture_is_single_flight_per_room():
+    b = Bodies(PERSONA)
+
+    class SlowSocket:
+        def __init__(self):
+            self.sent = []
+
+        async def send_json(self, data):
+            self.sent.append(data)
+            if data.get("capture"):
+                await asyncio.sleep(0.05)
+                b.complete_capture("Kitchen", base64.b64encode(b"jpeg").decode())
+
+    b.connect("Kitchen", SlowSocket())
+    first = asyncio.create_task(b.capture("Kitchen"))
+    await asyncio.sleep(0)  # let the first capture take its slot
+    assert await b.capture("Kitchen") is None  # refused while one is in flight
+    assert await first == b"jpeg"
+
+
+async def test_disconnect_fails_a_pending_capture():
+    b = Bodies(PERSONA)
+    sock = SilentSocket()
+    b.connect("Kitchen", sock)
+    pending = asyncio.create_task(b.capture("Kitchen"))
+    await asyncio.sleep(0)  # in flight now
+    b.disconnect("Kitchen", sock)
+    assert await pending is None

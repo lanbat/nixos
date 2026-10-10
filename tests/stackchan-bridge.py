@@ -263,6 +263,25 @@ class Router(unittest.TestCase):
         self.assertEqual(b.on_router({"act": {"mood": "furious", "gesture": "backflip", "look": "away"}}, NOON), [])
         self.assertEqual(b.on_router({"hello": 1}, NOON), [])
 
+    def test_a_capture_request_reaches_the_device(self):
+        b = Brain(Config(), now=NOON)
+        self.assertEqual(device(b.on_router({"capture": True}, NOON)), [{"capture": True}])
+        # An act and a capture never arrive together; a bare act is unaffected.
+        self.assertEqual(device(b.on_router({"act": {"mood": "happy"}}, NOON)), [{"mood": "happy"}])
+
+    def test_a_captured_face_reaches_the_router(self):
+        b = Brain(Config(), now=NOON)
+        self.assertEqual(self.router(b.on_device({"face_image": "aW1hZ2U="}, NOON)), [{"face_image": "aW1hZ2U="}])
+
+    def test_a_failed_capture_reaches_the_router(self):
+        b = Brain(Config(), now=NOON)
+        self.assertEqual(self.router(b.on_device({"face_image": None}, NOON)), [{"face_image": None}])
+
+    def test_a_face_image_does_not_disturb_presence(self):
+        b = Brain(Config(), now=NOON)
+        # face_image is not the periodic "face" presence report.
+        self.assertNotIn("state", self.router(b.on_device({"face_image": "aW1hZ2U="}, NOON))[0])
+
     def test_go_to_sleep_by_day_lasts_until_the_night_changes(self):
         b = Brain(Config(night_start="23:00", night_end="07:00"), now=NOON)
         b.on_lva("wake_word_detected", {}, NOON)
