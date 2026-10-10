@@ -41,6 +41,11 @@
       };
       mosquitto-frigate-pass = { };
       mosquitto-z2m-pass = { };
+    }
+    // lib.optionalAttrs (config.lanbat.hasService "person-mapper") {
+      # The person mapper's broker password, read by its unit from a root
+      # ExecStartPre. Declared only while that service is present.
+      mosquitto-person-mapper-pass = { };
     };
   };
 
@@ -85,6 +90,18 @@
             acl = [
               "readwrite zigbee2mqtt/#"
               "readwrite homeassistant/#"
+            ];
+          };
+        }
+        // lib.optionalAttrs (config.lanbat.hasService "person-mapper") {
+          # The person mapper: reads Frigate's face events, writes Home Assistant
+          # discovery plus the homelab room-presence topics. Least privilege.
+          "person-mapper" = {
+            passwordFile = config.lanbat.secrets.mosquitto-person-mapper-pass.path;
+            acl = [
+              "read frigate/#"
+              "write homeassistant/#"
+              "write homelab/#"
             ];
           };
         }

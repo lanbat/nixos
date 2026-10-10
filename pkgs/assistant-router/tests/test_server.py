@@ -415,3 +415,31 @@ async def test_a_robot_reports_faces_and_a_sensor_reports_phones(aiohttp_client)
     await sensor.close()
     assert bodies.has("Kitchen")
     await robot.close()
+
+
+async def test_a_face_source_reports_central_faces_without_becoming_a_body(aiohttp_client):
+    import asyncio
+    bodies, people = Bodies("You are Nabu."), People({"kiril": "Kiril"})
+    c = await aiohttp_client(make_body_app(bodies, clock=lambda: 100.0, people=people))
+    src = await c.ws_connect("/v1/body")
+    await src.send_json({"hello": {"room": "Kitchen", "kind": "face-source", "proto": 1}})
+    # A name outside the registry is dropped, exactly as for a robot.
+    await src.send_json({"faces": [{"person": "kiril", "confidence": 0.9},
+                                   {"person": "ghost", "confidence": 0.9}]})
+    line = None
+    for _ in range(50):
+        line = people.line("Kitchen", now=100.0)
+        if line and "Kiril" in line:
+            break
+        await asyncio.sleep(0.01)
+    assert "You are probably talking to Kiril" in line
+    # A face source is not a body: no persona, no acts for it.
+    assert not bodies.has("Kitchen")
+    # It reports the room's full current set, so an empty list clears it.
+    await src.send_json({"faces": []})
+    for _ in range(50):
+        if people.line("Kitchen", now=100.0) is None:
+            break
+        await asyncio.sleep(0.01)
+    assert people.line("Kitchen", now=100.0) is None
+    await src.close()

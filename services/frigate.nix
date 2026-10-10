@@ -316,6 +316,31 @@ let
         '';
       };
 
+      faceRecognition = {
+        enable = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Local face recognition on the detect stream (face_recognition.enabled).
+            Frigate's bundled FaceNet model names faces it has been shown; the
+            person mapper (services/person-mapper.nix) reads those matches from
+            the frigate MQTT topics. Enrolling people happens in Frigate's face
+            library, not here.
+          '';
+        };
+        modelSize = mkOption {
+          type = types.enum [
+            "small"
+            "medium"
+            "large"
+          ];
+          default = "small";
+          description = "FaceNet model size (face_recognition.model_size).";
+        };
+        confidence = optional score "Minimum match score to name a person (face_recognition.confidence).";
+        threshold = optional score "Detection confidence threshold (face_recognition.threshold).";
+      };
+
       retention = {
         motionDays = mkOption {
           type = types.ints.unsigned;
@@ -466,9 +491,13 @@ let
       model_size = "small";
     };
 
-    face_recognition = {
-      enabled = false;
-      model_size = "small";
+    # Face recognition is off by default; the person mapper names whatever
+    # Frigate's face library holds when it is on.
+    face_recognition = clean {
+      enabled = cfg.faceRecognition.enable;
+      model_size = cfg.faceRecognition.modelSize;
+      confidence = cfg.faceRecognition.confidence;
+      threshold = cfg.faceRecognition.threshold;
     };
 
     classification.bird.enabled = false;

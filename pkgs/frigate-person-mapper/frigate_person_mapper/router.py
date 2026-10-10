@@ -1,0 +1,19 @@
+"""Messages the mapper sends to the assistant router's body socket.
+
+The mapper is a `face-source` client (not a body): one connection per room. It
+sends a `hello` naming the room, then the room's full current set of recognised
+people whenever it changes. The router replaces the room's faces on every
+message, so a person who left simply isn't in the next set.
+"""
+from __future__ import annotations
+
+PROTO = 1
+
+
+def hello(room: str) -> dict:
+    return {"hello": {"room": room, "kind": "face-source", "proto": PROTO}}
+
+
+def faces(faces: tuple) -> dict:
+    """A (person, confidence) snapshot -> the router's face-source payload."""
+    return {"faces": [{"person": p, "confidence": c} for p, c in faces]}

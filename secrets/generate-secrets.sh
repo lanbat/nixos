@@ -94,6 +94,7 @@ INFLUXDB_TOKEN=FILL_IN_SAME_AS_influxdb-admin-token.age"
 encrypt mosquitto-ha-pass.age      "$(rand 24)"
 encrypt mosquitto-frigate-pass.age "$(rand 24)"
 encrypt mosquitto-z2m-pass.age     "$(rand 24)"
+encrypt mosquitto-person-mapper-pass.age "$(rand 24)"
 
 # ---- Frigate ----
 # Random RTSP credentials — set the same values in the camera's web UI.
