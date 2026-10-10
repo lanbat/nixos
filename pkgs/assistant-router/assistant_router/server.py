@@ -171,7 +171,9 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic,
         # models refuse both together, so the provider's defaults apply.
         out = {k: v for k, v in body.items() if k not in ("temperature", "top_p", "user")}
         out["model"] = cfg.cloud_model
-        if enrollable:
+        # The enrolment tool is offered only where a body can actually capture
+        # a face: Frigate is wired and this room has a body connected.
+        if enrollable and bodies.has(room):
             out["tools"] = list(out.get("tools") or []) + [ENROLL_TOOL]
         # A body in the room: its persona and what it senses go after Home
         # Assistant's block, so the start of the prompt stays the same.
@@ -377,6 +379,8 @@ def make_body_app(bodies: Bodies, clock=time.monotonic, people: People | None = 
                 elif room and kind not in non_bodies and isinstance(data.get("state"), dict):
                     bodies.update(room, data["state"], clock())
                     observe_faces(room, data["state"].get("faces"), clock())
+                elif room and kind not in non_bodies and "face_image" in data:
+                    bodies.complete_capture(room, data["face_image"])
                 elif room and kind == "room-sensor" and isinstance(data.get("seen"), list):
                     for seen in data["seen"][:32]:
                         if isinstance(seen, dict) and type(seen.get("rssi")) is int and seen["rssi"] >= -85:

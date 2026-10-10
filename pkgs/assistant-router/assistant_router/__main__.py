@@ -30,7 +30,8 @@ async def serve(cfg: Config, a: argparse.Namespace) -> None:
     people = People(names)
     people_store = PeopleStore(people, a.people_state) if a.people_state else None
     frigate = Frigate(a.frigate_url) if a.frigate_url else None
-    runners = [web.AppRunner(make_app(cfg, bodies=bodies, people=people, people_store=people_store, frigate=frigate))]
+    runners = [web.AppRunner(make_app(cfg, bodies=bodies, people=people, people_store=people_store, frigate=frigate,
+                                      capture_face=bodies.capture))]
     await runners[0].setup()
     await web.TCPSite(runners[0], a.host, a.port).start()
     if a.body_port:

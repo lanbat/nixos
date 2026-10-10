@@ -306,11 +306,16 @@ class Brain:
         return out
 
     def on_router(self, msg: dict, now: float) -> list:
-        """An act from the assistant router: fields from fixed lists, else ignored."""
-        act = msg.get("act") if isinstance(msg, dict) else None
-        if not isinstance(act, dict):
+        """A message from the assistant router: an act, or a face capture
+        request; fields from fixed lists, else ignored."""
+        if not isinstance(msg, dict):
             return []
         self.now = now
+        if msg.get("capture"):
+            return [("device", {"capture": True})]
+        act = msg.get("act")
+        if not isinstance(act, dict):
+            return []
         out: list = []
         mood = act.get("mood")
         if mood in MOODS:
@@ -334,6 +339,10 @@ class Brain:
     def on_device(self, msg: dict, now: float) -> list:
         self.now = now
         out: list = []
+        if "face_image" in msg:
+            # A face the robot was asked to capture: to the router, verbatim
+            # (base64, or null when it got none). It goes to Frigate's library.
+            out.append(("router", {"face_image": msg.get("face_image")}))
         face = msg.get("face")
         if face in ("new", "lost") and (face == "new") != self.present:
             self.present = face == "new"

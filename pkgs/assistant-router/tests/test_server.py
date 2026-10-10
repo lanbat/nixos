@@ -1,6 +1,9 @@
+import base64
 import json
+
 import pytest
 from aiohttp import web
+from assistant_router.body import Bodies
 from assistant_router.server import Config, make_app
 from assistant_router.state import State
 
@@ -470,18 +473,44 @@ async def capture_none(room):
     return None
 
 
+class _BodySocket:
+    """A body socket that only records what the router sends."""
+
+    def __init__(self):
+        self.sent = []
+
+    async def send_json(self, data):
+        self.sent.append(data)
+
+
+class _CaptureSocket:
+    """A body socket that answers a capture with a face (or None)."""
+
+    def __init__(self, bodies, room, image=b"jpeg"):
+        self.bodies = bodies
+        self.room = room
+        self.image = image
+        self.sent = []
+
+    async def send_json(self, data):
+        self.sent.append(data)
+        if data.get("capture"):
+            self.bodies.complete_capture(self.room,
+                                         base64.b64encode(self.image).decode() if self.image else None)
+
+
 def _enroll_call(name):
     return {"role": "assistant", "content": None, "tool_calls": [
         {"id": "e1", "type": "function",
          "function": {"name": "enroll_person", "arguments": json.dumps({"name": name})}}]}
 
 
-async def enroll_client(aiohttp_client, base, people=None, store=None, frigate=None, capture=None):
+async def enroll_client(aiohttp_client, base, people=None, store=None, frigate=None, capture=None, bodies=None):
     cfg = Config(local_url=f"{base}/local/v1/chat/completions", local_model="qwen3-4b",
                  cloud_url=f"{base}/cloud/v1/chat/completions", cloud_model="smart", mode="local-first")
     people = people or People({})
     return await aiohttp_client(make_app(cfg, State(), people=people, people_store=store,
-                                         frigate=frigate, capture_face=capture))
+                                         frigate=frigate, capture_face=capture, bodies=bodies))
 
 
 async def test_enroll_registers_a_new_person(aiohttp_client, fakes, tmp_path):
@@ -570,7 +599,9 @@ async def test_enroll_without_a_usable_name(aiohttp_client, fakes):
 async def test_enroll_tool_is_offered_to_the_cloud_when_a_camera_is_wired(aiohttp_client, fakes):
     seen, local_line, _, base = fakes
     local_line["v"] = "escalate"
-    c = await enroll_client(aiohttp_client, base, frigate=FakeFrigate(), capture=capture_ok)
+    bodies = Bodies("")
+    bodies.connect("Bedroom 1", _BodySocket())
+    c = await enroll_client(aiohttp_client, base, frigate=FakeFrigate(), capture=capture_ok, bodies=bodies)
     await post(c, req("Tell me a joke"))
     names = [t["function"]["name"] for t in seen["cloud"][-1].get("tools", [])]
     assert "enroll_person" in names
@@ -583,6 +614,34 @@ async def test_enroll_tool_is_not_offered_without_a_camera(aiohttp_client, fakes
     await post(c, req("Tell me a joke"))
     names = [t["function"]["name"] for t in seen["cloud"][-1].get("tools", [])]
     assert "enroll_person" not in names
+
+
+async def test_enroll_tool_is_not_offered_when_the_room_has_no_body(aiohttp_client, fakes):
+    # Frigate is wired, so a face *could* be registered, but there is no body
+    # in the room to capture one: the tool is not offered.
+    seen, local_line, _, base = fakes
+    local_line["v"] = "escalate"
+    c = await enroll_client(aiohttp_client, base, frigate=FakeFrigate(), capture=capture_ok)
+    await post(c, req("Tell me a joke"))
+    names = [t["function"]["name"] for t in seen["cloud"][-1].get("tools", [])]
+    assert "enroll_person" not in names
+
+
+async def test_enroll_asks_the_body_to_capture_and_saves_the_image(aiohttp_client, fakes):
+    _, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    cloud_reply["v"] = _enroll_call("Bob")
+    img = b"\xff\xd8fake-jpeg"
+    bodies = Bodies("")
+    sock = _CaptureSocket(bodies, "Bedroom 1", img)
+    bodies.connect("Bedroom 1", sock)
+    fr = FakeFrigate()
+    c = await enroll_client(aiohttp_client, base, frigate=fr, capture=bodies.capture, bodies=bodies)
+    choice = await post(c, req("Enroll me as Bob"))
+    assert choice["finish_reason"] == "stop"
+    assert choice["message"]["content"] == "Okay, I'll remember you as Bob."
+    assert sock.sent == [{"capture": True}]               # the router asked the body
+    assert fr.enrolled == [("bob", img, "capture.jpg")]    # and Frigate got the face
 
 
 def test_person_key_from_a_name():

@@ -33,9 +33,12 @@ voice satellite's USB port, it becomes the satellite's face. The Pi keeps the vo
   pulse means Home Assistant is unreachable. "No Pi" means the bridge has stopped
   talking to it.
 
-Nothing leaves the host. Frames are analysed on the robot and dropped; only a face's
-position is used, to move the head. The bridge on the Pi reaches LVA on the loopback and
-the robot over USB.
+Nothing leaves the host, with one narrow exception. Frames are analysed on the robot and
+dropped; only a face's position is used, to move the head. The one thing that does leave
+the robot is a photo of someone who asks to be remembered, and it goes straight to
+Frigate's recognition library on the server (see [people.md](people.md)); a remembered
+face only personalises the assistant and is never used to unlock, disarm, open or allow
+anything. The bridge on the Pi reaches LVA on the loopback and the robot over USB.
 
 ## Requirements
 
@@ -156,6 +159,12 @@ and the assistant knows it has a body:
 - **Body commands, answered at once** without a model: "nod", "shake your head", "look
   at me", "look around", "do a little dance", "go to sleep" and "wake up". "Go to sleep"
   by day lasts until the night hours start or end.
+- **It remembers people.** Ask it "remember me as <name>" and, if the robot can see you,
+  it takes a photo and registers your face with Frigate, so the assistant knows your name
+  in this room. The photo only goes to Frigate's recognition library and is never used to
+  unlock, disarm, open or allow anything. *The robot's camera still needs its
+  JPEG-capture firmware update for this to work end to end; the router and the bridge are
+  ready.*
 
 Only fixed fields pass between the robot and the router (yes/no, seconds, names from
 fixed lists), so nothing the robot sends becomes text in a prompt. The router listens
@@ -198,6 +207,7 @@ One JSON object per line, 115200 baud over the CoreS3's USB port.
 | `{"status": {"muted", "online"}}` | Muted microphone; Home Assistant reachable |
 | `{"config": {"brightness", "notice"}}` | Screen brightness; whether to greet newcomers |
 | `{"ping": 1}` | Heartbeat every 3 s. After 10 s without any line the robot shows "No Pi" |
+| `{"capture": true}` | Take a photo of whoever is in front and send it back as `face_image` |
 
 | Robot → Pi | Meaning |
 |---|---|
@@ -207,6 +217,11 @@ One JSON object per line, 115200 baud over the CoreS3's USB port.
 | `{"rest": "nap\|awake"}` | It started or ended a nap |
 | `{"battery": {"level", "mv", "charging", "low"}}` | On a change, and every 5 minutes |
 | `{"log": "..."}` | Shown in the bridge's journal |
+| `{"face_image": "<base64>"}` | A captured photo, answering `capture`; `null` if it couldn't take one |
+
+`face_image` is the only line that can be large (a full-frame JPEG, base64). The robot
+only sends it in answer to a `capture`, never on its own; the bridge relays it to the
+router, which passes the decoded photo to Frigate.
 
 ## Troubleshooting
 
