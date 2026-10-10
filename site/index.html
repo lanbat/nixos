@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lanbat/nixos: a whole homelab as one Nix flake</title>
+  <meta name="description" content="A complete, production-grade homelab written in Nix. Two machines, one identity provider, 20+ self-hosted services, one file per service, and no Kubernetes.">
+  <meta name="theme-color" content="#e9edf4">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="canonical" href="https://lanbat.github.io/nixos/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="lanbat/nixos: a whole homelab as one Nix flake">
+  <meta property="og:description" content="One file per service. The wiring writes itself. Two machines, single sign-on, 20+ services, no Kubernetes.">
+  <meta property="og:url" content="https://lanbat.github.io/nixos/">
+  <meta name="twitter:card" content="summary">
+
+  <link rel="preload" href="assets/fonts/bricolage-grotesque-400-800.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="wrap top__row">
+      <a class="mark" href="#top" aria-label="lanbat/nixos, top of page">
+        <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><path fill="currentColor" d="M16 10 17.6 5.8 19.2 10.2C22.5 8.6 26.5 9.4 30 13Q27.6 13.2 26.4 16.6Q24.2 15 22.4 17.4Q21 16.6 19.6 21.4L16 26.5 12.4 21.4Q11 16.6 9.6 17.4Q7.8 15 5.6 16.6Q4.4 13.2 2 13C5.5 9.4 9.5 8.6 12.8 10.2L14.4 5.8Z"/></svg>
+        <span>lanbat<span class="mark__slash">/</span>nixos</span>
+      </a>
+      <nav class="top__nav" aria-label="Sections">
+        <a href="#try">Try it</a>
+        <a href="#tiers">Tiers</a>
+        <a href="#extend">Extend</a>
+        <a href="#start">Start</a>
+        <a class="btn btn--small" href="https://github.com/lanbat/nixos">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ───────────── Hero ───────────── -->
+    <section class="hero" id="top">
+      <div class="wrap hero__grid">
+        <div class="hero__copy">
+          <h1>
+            <span class="h1__a">One file per service.</span>
+            <span class="h1__b">The wiring writes itself.</span>
+          </h1>
+          <p class="lead">
+            lanbat/nixos is a whole homelab as a single Nix flake: an x86_64 server, a Raspberry Pi 5
+            for encrypted storage and TV, one sign-on for everything, and no Kubernetes. It is
+            published as a reference. Read it, fork it, or borrow the patterns that save you weeks.
+          </p>
+          <div class="cta">
+            <a class="btn" href="https://github.com/lanbat/nixos">Open the repo on GitHub</a>
+            <a class="btn btn--ghost" href="https://github.com/lanbat/nixos/blob/master/docs/architecture.md">Read the architecture</a>
+          </div>
+        </div>
+
+        <dl class="spec" aria-label="At a glance">
+          <div><dt>Hosts</dt><dd>server, storage Pi 5, optional voice Pi 3</dd></div>
+          <div><dt>Services</dt><dd>20+, one file each</dd></div>
+          <div><dt>Sign-on</dt><dd>Authentik, wired per service</dd></div>
+          <div><dt>Disks</dt><dd>disko, LUKS2, XFS</dd></div>
+          <div><dt>Secrets</dt><dd>agenix</dd></div>
+          <div><dt>Deploys</dt><dd>deploy-rs</dd></div>
+          <div><dt>Orchestrator</dt><dd>systemd and Podman</dd></div>
+          <div><dt>License</dt><dd>MIT</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <!-- ───────────── Playground ───────────── -->
+    <section class="section" id="try" aria-labelledby="try-h">
+      <div class="wrap">
+        <div class="section__head">
+          <h2 id="try-h">Edit the service. See what gets generated.</h2>
+          <p>
+            A service in lanbat is a short description. Change the highlighted values in the block below.
+            The Caddy vhost, systemd ordering, sign-on and dashboard tile follow from it, and evaluation
+            rejects clashes before anything is deployed. This is a simplified preview of the wiring in
+            <a href="https://github.com/lanbat/nixos/tree/master/modules/wiring"><code>modules/wiring/</code></a>.
+          </p>
+        </div>
+
+        <div class="rack" id="rack">
+          <div class="rack__code">
+            <div class="pane__bar"><span class="pane__title">services/paperless.nix</span><span class="pane__hint">values are editable</span></div>
+            <pre class="nix" aria-label="Nix service description"><code><span class="c">lanbat.services.</span><span class="in-wrap"><input class="in" id="f-name" type="text" value="paperless" spellcheck="false" autocomplete="off" aria-label="Service name" maxlength="24"></span><span class="p"> = {</span>
+  <span class="k">subdomain</span><span class="p"> = "</span><span class="in-wrap"><input class="in" id="f-sub" type="text" value="docs" spellcheck="false" autocomplete="off" aria-label="Subdomain" maxlength="20"></span><span class="p">";</span>
+  <span class="k">port</span><span class="p"> = </span><span class="in-wrap"><input class="in in--num" id="f-port" type="text" inputmode="numeric" value="8000" spellcheck="false" autocomplete="off" aria-label="Port" maxlength="5"></span><span class="p">;</span>
+  <span class="k">auth</span><span class="p"> = "</span><span class="in-wrap"><select class="in" id="f-auth" aria-label="Authentication"><option value="forward-auth" selected>forward-auth</option><option value="app">app</option><option value="none">none</option></select></span><span class="p">";</span>
+  <span class="k">tier</span><span class="p"> = "</span><span class="in-wrap"><select class="in" id="f-tier" aria-label="Tier"><option value="workload" selected>workload</option><option value="boot">boot</option></select></span><span class="p">";</span>
+<span class="ln" data-show="state">  <span class="k">state</span><span class="p"> = [ "</span><span class="v" data-name>paperless</span><span class="p">" ];</span>
+</span><span class="ln" data-show="units">  <span class="k">units</span><span class="p"> = [ "</span><span class="v" data-name>paperless</span><span class="p">" ];</span>
+</span>  <span class="k">nfs.drives</span><span class="p"> = [ </span><span class="in-wrap"><select class="in" id="f-nfs" aria-label="Pi storage drive"><option value="" selected>(none)</option><option value="a">"a"</option><option value="b">"b"</option></select></span><span class="p"> ];</span>
+<span class="ln" data-show="nfsunits">  <span class="k">nfs.units</span><span class="p"> = [ "</span><span class="v" data-name>paperless</span><span class="p">" ];</span>
+</span>  <span class="k">dashboard</span><span class="p"> = {</span>
+    <span class="k">group</span><span class="p"> = "Documents";</span>
+    <span class="k">name</span><span class="p"> = "</span><span class="v" data-title>Paperless</span><span class="p">";</span>
+    <span class="k">description</span><span class="p"> = "Document archive";</span>
+  <span class="p">};</span>
+<span class="p">};</span></code></pre>
+            <div class="try">
+              <span class="try__label">Break it:</span>
+              <button type="button" class="chip" data-set="port=8123">port 8123</button>
+              <button type="button" class="chip" data-set="sub=vault">subdomain vault</button>
+              <button type="button" class="chip" data-set="reset">reset</button>
+            </div>
+          </div>
+
+          <div class="rack__out">
+            <div role="tablist" aria-label="Generated output" class="tabs">
+              <button role="tab" id="t-caddy" aria-selected="true" aria-controls="p-caddy">Caddy</button>
+              <button role="tab" id="t-systemd" aria-selected="false" aria-controls="p-systemd" tabindex="-1">systemd</button>
+              <button role="tab" id="t-sso" aria-selected="false" aria-controls="p-sso" tabindex="-1">Sign-on</button>
+              <button role="tab" id="t-dash" aria-selected="false" aria-controls="p-dash" tabindex="-1">Dashboard</button>
+            </div>
+            <div class="panels">
+              <pre class="panel" role="tabpanel" id="p-caddy" aria-labelledby="t-caddy" tabindex="0"><code id="o-caddy"></code></pre>
+              <pre class="panel" role="tabpanel" id="p-systemd" aria-labelledby="t-systemd" tabindex="0" hidden><code id="o-systemd"></code></pre>
+              <pre class="panel" role="tabpanel" id="p-sso" aria-labelledby="t-sso" tabindex="0" hidden><code id="o-sso"></code></pre>
+              <pre class="panel" role="tabpanel" id="p-dash" aria-labelledby="t-dash" tabindex="0" hidden><code id="o-dash"></code></pre>
+            </div>
+            <div class="status" id="status" data-ok="true" role="status" aria-live="polite">
+              <span class="status__lamp" aria-hidden="true"></span>
+              <div class="status__text" id="status-text"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────── Tiers ───────────── -->
+    <section class="section" id="tiers" aria-labelledby="tiers-h">
+      <div class="wrap">
+        <div class="section__head">
+          <h2 id="tiers-h">Some things boot. Some things wait for you.</h2>
+          <p>
+            Always-on infrastructure starts without a key. Personal data (photos, passwords, cloud, media)
+            sits on an encrypted LUKS layer that you unlock on demand. If the Pi's storage disappears,
+            the services that depend on it stop cleanly and come back by themselves.
+            Try it on the real service list.
+          </p>
+        </div>
+
+        <div class="sim" id="sim">
+          <div class="sim__controls">
+            <fieldset class="seg">
+              <legend>Server</legend>
+              <label><input type="radio" name="sim-lock" value="locked" checked><span>Just rebooted</span></label>
+              <label><input type="radio" name="sim-lock" value="unlocked"><span>Workload unlocked</span></label>
+            </fieldset>
+            <fieldset class="seg">
+              <legend>Pi storage</legend>
+              <label><input type="radio" name="sim-pi" value="up" checked><span>Reachable</span></label>
+              <label><input type="radio" name="sim-pi" value="down"><span>Unplugged</span></label>
+            </fieldset>
+            <pre class="term" id="sim-term" aria-live="polite"></pre>
+          </div>
+
+          <div class="lanes" id="lanes"></div>
+
+          <ul class="legend" aria-label="Legend">
+            <li><i class="dot dot--run"></i>running</li>
+            <li><i class="dot dot--lock"></i>locked until unlock-workload</li>
+            <li><i class="dot dot--gone"></i>stopped, waiting for Pi storage</li>
+            <li><i class="dot dot--sleep"></i>asleep until the first request</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────── Beliefs ───────────── -->
+    <section class="section" id="beliefs" aria-labelledby="beliefs-h">
+      <div class="wrap beliefs">
+        <h2 id="beliefs-h">What the design bets on</h2>
+        <ol class="belief-list" style="list-style:none">
+          <li>
+            <h3>The server is the brain</h3>
+            <p>Compute, databases, SSO and the reverse proxy live on one machine. When something is wrong, you know where to look.</p>
+          </li>
+          <li>
+            <h3>The Pi is storage and TV</h3>
+            <p>Encrypted NVMe drives exported over NFS, plus Kodi and EmulationStation on the screen. A Pi 3 can be a speaker and voice satellite.</p>
+          </li>
+          <li>
+            <h3>Failure is a state, not an incident</h3>
+            <p>Services that need the Pi's storage stop when it drops and restart when it returns. Caddy shows a storage page instead of a stack trace.</p>
+          </li>
+          <li>
+            <h3>No Kubernetes</h3>
+            <p>systemd, Podman and NixOS modules are enough for two machines, and far easier to debug at midnight.</p>
+          </li>
+          <li>
+            <h3>Native first, containers when needed</h3>
+            <p>Nextcloud, Jellyfin, Home Assistant and Samba run as NixOS services. Authentik, Immich and Frigate use containers because packaging them natively isn't practical.</p>
+          </li>
+          <li>
+            <h3>One place per service</h3>
+            <p>Vhost, tier, storage, account and secrets are declared in the service's own file and checked at evaluation. Port, subdomain, secret and UID clashes fail the build.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ───────────── Extend ───────────── -->
+    <section class="section" id="extend" aria-labelledby="extend-h">
+      <div class="wrap">
+        <div class="section__head">
+          <h2 id="extend-h">Add a site or a service without rewriting config</h2>
+          <p>
+            Configuration has three layers. The flake builds one NixOS configuration per host in each
+            active profile, and you can inspect any of them straight from the flake.
+          </p>
+        </div>
+
+        <div class="layers">
+          <div class="layer">
+            <div class="layer__name">Profile</div>
+            <div class="layer__body">
+              <p>A whole site: its domain, its hosts, its plugins. Your real one stays out of git.</p>
+              <ul class="tags"><li>homelab</li><li>cabin</li><li>staging</li></ul>
+            </div>
+            <code class="layer__path">deployments/&lt;profile&gt;/deploy.nix</code>
+          </div>
+          <div class="layer">
+            <div class="layer__name">Role</div>
+            <div class="layer__body">
+              <p>What a host is: the bundle of infrastructure it needs.</p>
+              <ul class="tags"><li>server</li><li>storage-pi</li><li>voice-pi</li></ul>
+            </div>
+            <code class="layer__path">lib/roles/</code>
+          </div>
+          <div class="layer">
+            <div class="layer__name">Plugin</div>
+            <div class="layer__body">
+              <p>Optional features per host, built in or loaded from an external flake. The reference homelab adds Frigate-based parking enforcement this way.</p>
+              <ul class="tags"><li>services</li><li>tv</li><li>voice</li><li>android</li><li>your own flake</li></ul>
+            </div>
+            <code class="layer__path">plugins/</code>
+          </div>
+        </div>
+
+        <div class="extras">
+          <div>
+            <h3>Provisions its own Android TVs</h3>
+            <p>Device-owner policy, CA trust and APKs are pushed over ADB by a package built in Nix.</p>
+          </div>
+          <div>
+            <h3>Inspect before you deploy</h3>
+            <pre class="cmd"><code>nix run .#validate-deploy
+nix run .#hosts
+nix run .#deploy-query -- &lt;host&gt;</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────── Tested ───────────── -->
+    <section class="section section--tight" id="tested" aria-labelledby="tested-h">
+      <div class="wrap tested">
+        <div>
+          <h2 id="tested-h">Checked on every pull request</h2>
+          <p>
+            The assertion suite and the VM tests run on each pull request, formatting included. A nightly job
+            boots the full server in a VM and catches two changes that pass alone and break together.
+          </p>
+        </div>
+        <div class="badges">
+          <a href="https://github.com/lanbat/nixos/actions/workflows/check.yml"><img src="https://github.com/lanbat/nixos/actions/workflows/check.yml/badge.svg" alt="CI status" height="20"></a>
+          <a href="https://github.com/lanbat/nixos/actions/workflows/nightly.yml"><img src="https://github.com/lanbat/nixos/actions/workflows/nightly.yml/badge.svg" alt="Nightly status" height="20"></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────────── Start ───────────── -->
+    <section class="section" id="start" aria-labelledby="start-h">
+      <div class="wrap">
+        <div class="section__head">
+          <h2 id="start-h">From a fresh clone to a running site</h2>
+          <p>
+            You need an x86_64 server, a Raspberry Pi 5 with NVMe storage and a microSD card, a domain with local DNS
+            for <code>&lt;service&gt;.&lt;domain&gt;</code>, and a workstation with
+            <a href="https://nixos.org/download/">Nix</a> and flakes enabled. Services stay on your LAN; Caddy uses an
+            internal CA that each device trusts once.
+          </p>
+        </div>
+
+        <ol class="steps">
+          <li>
+            <h3>Enter the dev shell</h3>
+            <p>It provides deploy-rs, agenix and nixos-anywhere.</p>
+            <div class="code"><button class="copy" type="button" data-copy aria-label="Copy command">Copy</button><pre><code>git clone https://github.com/lanbat/nixos
+cd nixos
+nix develop</code></pre></div>
+          </li>
+          <li>
+            <h3>Create your local deploy files</h3>
+            <p>The real files are gitignored, so your domain, IPs and plugins are never committed. Then set the domain, host IPs and plugins.</p>
+            <div class="code"><button class="copy" type="button" data-copy aria-label="Copy command">Copy</button><pre><code>cp deploy.nix.example deploy.nix
+cp deployments/homelab/deploy.nix.example \
+   deployments/homelab/deploy.nix</code></pre></div>
+          </li>
+          <li>
+            <h3>Encrypt your secrets</h3>
+            <p>Follow the <a href="https://github.com/lanbat/nixos/blob/master/secrets/README.md">secrets guide</a>. They are agenix files that only the right hosts can decrypt.</p>
+          </li>
+          <li>
+            <h3>Deploy each host</h3>
+            <p>CI runs the Pi's aarch64 checks, so <code>--skip-checks</code> keeps your workstation from building them.</p>
+            <div class="code"><button class="copy" type="button" data-copy aria-label="Copy command">Copy</button><pre><code>deploy --skip-checks path:.#homelab-server
+deploy --skip-checks path:.#homelab-pi-storage</code></pre></div>
+          </li>
+        </ol>
+
+        <p class="more">
+          The full walk-through, covering disk layout, secrets and post-install, is the
+          <a href="https://github.com/lanbat/nixos/blob/master/docs/deployment-checklist.md">deployment checklist</a>.
+          After a reboot, the <a href="https://github.com/lanbat/nixos/blob/master/docs/runbook.md">runbook</a> shows how to unlock.
+        </p>
+      </div>
+    </section>
+
+    <!-- ───────────── Join ───────────── -->
+    <section class="join" aria-labelledby="join-h">
+      <div class="wrap join__row">
+        <div>
+          <h2 id="join-h">Run a homelab like this? Compare notes.</h2>
+          <p>Pull requests are welcome. The contributor guide covers how to check a change locally and the conventions the repo follows, including the checklist for adding a new service.</p>
+        </div>
+        <div class="join__actions">
+          <a class="btn btn--light" href="https://github.com/lanbat/nixos">Star or fork on GitHub</a>
+          <a class="btn btn--ghost-light" href="https://github.com/lanbat/nixos/blob/master/CONTRIBUTING.md">Contributor guide</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot__row">
+      <span>lanbat/nixos, MIT licensed</span>
+      <nav aria-label="Footer">
+        <a href="https://github.com/lanbat/nixos">Source</a>
+        <a href="https://github.com/lanbat/nixos/tree/master/docs">Docs</a>
+        <a href="https://github.com/lanbat/nixos/blob/master/SECURITY.md">Security</a>
+        <a href="https://github.com/lanbat/nixos/blob/master/LICENSE">License</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="assets/app.js" defer></script>
+</body>
+</html>
