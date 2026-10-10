@@ -329,7 +329,11 @@ let
           '';
         };
         modelSize = mkOption {
-          type = types.enum [ "small" "medium" "large" ];
+          type = types.enum [
+            "small"
+            "medium"
+            "large"
+          ];
           default = "small";
           description = "FaceNet model size (face_recognition.model_size).";
         };

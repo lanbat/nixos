@@ -87,9 +87,11 @@ in
       systemd.services.${name} = {
         description = "Frigate face events -> room presence for the assistant and Home Assistant";
         wantedBy = [ "multi-user.target" ];
-        after = [ "network-online.target" ]
-          ++ lib.optional hasMqtt "mosquitto.service"
-          ++ lib.optional hasRouter "assistant-router.service";
+        after = [
+          "network-online.target"
+        ]
+        ++ lib.optional hasMqtt "mosquitto.service"
+        ++ lib.optional hasRouter "assistant-router.service";
         wants = [ "network-online.target" ];
         serviceConfig = {
           User = name;
