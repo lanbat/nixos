@@ -11,7 +11,9 @@ from aiohttp import web
 import json
 
 from .body import Bodies
+from .frigate import Frigate
 from .people import People
+from .people_store import PeopleStore
 from .server import Config, make_app, make_body_app
 
 
@@ -26,7 +28,9 @@ async def serve(cfg: Config, a: argparse.Namespace) -> None:
         with open(a.people_file, encoding="utf-8") as f:
             names = {str(k): str(v) for k, v in json.load(f).items()}
     people = People(names)
-    runners = [web.AppRunner(make_app(cfg, bodies=bodies, people=people))]
+    people_store = PeopleStore(people, a.people_state) if a.people_state else None
+    frigate = Frigate(a.frigate_url) if a.frigate_url else None
+    runners = [web.AppRunner(make_app(cfg, bodies=bodies, people=people, people_store=people_store, frigate=frigate))]
     await runners[0].setup()
     await web.TCPSite(runners[0], a.host, a.port).start()
     if a.body_port:
@@ -58,6 +62,8 @@ def config(argv: list[str] | None = None) -> tuple[Config, argparse.Namespace]:
     p.add_argument("--body-port", type=int, default=0, help="0: no bodies")
     p.add_argument("--persona-file", help="who the assistant is when a body is in the room")
     p.add_argument("--people-file", help="JSON {key: name}: the people it may recognise (people.py)")
+    p.add_argument("--people-state", help="JSON {key: name} in the state dir: people enrolled at runtime, merged over --people-file (people_store.py)")
+    p.add_argument("--frigate-url", help="Frigate's base URL: the face library for enrolment (frigate.py); unset when Frigate is not on this host")
     a = p.parse_args(argv)
     cfg = Config(a.local_url, a.local_model, a.cloud_url, a.cloud_model, a.mode, local_timeout=a.local_timeout,
                  log_dir=a.log_dir, log_days=a.log_days, log_text=not a.no_log_text)

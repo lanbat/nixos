@@ -13,8 +13,10 @@ import glob
 import json
 import logging
 import os
+import re
 import time
 from dataclasses import dataclass
+from typing import Awaitable, Callable
 
 import aiohttp
 from aiohttp import web
@@ -22,7 +24,9 @@ from aiohttp import web
 from . import actions, body as body_mod, gate as gate_mod, honesty, triage
 from .body import Bodies
 from .context import Context, parse_context
+from .frigate import Frigate, FrigateError
 from .people import People
+from .people_store import PeopleStore
 from .state import State
 
 LOG = logging.getLogger("assistant-router")
@@ -42,6 +46,41 @@ TOOL_ACTIONS = {
     "control_device": set(actions.SERVICE.values()),
     "media_control": set(actions.MEDIA_SERVICE.values()),
 }
+
+# A tool the router runs itself, not Home Assistant: it registers the person
+# speaking now against Frigate's face library and the runtime people. Offered
+# to the cloud model only when a camera can capture a face (the capture is the
+# presence check: no face in front, no enrolment).
+ENROLL_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "enroll_person",
+        "description": ("Register the person speaking right now so the assistant can recognise "
+                        "them later. Use only when they ask to be enrolled or remembered by "
+                        "name. Call it with the name they want to be called."),
+        "parameters": {
+            "type": "object",
+            "properties": {"name": {"type": "string", "description": "The name to call the person."}},
+            "required": ["name"],
+        },
+    },
+}
+
+ENROLL_TAKEN = "That name is already taken."
+ENROLL_BAD_NAME = "I didn't catch a good name for you."
+ENROLL_NO_FACE = "I couldn't get a clear look at your face."
+ENROLL_NO_FRIGATE = "Face registration isn't available right now."
+ENROLL_FAILED = "I couldn't save your face right now."
+
+
+def _person_key(name: str) -> str | None:
+    """A person key from a display name, or None when it has nothing to make one of.
+
+    The key is a face-library name (frigate.safe_name): lowercase, letters,
+    digits and underscores. Two people must not share a key, so the caller
+    checks it is unused before enrolling."""
+    slug = re.sub(r"[^a-z0-9]+", "_", (name or "").lower()).strip("_")
+    return slug or None
 
 
 @dataclass
@@ -102,10 +141,13 @@ def _allowed(calls: list[dict], ctx: Context | None) -> bool:
 
 
 def make_app(cfg: Config, state: State | None = None, clock=time.monotonic,
-             bodies: Bodies | None = None, people: People | None = None) -> web.Application:
+             bodies: Bodies | None = None, people: People | None = None,
+             people_store: PeopleStore | None = None, frigate: Frigate | None = None,
+             capture_face: Callable[[str], Awaitable[bytes | None]] | None = None) -> web.Application:
     state = state or State()
     bodies = bodies or Bodies("")
     people = people or People({})
+    enrollable = capture_face is not None
     log_day = {"v": ""}
 
     def log(entry: dict) -> None:
@@ -129,6 +171,8 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic,
         # models refuse both together, so the provider's defaults apply.
         out = {k: v for k, v in body.items() if k not in ("temperature", "top_p", "user")}
         out["model"] = cfg.cloud_model
+        if enrollable:
+            out["tools"] = list(out.get("tools") or []) + [ENROLL_TOOL]
         # A body in the room: its persona and what it senses go after Home
         # Assistant's block, so the start of the prompt stays the same.
         now = clock()
@@ -150,12 +194,49 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic,
         state.remember_reply(device, said, clock())
         return _reply(said)
 
+    async def _enroll(device: str, ctx: Context | None, call: dict, tool_results: list[str]) -> dict:
+        # Run by the router itself, not Home Assistant: take the name, make a
+        # key, check it is unused, capture a face, register it with Frigate and
+        # remember the person. Each failure is a plain, honest reply.
+        fn = call.get("function") or {}
+        try:
+            args = json.loads(fn.get("arguments") or "")
+        except (TypeError, ValueError):
+            args = {}
+        name = args.get("name") if isinstance(args, dict) else None
+        key = _person_key(name) if isinstance(name, str) else None
+        if not key:
+            return finish(device, ENROLL_BAD_NAME, tool_results)
+        if key in people.names:
+            return finish(device, ENROLL_TAKEN, tool_results)
+        if frigate is None:
+            return finish(device, ENROLL_NO_FRIGATE, tool_results)
+        room = ctx.room if ctx else ""
+        try:
+            img = await capture_face(room)
+        except Exception:
+            img = None
+        if not img:
+            return finish(device, ENROLL_NO_FACE, tool_results)
+        try:
+            await frigate.enroll(key, img)
+        except FrigateError:
+            return finish(device, ENROLL_FAILED, tool_results)
+        if people_store is not None:
+            people_store.add(key, name)
+        else:
+            people.add(key, name)
+        return finish(device, f"Okay, I'll remember you as {name}.", tool_results)
+
     async def from_cloud(device: str, ctx: Context | None, data: dict | None, tool_results: list[str]) -> dict:
         if data is None:
             return finish(device, CLOUD_DOWN, tool_results)
         msg = data["choices"][0]["message"]
         calls = msg.get("tool_calls")
         if calls:
+            enroll = next((c for c in calls if (c.get("function") or {}).get("name") == "enroll_person"), None)
+            if enroll is not None:
+                return await _enroll(device, ctx, enroll, tool_results)
             return _tool_reply(calls) if _allowed(calls, ctx) else finish(device, REFUSED, tool_results)
         text = msg.get("content") or ""
         room = ctx.room if ctx else ""
@@ -240,6 +321,8 @@ def make_app(cfg: Config, state: State | None = None, clock=time.monotonic,
         await app["session"].close()
 
     app = web.Application()
+    app["people_store"] = people_store
+    app["frigate"] = frigate
     app.router.add_post("/v1/chat/completions", completions)
     app.router.add_get("/healthz", healthz)
     app.on_startup.append(on_startup)

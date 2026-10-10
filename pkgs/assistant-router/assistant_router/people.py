@@ -48,6 +48,12 @@ class People:
         # room -> source -> person -> evidence
         self._seen: dict[str, dict[str, dict[str, Evidence]]] = {}
 
+    def add(self, key: str, name: str) -> None:
+        self.names[str(key)] = str(name)
+
+    def remove(self, key: str) -> None:
+        self.names.pop(str(key), None)
+
     def observe(self, room: str, source: str, person: str, confidence, now: float) -> None:
         if source not in SOURCES or person not in self.names or not room:
             return

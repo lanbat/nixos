@@ -157,8 +157,14 @@ in
               "--body-port ${toString bodyPort}"
               "--persona-file ${personaFile}"
               "--people-file ${peopleFile}"
+              "--people-state /var/lib/assistant-router/people.json"
             ]
             ++ lib.optionals (!cfg.logText) [ "--no-log-text" ]
+            # Co-located on this host (localhost); its API needs no auth. The URL
+            # is only rendered when Frigate is present, so its port is read then.
+            ++ lib.optionals (config.lanbat.hasService "frigate") [
+              "--frigate-url http://127.0.0.1:${toString config.lanbat.services.frigate.port}/"
+            ]
           );
           DynamicUser = true;
           StateDirectory = "assistant-router";

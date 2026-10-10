@@ -443,3 +443,154 @@ async def test_a_face_source_reports_central_faces_without_becoming_a_body(aioht
         await asyncio.sleep(0.01)
     assert people.line("Kitchen", now=100.0) is None
     await src.close()
+
+
+# ── enrolment (assistant_router/frigate.py, people_store.py) ──────────────────
+from assistant_router.frigate import FrigateError  # noqa: E402
+from assistant_router.people_store import PeopleStore  # noqa: E402
+
+
+class FakeFrigate:
+    def __init__(self, fail=False):
+        self.enrolled = []
+        self.fail = fail
+
+    async def enroll(self, name, image, filename="capture.jpg"):
+        if self.fail:
+            raise FrigateError("POST /api/faces/{}/register".format(name))
+        self.enrolled.append((name, image, filename))
+        return {"success": True}
+
+
+async def capture_ok(room):
+    return b"jpeg"
+
+
+async def capture_none(room):
+    return None
+
+
+def _enroll_call(name):
+    return {"role": "assistant", "content": None, "tool_calls": [
+        {"id": "e1", "type": "function",
+         "function": {"name": "enroll_person", "arguments": json.dumps({"name": name})}}]}
+
+
+async def enroll_client(aiohttp_client, base, people=None, store=None, frigate=None, capture=None):
+    cfg = Config(local_url=f"{base}/local/v1/chat/completions", local_model="qwen3-4b",
+                 cloud_url=f"{base}/cloud/v1/chat/completions", cloud_model="smart", mode="local-first")
+    people = people or People({})
+    return await aiohttp_client(make_app(cfg, State(), people=people, people_store=store,
+                                         frigate=frigate, capture_face=capture))
+
+
+async def test_enroll_registers_a_new_person(aiohttp_client, fakes, tmp_path):
+    seen, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    cloud_reply["v"] = _enroll_call("Bob")
+    people = People({})
+    store = PeopleStore(people, str(tmp_path / "people.json"))
+    fr = FakeFrigate()
+    c = await enroll_client(aiohttp_client, base, people=people, store=store, frigate=fr, capture=capture_ok)
+    choice = await post(c, req("Enroll me as Bob"))
+    assert choice["finish_reason"] == "stop"
+    assert choice["message"]["content"] == "Okay, I'll remember you as Bob."
+    assert fr.enrolled == [("bob", b"jpeg", "capture.jpg")]
+    assert people.names == {"bob": "Bob"}
+    assert json.loads((tmp_path / "people.json").read_text()) == {"bob": "Bob"}
+    assert seen["local"] and seen["cloud"]  # gate -> local(escalate) -> cloud -> router runs it
+
+
+async def test_enroll_derives_a_key_from_the_name(aiohttp_client, fakes):
+    _, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    cloud_reply["v"] = _enroll_call("Mary Jane")
+    fr = FakeFrigate()
+    c = await enroll_client(aiohttp_client, base, frigate=fr, capture=capture_ok)
+    await post(c, req("Enroll me as Mary Jane"))
+    assert fr.enrolled == [("mary_jane", b"jpeg", "capture.jpg")]
+
+
+async def test_enroll_refuses_a_taken_name(aiohttp_client, fakes, tmp_path):
+    _, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    cloud_reply["v"] = _enroll_call("Bob")
+    people = People({"bob": "Bobby"})
+    store = PeopleStore(people, str(tmp_path / "people.json"))
+    fr = FakeFrigate()
+    c = await enroll_client(aiohttp_client, base, people=people, store=store, frigate=fr, capture=capture_ok)
+    choice = await post(c, req("Enroll me as Bob"))
+    assert choice["message"]["content"] == "That name is already taken."
+    assert fr.enrolled == []  # Frigate is never told about a taken key
+
+
+async def test_enroll_reports_when_it_cannot_see(aiohttp_client, fakes):
+    _, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    cloud_reply["v"] = _enroll_call("Bob")
+    fr = FakeFrigate()
+    c = await enroll_client(aiohttp_client, base, frigate=fr, capture=capture_none)
+    choice = await post(c, req("Enroll me as Bob"))
+    assert choice["message"]["content"] == "I couldn't get a clear look at your face."
+    assert fr.enrolled == []
+
+
+async def test_enroll_without_frigate_says_it_is_unavailable(aiohttp_client, fakes):
+    _, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    cloud_reply["v"] = _enroll_call("Bob")
+    c = await enroll_client(aiohttp_client, base, capture=capture_ok)  # no frigate
+    choice = await post(c, req("Enroll me as Bob"))
+    assert choice["message"]["content"] == "Face registration isn't available right now."
+
+
+async def test_enroll_reports_a_failed_save(aiohttp_client, fakes):
+    _, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    cloud_reply["v"] = _enroll_call("Bob")
+    fr = FakeFrigate(fail=True)
+    people = People({})
+    c = await enroll_client(aiohttp_client, base, people=people, frigate=fr, capture=capture_ok)
+    choice = await post(c, req("Enroll me as Bob"))
+    assert choice["message"]["content"] == "I couldn't save your face right now."
+    assert people.names == {}  # not remembered when the save failed
+
+
+async def test_enroll_without_a_usable_name(aiohttp_client, fakes):
+    _, local_line, cloud_reply, base = fakes
+    local_line["v"] = "escalate"
+    cloud_reply["v"] = _enroll_call("")
+    fr = FakeFrigate()
+    c = await enroll_client(aiohttp_client, base, frigate=fr, capture=capture_ok)
+    choice = await post(c, req("Enroll me"))
+    assert choice["message"]["content"] == "I didn't catch a good name for you."
+    assert fr.enrolled == []
+
+
+async def test_enroll_tool_is_offered_to_the_cloud_when_a_camera_is_wired(aiohttp_client, fakes):
+    seen, local_line, _, base = fakes
+    local_line["v"] = "escalate"
+    c = await enroll_client(aiohttp_client, base, frigate=FakeFrigate(), capture=capture_ok)
+    await post(c, req("Tell me a joke"))
+    names = [t["function"]["name"] for t in seen["cloud"][-1].get("tools", [])]
+    assert "enroll_person" in names
+
+
+async def test_enroll_tool_is_not_offered_without_a_camera(aiohttp_client, fakes):
+    seen, local_line, _, base = fakes
+    local_line["v"] = "escalate"
+    c = await client_for(aiohttp_client, base)  # no camera, no frigate
+    await post(c, req("Tell me a joke"))
+    names = [t["function"]["name"] for t in seen["cloud"][-1].get("tools", [])]
+    assert "enroll_person" not in names
+
+
+def test_person_key_from_a_name():
+    from assistant_router.server import _person_key
+    assert _person_key("Bob") == "bob"
+    assert _person_key("Mary Jane") == "mary_jane"
+    assert _person_key("Bob22") == "bob22"
+    assert _person_key("O'Brien") == "o_brien"
+    assert _person_key("  Padded  ") == "padded"
+    assert _person_key("!!!") is None
+    assert _person_key("") is None
