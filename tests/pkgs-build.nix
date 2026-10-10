@@ -24,6 +24,7 @@ let
   haDashboards = pkgs.callPackage ../pkgs/home-assistant-dashboards { };
   voiceId = pkgs.callPackage ../pkgs/voice-id { };
   assistantRouter = pkgs.callPackage ../pkgs/assistant-router { };
+  frigatePersonMapper = pkgs.callPackage ../pkgs/frigate-person-mapper { };
 in
 pkgs.runCommand "pkgs-build-smoke"
   {
@@ -43,6 +44,7 @@ pkgs.runCommand "pkgs-build-smoke"
       haDashboards
       voiceId
       assistantRouter
+      frigatePersonMapper
     ];
   }
   ''
@@ -68,5 +70,7 @@ pkgs.runCommand "pkgs-build-smoke"
     home-assistant-dashboards --help >/dev/null
     voice-id --help >/dev/null
     assistant-router --help >/dev/null
+    command -v frigate-person-mapper
+    frigate-person-mapper
     touch $out
   ''

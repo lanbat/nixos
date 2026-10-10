@@ -251,15 +251,27 @@ def make_body_app(bodies: Bodies, clock=time.monotonic, people: People | None = 
     """The bodies' side (assistant_router/body.py): one WebSocket each, on its
     own listener, so the LAN reaches this and not the agent's endpoint.
 
-    A robot ("kind": anything but "room-sensor") is the room's body; it may
-    report the faces it recognises. A room sensor (pkgs/room-presence) is not
-    a body: it only reports the phones it sees, and gets nothing back."""
+    A robot ("kind": anything but "room-sensor" and "face-source") is the
+    room's body; it may report the faces it recognises. A room sensor
+    (pkgs/room-presence) is not a body: it only reports the phones it sees, and
+    gets nothing back. A face source (the frigate person mapper) is also not a
+    body: it reports the recognised people for the room ({"faces": [...]}), the
+    full current set each time it changes."""
     people = people or People({})
+    non_bodies = ("room-sensor", "face-source")
+
+    def observe_faces(room: str, faces, now: float) -> None:
+        # The sender reports the room's full current set, so it replaces.
+        if isinstance(faces, list):
+            people.forget_faces(room)
+            for face in faces[:8]:
+                if isinstance(face, dict):
+                    people.observe(room, "face", face.get("person"), face.get("confidence"), now)
 
     async def socket(request: web.Request) -> web.WebSocketResponse:
         ws = web.WebSocketResponse(heartbeat=20)
         await ws.prepare(request)
-        room, sensor = "", False
+        room, kind = "", ""
         try:
             async for msg in ws:
                 if msg.type != aiohttp.WSMsgType.TEXT:
@@ -272,27 +284,24 @@ def make_body_app(bodies: Bodies, clock=time.monotonic, people: People | None = 
                     continue
                 hello = data.get("hello")
                 if isinstance(hello, dict) and isinstance(hello.get("room"), str) and hello["room"].strip():
-                    if room and not sensor:
+                    if room and kind not in non_bodies:
                         bodies.disconnect(room, ws)
                     room = hello["room"].strip()[:64]
-                    sensor = hello.get("kind") == "room-sensor"
-                    if not sensor:
+                    kind = hello.get("kind") or ""
+                    if kind not in non_bodies:
                         bodies.connect(room, ws)
-                    LOG.info(json.dumps({"body": "connected", "room": room, "kind": str(hello.get("kind", ""))[:32]}))
-                elif room and not sensor and isinstance(data.get("state"), dict):
+                    LOG.info(json.dumps({"body": "connected", "room": room, "kind": str(kind)[:32]}))
+                elif room and kind not in non_bodies and isinstance(data.get("state"), dict):
                     bodies.update(room, data["state"], clock())
-                    faces = data["state"].get("faces")
-                    if isinstance(faces, list):
-                        people.forget_faces(room)
-                        for face in faces[:8]:
-                            if isinstance(face, dict):
-                                people.observe(room, "face", face.get("person"), face.get("confidence"), clock())
-                elif room and sensor and isinstance(data.get("seen"), list):
+                    observe_faces(room, data["state"].get("faces"), clock())
+                elif room and kind == "room-sensor" and isinstance(data.get("seen"), list):
                     for seen in data["seen"][:32]:
                         if isinstance(seen, dict) and type(seen.get("rssi")) is int and seen["rssi"] >= -85:
                             people.observe(room, "phone", seen.get("person"), 1.0, clock())
+                elif room and kind == "face-source" and isinstance(data.get("faces"), list):
+                    observe_faces(room, data["faces"], clock())
         finally:
-            if room and not sensor:
+            if room and kind not in non_bodies:
                 bodies.disconnect(room, ws)
                 LOG.info(json.dumps({"body": "gone", "room": room}))
         return ws

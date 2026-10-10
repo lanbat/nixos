@@ -114,6 +114,24 @@ let
 
   base = serverWith [ ];
 
+  # ── Person mapper ─────────────────────────────────────────────────────────
+  # It is the only always-on service that names people, so its whole wiring
+  # (account, secret, broker user, unit) follows settings.cameras being
+  # non-empty while Frigate, the broker and the router are all present. The
+  # router is present only when haLlm points at it, so the variant enables that
+  # too; the example server loads every other service.
+  personMapperOn = serverWith [
+    {
+      lanbat.deployment.haLlm = lib.mkForce { baseUrl = "http://127.0.0.1:8092/v1"; model = "assistant"; };
+      lanbat.services.person-mapper.settings.cameras = {
+        "Living Room" = "front";
+      };
+      lanbat.services.frigate.settings.faceRecognition.enable = true;
+    }
+  ];
+  personMapperUnit = config: config.systemd.services.person-mapper;
+  mosquittoUsers = config: lib.attrNames (lib.head config.services.mosquitto.listeners).users;
+
   # ── Jackett ──────────────────────────────────────────────────────────────
   jackett = base.lanbat.services.jackett;
   jackettService = base.services.jackett;
@@ -1548,6 +1566,53 @@ let
 
     (expect "music-assistant: a snapserver on another host is rejected" (
       lib.any (lib.hasInfix "#117") (failedAssertions maApart)
+    ))
+
+    (expect "person-mapper: no cameras means no unit, no account and no wiring" (
+      !(base.systemd.services ? person-mapper)
+      && !(base.users.users ? person-mapper)
+      && base.lanbat.services.person-mapper.account == null
+      && base.lanbat.services.person-mapper.consumes == [ ]
+      && base.lanbat.services.person-mapper.readsSecrets == [ ]
+      && base.lanbat.services.person-mapper.units == [ ]
+    ))
+
+    (expect "person-mapper: a camera switches on the unit, the account and the wiring" (
+      personMapperOn.systemd.services ? person-mapper
+      && personMapperOn.users.users ? person-mapper
+      && personMapperOn.users.users.person-mapper.uid == 996
+      && personMapperOn.lanbat.services.person-mapper.account.uid == 996
+      && personMapperOn.lanbat.services.person-mapper.consumes == [ "mosquitto" "assistant-router" ]
+      && personMapperOn.lanbat.services.person-mapper.readsSecrets == [ "mosquitto-person-mapper-pass" ]
+      && personMapperOn.lanbat.services.person-mapper.units == [ "person-mapper" ]
+    ))
+
+    (expect "person-mapper: the broker carries its least-privilege user, and the secret is declared and read" (
+      personMapperOn.lanbat.secrets ? mosquitto-person-mapper-pass
+      && lib.elem "person-mapper" (mosquittoUsers personMapperOn)
+      && (lib.head personMapperOn.services.mosquitto.listeners).users."person-mapper".acl
+        == [ "read frigate/#" "write homeassistant/#" "write homelab/#" ]
+    ))
+
+    (expect "person-mapper: the unit runs as its account, copies the broker password as root, and starts after the broker and the router" (
+      let
+        unit = personMapperUnit personMapperOn;
+        env = unit.serviceConfig.Environment or [ ];
+      in
+      unit.serviceConfig.User == "person-mapper"
+      && unit.serviceConfig.Group == "person-mapper"
+      && unit.serviceConfig.RuntimeDirectory == "person-mapper"
+      && lib.hasPrefix "+" (lib.head unit.serviceConfig.ExecStartPre)
+      && lib.hasPrefix "/nix/store/" unit.serviceConfig.ExecStart
+      && lib.elem "mosquitto.service" unit.after
+      && lib.elem "assistant-router.service" unit.after
+      && lib.elem "network-online.target" unit.wants
+      && lib.elem "multi-user.target" unit.wantedBy
+      && lib.elem "MQTT_PASSWORD_FILE=/run/person-mapper/mqtt.pass" env
+      && lib.elem "ROUTER_URL=ws://127.0.0.1:8770/v1/body" env
+      && lib.any (lib.hasPrefix "PEOPLE_FILE=/nix/store/") env
+      && lib.any (lib.hasPrefix "CAMERAS_FILE=/nix/store/") env
+      && failedAssertions personMapperOn == [ ]
     ))
 
     (expect "the example profile's server has no failed assertion" (failedAssertions base == [ ]))
